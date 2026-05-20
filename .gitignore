@@ -1,0 +1,23 @@
+# macOS / Windows shell crud
+.DS_Store
+Thumbs.db
+
+# Editor / IDE local state
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# Local environment overrides
+.env
+.env.local
+.env.*.local
+
+# Archive blobs accidentally dropped at root
+*.zip
+*.tar.gz
+*.tgz
+
+# Claude Code per-user local state (the rest of .claude/ is tracked)
+.claude/settings.local.json
