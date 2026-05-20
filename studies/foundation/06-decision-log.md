@@ -44,7 +44,7 @@
 
 | # | Topic | Status | Key Question | Why It Matters | Expected Output |
 |---|---|---|---|---|---|
-| B0-1 | Engine ↔ rules compatibility | open | How does the rules workspace declare which schema and linter contract it follows, given both live in the same repository? | Without an explicit contract, the monorepo lets boundaries erode silently. | ADR + boundary contract refinement |
+| B0-1 | Engine ↔ rules compatibility | [resolved-study](../decisions/2026-05-20-engine-rules-compatibility.md) | How does the rules workspace declare which schema and linter contract it follows, given both live in the same repository? | Without an explicit contract, the monorepo lets boundaries erode silently. | ADR + boundary contract refinement |
 | B0-2 | Run identity and idempotency | open | What uniquely defines a run, and how do reruns of the same window behave? | Reporting trust and alert deduplication depend on it. | Execution semantics ADR |
 | B0-3 | Result write model | open | Are `dq_executions` and `dq_check_results` append-only, upserted, or hybrid? | Impacts retries, lineage, and dashboard accuracy. | Storage design ADR |
 | B0-4 | Failure scope | open | When one check errors operationally, does the entity error, degrade, or partially complete? | Incidents and alerting become inconsistent without a single policy. | Failure-semantics ADR plus runbook |
@@ -139,7 +139,7 @@ Use this section to confirm whether the project can advance.
 ### Wave 1 gate (B0 complete)
 
 Pass when **every B0 row** is at status `resolved-study` or
-`resolved-adr`. Currently: 0 of 7 resolved.
+`resolved-adr`. Currently: 1 of 7 resolved.
 
 ### Wave 2 gate (platform decisions complete)
 
