@@ -68,7 +68,7 @@ The seven B0 topics, summarized:
 3. Result write model (`dq_executions` and `dq_check_results` storage
    semantics).
 4. Failure scope (when a check fails, what is the entity's status).
-5. Manifest publication atomicity (how a ruleset becomes "live").
+5. Manifest publication semantics (how a ruleset becomes "live").
 6. Alert routing contract (shape of owner metadata, deduplication,
    severity).
 7. Loader / scheduler / retry failure semantics.
@@ -109,6 +109,16 @@ output would benefit from showing a code shape, use a fenced block
 inside a markdown file — never a real file in `engine/`, `rules/`,
 `tools/`, or `deploy/`.
 
+The directory layout shown in
+`studies/foundation/02-monorepo-topology.md` (including
+`docker-compose.yml`, `Makefile`, `go.work`, `.gitlab/` or `.github/`,
+and the five product workspaces) is **descriptive of the target state**.
+It exists in that document so reviewers and contributors can reason
+about the eventual shape of the repository. It is **not** an
+authorization to create any of those files now. R1 continues to
+forbid producing them during waves 1 and 2; they appear during
+Wave 3, backed by the decisions resolved in waves 1 and 2.
+
 ### R2. Do not invent requirements
 
 If a decision depends on information not available in this repository,
@@ -128,7 +138,7 @@ When a session is focused on a specific B0 item or a specific
 scaffolding area, stay inside that scope. If you identify adjacent
 work, list it for a future session — do not expand the current one.
 
-### R5. Cite only this repository
+### R5. Cite only this repository, and own your patterns
 
 Every architectural claim in a produced document should cite either:
 
@@ -138,10 +148,29 @@ Every architectural claim in a produced document should cite either:
 - or be explicitly marked as **new contribution proposed here,
   requires review**.
 
-**Do not reference external systems, prior art, vendor patterns, or
-internal projects by name** in any produced artifact. If a pattern is
-worth using, describe it in our own terms and own it. The repository
-must read as if it were the only source of these ideas.
+In addition, the following naming prohibition applies to every
+produced artifact:
+
+- **Do not name internal projects** of the organization or other
+  teams (sibling platforms, predecessor systems, sister tools) as
+  justification, comparison, or pattern source.
+- **Do not name prior art** — products, vendor designs, or
+  third-party systems held up as the *source of an idea* — as
+  justification for an architectural choice. If a pattern is worth
+  adopting, describe it in our own terms and defend it on its own
+  merits. The repository must read as if it were the only source of
+  these ideas.
+
+**What is exempt — environment, not borrowed ideas.** Naming the
+commodity technologies and public substrates the platform runs on or
+against is allowed and expected: BigQuery, Kafka, GCS, Pub/Sub, OIDC,
+Prometheus, OpenTelemetry, Kubernetes, Go, Docker, slog, JSON Schema,
+and equivalents. These are the environment we operate in, not
+patterns we are borrowing. Describing them clearly is necessary to
+keep the documents accurate.
+
+The line is: **"we use X" is fine. "we are doing Y because X does Y"
+is not.**
 
 ### R6. Path header on every produced file
 
@@ -190,9 +219,12 @@ They must not be eroded by any output produced here.
 - **P5. Evolution must be contract-driven.** Schema, linter,
   examples, and rule artifacts evolve under a published compatibility
   contract — even inside a single repository.
-- **P6. Borrow patterns, not baggage.** Patterns adopted by this
-  project are described in our own terms and judged on their fit to
-  our context. External provenance is not a justification.
+- **P6. Borrow patterns, not baggage.** Named design patterns
+  adopted by this project are described in our own terms and judged
+  on their fit to our context; external provenance is not a
+  justification. This principle governs *borrowed ideas*, not the
+  commodity infrastructure the platform runs on (see R5 for the
+  exact scope and exemptions).
 
 ---
 

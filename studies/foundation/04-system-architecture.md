@@ -173,7 +173,14 @@ The platform adopts several internal patterns that recur across
 components. Describing them here once avoids re-explaining the same
 shape in every component description.
 
-### Pattern P1 — Fail-fast registry loading
+**Naming.** Internal patterns are prefixed `PAT-` to avoid collision
+with the platform principles `P1`–`P6` defined in
+[`01-charter-and-principles.md`](./01-charter-and-principles.md).
+Principles constrain *what we will not compromise*; patterns describe
+*how recurring shapes inside the engine are built*. The two are
+distinct concepts and should not share a numbering scheme.
+
+### PAT-1 — Fail-fast registry loading
 
 The loader does not behave like a passive file reader. It behaves
 like a registry builder:
@@ -195,7 +202,7 @@ silent skipping.
 This pattern is the foundation of runtime trust. If the ruleset
 loaded, it loaded completely and correctly.
 
-### Pattern P2 — Lifecycle-aware scheduler integration
+### PAT-2 — Lifecycle-aware scheduler integration
 
 The scheduler integration is not a single "create cron" call. It is a
 lifecycle:
@@ -214,7 +221,7 @@ This lifecycle is owned by a single subsystem inside `engine/`, with
 admin endpoints for manual invocation and a periodic reconciliation
 loop for drift correction.
 
-### Pattern P3 — Fixture-driven compiler testing
+### PAT-3 — Fixture-driven compiler testing
 
 Query compilation is one of the highest-risk parts of the platform.
 The testing posture for compilers is:
@@ -233,7 +240,7 @@ This pattern catches regressions in SQL generation immediately and
 makes it possible to review a compiler change by reading the fixture
 diff.
 
-### Pattern P4 — Typed multi-environment configuration
+### PAT-4 — Typed multi-environment configuration
 
 The engine runs in multiple environments (local, qa, prod, possibly
 more). The configuration model is:
@@ -248,7 +255,7 @@ If a new field is added to one environment, the build fails until it
 is added to all environments. This forces deliberate decisions and
 makes drift impossible.
 
-### Pattern P5 — Modular logging contract
+### PAT-5 — Modular logging contract
 
 Logging supports a global default level plus per-package overrides
 via an environment variable:
@@ -264,24 +271,6 @@ scheduler reconciliation, manifest loading, or alert emission.
 The implementation is a small layer over Go's `slog` standard library
 package. It is intentionally minimal.
 
-### Pattern P6 — Closed catalog of check types
-
-Every check type has a named compiler in `engine/internal/compilers/`
-and a documented contract in `docs/dsl/`. There is no "temporary"
-check type, no "custom" check type, no SQL expression escape hatch in
-the DSL.
-
-Adding a new check type is a deliberate process:
-
-1. Propose an ADR.
-2. Update the schema (`v1` if additive, `v2` if breaking).
-3. Add the compiler with full fixtures.
-4. Add documentation.
-5. Add an example to `rules/_examples/`.
-
-The closed-catalog rule is what makes the platform predictable to
-operate and safe to evolve.
-
 ---
 
 ## Component Inventory
@@ -292,11 +281,11 @@ responsibility.
 ### `Loader`
 
 Reads the active manifest, fetches and validates rules, indexes by
-entity. Implements pattern P1.
+entity. Implements PAT-1.
 
 ### `Scheduler`
 
-Owns the scheduled trigger lifecycle. Implements pattern P2.
+Owns the scheduled trigger lifecycle. Implements PAT-2.
 
 ### `Trigger API`
 
@@ -311,7 +300,7 @@ Owns plan-level concurrency limits.
 ### `Compilers`
 
 One per check type. Transform declarative check specs into BigQuery
-queries. Implement pattern P3.
+queries. Implement PAT-3.
 
 ### `Runner`
 
@@ -344,9 +333,21 @@ constraints on every implementation choice.
 
 ### G1. Closed check catalog
 
-Every check type must have a named compiler in the engine and a
-documented contract. No hidden "temporary" type, no "custom" type,
-no SQL expression escape hatch.
+Every check type must have a named compiler in
+`engine/internal/compilers/` and a documented contract in
+`docs/dsl/`. No hidden "temporary" type, no "custom" type, no SQL
+expression escape hatch in the DSL.
+
+Adding a new check type is a deliberate process:
+
+1. Propose an ADR.
+2. Update the schema (`v1` if additive, `v2` if breaking).
+3. Add the compiler with full fixtures.
+4. Add documentation.
+5. Add an example to `rules/_examples/`.
+
+The closed-catalog rule is what makes the platform predictable to
+operate and safe to evolve.
 
 ### G2. No free-form execution language in rules
 

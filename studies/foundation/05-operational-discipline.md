@@ -262,7 +262,7 @@ concern. Every component emits:
 ### Structured logs
 
 - Format: JSON with `slog`-style key-value pairs.
-- Levels: per-package overrides via `DQ_LOG_LEVELS` (see pattern P5
+- Levels: per-package overrides via `DQ_LOG_LEVELS` (see PAT-5
   in [`04-system-architecture.md`](./04-system-architecture.md)).
 - Required fields on every log line: `time`, `level`, `component`,
   `execution_id` (when applicable), `entity` (when applicable),
