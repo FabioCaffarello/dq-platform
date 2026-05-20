@@ -247,7 +247,27 @@ They must not be eroded by any output produced here.
 
 ---
 
-## 6. Slash commands available
+## 6. Playbooks — required reading at session start
+
+The playbooks under `.claude/playbooks/` encode the working protocol
+for Wave 1. They are short. Read them at the start of every session,
+alongside the foundation documents:
+
+- **`.claude/playbooks/wave-1-session-loop.md`** — the 10-step loop
+  for resolving one B0. Includes explicit human decision points.
+- **`.claude/playbooks/acceptance-criteria.md`** — the binary,
+  verifiable criteria a decision study must meet before it can be
+  marked `resolved-study`.
+- **`.claude/playbooks/feedback-protocol.md`** — how feedback on a
+  draft is given (always citing R/P/AC labels, never personal).
+
+These playbooks are operational, not architectural. When a playbook
+turns out to be wrong, update the playbook — do not silently
+diverge.
+
+---
+
+## 7. Slash commands available
 
 Defined under `.claude/commands/`. Use them — they encode the
 workflow.
@@ -264,7 +284,7 @@ workflow.
 
 ---
 
-## 7. What success in Wave 1 looks like
+## 8. What success in Wave 1 looks like
 
 By the end of Wave 1:
 
