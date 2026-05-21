@@ -97,8 +97,39 @@ Wave 3 lands the engine runtime across Phases 3–4:
     integration tests under
     `orphan_integration_test.go` (build tag `integration`).
 
-Future work (last sub-phase):
+- **W3-P4c (runner + failure-scope mapping)** —
+  `internal/runner/` package plus the `cmd/dq-engine/`
+  binary entry point:
+  - `Runner.Run(ctx, trigger)` — end-to-end execution
+    attempt: validates inputs (ADR-0002 CC2 pipe safety;
+    CC5 trigger-source / supersedes coherence); computes
+    `execution_id` (ADR-0002 CC1); generates `attempt_id`
+    (ADR-0003 CC4); runs pre-check (ADR-0007 CC8); writes
+    running row; evaluates each check with
+    always-continue (ADR-0004 CC4); writes per-check
+    rows; computes terminal status via `MapStatus` per
+    ADR-0004 CC2; writes terminal row.
+  - `EntityPrecheck` + `CheckEvaluator` interfaces with
+    no-op defaults (real implementations land in Phase 6).
+  - `cmd/dq-engine/main.go` — minimal binary: loads
+    config from env, creates GCS + BigQuery clients, runs
+    `EnsureSchema`, performs initial manifest load
+    (process-exit on failure per ADR-0007 CC1), starts
+    two periodic loops (loader refresh + orphan
+    detection), waits for SIGTERM/SIGINT.
+  - HTTP / gRPC trigger handler is deferred; the binary
+    holds a Runner but does not exercise it at runtime.
+    Phase 6 (first onboarded entity) wires triggers.
+  - Unit tests under `internal/runner/runner_test.go`;
+    integration tests under
+    `runner_integration_test.go` (build tag
+    `integration`).
 
-- **W3-P4c** — runner + failure-scope mapping; assembles
-  the engine binary entry point and the periodic loops
-  that drive the loader refresh and the orphan detector.
+With Phase 4c, **Phase 4 closes**. Future work:
+
+- **W3-P5** — alerting (Pub/Sub publisher per ADR-0006,
+  `_owners.yaml` schema, linter rule).
+- **W3-P6** — first onboarded entity end-to-end; HTTP /
+  gRPC trigger handler.
+- **W3-P7** — `deploy/` (Kubernetes manifests, env overlays).
+- **W3-P8** — `docs/` content beyond ADRs.

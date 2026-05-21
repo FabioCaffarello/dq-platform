@@ -24,7 +24,7 @@ COMPOSE := docker compose -p $(COMPOSE_PROJECT_NAME)
 	lint-tools test-tools \
 	lint-rules dry-run-rules \
 	sync-schema \
-	build-lint \
+	build-lint build-engine \
 	up down \
 	smoke-substrate
 
@@ -53,6 +53,10 @@ test-tools: ## go test across every module under tools/.
 build-lint: ## Build the dq-lint binary at bin/dq-lint.
 	@mkdir -p bin
 	@cd tools/lint && go build -o ../../bin/dq-lint .
+
+build-engine: ## Build the dq-engine binary at bin/dq-engine.
+	@mkdir -p bin
+	@cd engine && go build -o ../bin/dq-engine ./cmd/dq-engine
 
 lint-rules: build-lint ## Validate every rule YAML against the schema mirror (per ADR-0001).
 	@./bin/dq-lint -schema rules/_schema/v1.schema.json -rules rules
