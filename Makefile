@@ -20,7 +20,7 @@ COMPOSE := docker compose -p $(COMPOSE_PROJECT_NAME)
 
 .PHONY: help \
 	lint test \
-	lint-engine test-engine \
+	lint-engine test-engine test-engine-integration \
 	lint-tools test-tools \
 	lint-rules dry-run-rules \
 	sync-schema \
@@ -38,8 +38,11 @@ test: smoke-substrate test-engine test-tools ## Run substrate smoke tests + go t
 lint-engine: ## go vet across the engine module.
 	@cd engine && go vet ./...
 
-test-engine: ## go test across the engine module.
+test-engine: ## go test across the engine module (unit tests only).
 	@cd engine && go test ./...
+
+test-engine-integration: ## go test -tags integration across the engine module; requires `make up` first.
+	@cd engine && go test -tags integration ./...
 
 lint-tools: ## go vet across every module under tools/.
 	@cd tools/lint && go vet ./...
