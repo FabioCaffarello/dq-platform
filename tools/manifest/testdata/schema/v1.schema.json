@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "engine/internal/dsl/schema/v1.schema.json",
+  "title": "DQ Platform Rule Schema v1",
+  "description": "Canonical JSON Schema for rule YAMLs at schema version 1. The byte-identical mirror at rules/_schema/v1.schema.json is enforced by the schema-mirror CI gate. The mirror is never edited by hand; use `make sync-schema` to update it.",
+  "type": "object",
+  "required": ["version", "entity", "checks"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "description": "Schema version this rule was written against. Mandatory per ADR-0001 C4. Engine and linter reject rules without it.",
+      "const": 1
+    },
+    "entity": {
+      "description": "Entity identifier. ASCII alphanumeric plus underscore, dot, hyphen. The pipe character is explicitly forbidden per ADR-0002 input-safety (entity is one of the five inputs to the execution_id hash; the formula is pipe-separated with no escaping).",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^[A-Za-z0-9_.-]+$"
+    },
+    "checks": {
+      "description": "Non-empty array of check definitions. Each check is evaluated independently per ADR-0004 always-continue.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/check"
+      }
+    },
+    "description": {
+      "description": "Optional human-readable description of the rule.",
+      "type": "string"
+    }
+  },
+  "$defs": {
+    "check": {
+      "type": "object",
+      "required": ["check_id", "kind"],
+      "additionalProperties": false,
+      "properties": {
+        "check_id": {
+          "description": "Check identifier; component of the dq_check_results composite key per ADR-0003 CC7. ASCII alphanumeric plus underscore, dot, hyphen; pipe forbidden.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "^[A-Za-z0-9_.-]+$"
+        },
+        "kind": {
+          "description": "Discriminator for the check's evaluation strategy. v1 schema accepts any string; Phase-4+ schemas tighten this to an enumerated set of supported kinds as the DSL grammar lands.",
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "description": "Optional human-readable description of the check.",
+          "type": "string"
+        }
+      }
+    }
+  }
+}

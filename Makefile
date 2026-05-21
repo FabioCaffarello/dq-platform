@@ -21,10 +21,10 @@ COMPOSE := docker compose -p $(COMPOSE_PROJECT_NAME)
 .PHONY: help \
 	lint test \
 	lint-engine test-engine test-engine-integration \
-	lint-tools test-tools \
+	lint-tools test-tools test-tools-manifest-integration \
 	lint-rules dry-run-rules \
 	sync-schema \
-	build-lint build-engine \
+	build-lint build-engine build-manifest \
 	up down \
 	smoke-substrate
 
@@ -46,9 +46,14 @@ test-engine-integration: ## go test -tags integration across the engine module; 
 
 lint-tools: ## go vet across every module under tools/.
 	@cd tools/lint && go vet ./...
+	@cd tools/manifest && go vet ./...
 
 test-tools: ## go test across every module under tools/.
 	@cd tools/lint && go test ./...
+	@cd tools/manifest && go test ./...
+
+test-tools-manifest-integration: ## go test -tags integration on tools/manifest; requires `make up` first.
+	@cd tools/manifest && go test -tags integration ./...
 
 build-lint: ## Build the dq-lint binary at bin/dq-lint.
 	@mkdir -p bin
@@ -57,6 +62,10 @@ build-lint: ## Build the dq-lint binary at bin/dq-lint.
 build-engine: ## Build the dq-engine binary at bin/dq-engine.
 	@mkdir -p bin
 	@cd engine && go build -o ../bin/dq-engine ./cmd/dq-engine
+
+build-manifest: ## Build the dq-manifest binary at bin/dq-manifest.
+	@mkdir -p bin
+	@cd tools/manifest && go build -o ../../bin/dq-manifest .
 
 lint-rules: build-lint ## Validate every rule YAML against the schema mirror (per ADR-0001).
 	@./bin/dq-lint -schema rules/_schema/v1.schema.json -rules rules

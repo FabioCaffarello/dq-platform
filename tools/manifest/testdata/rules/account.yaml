@@ -1,0 +1,7 @@
+# path: tools/manifest/testdata/rules/account.yaml
+version: 1
+entity: account
+description: Second test rule for multi-rule manifest tests.
+checks:
+  - check_id: row_count_positive
+    kind: placeholder
