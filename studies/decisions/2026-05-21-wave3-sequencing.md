@@ -250,8 +250,52 @@ end-to-end. The "Tabular store: lazy view" (**Partial**) row
 ships with a known fidelity gap, documented per
 C-W2-3.6 / OQ-W2-3.3.
 
-May split into sub-phases (loader / runner / write / failure
-scope / orphan) — see OQ-W3-2.
+#### Sub-phase split (resolves OQ-W3-2)
+
+The first Phase-4 session (2026-05-21) decided to split Phase 4
+into four cohesive sub-phases along the natural data-flow
+dependency edges. Each sub-phase is internally cohesive and
+sized for a single Wave-3 session under the
+`.claude/playbooks/wave-3-session-loop.md` discipline.
+
+- **W3-P4a — Loader.** Manifest fetch + hash short-circuit +
+  refuse-swap. Implements B0-7 CC1, CC2, CC9; consumer side
+  of ADR-0005 §4 publication contract. Depends only on
+  Phase 2's object store and Phase 3's schema mirror.
+
+- **W3-P4b — Result-write layer.** Append-only storage for
+  `dq_executions` + `dq_check_results` + lazy
+  `dq_executions_current` view. Implements B0-3 CC1, CC2,
+  CC3, CC7. Stand-alone subsystem; depends only on Phase 2's
+  tabular store.
+
+- **W3-P4c — Runner + failure-scope mapping.** The runtime
+  path that wires the loader (W3-P4a) and the result-write
+  layer (W3-P4b) together via `execution_id` computation
+  (B0-2 CC1/CC2/CC6) and the failure-scope status mapping
+  (B0-4 CC1/CC2/CC3/CC4). Also lands the pre-check
+  entity-level validation (B0-7 CC8) and the per-failure-path
+  observability emission (B0-7 CC14). Depends on both W3-P4a
+  and W3-P4b.
+
+- **W3-P4d — Orphan-run detection.** Periodic scan finalizing
+  abandoned `running` rows to `aborted` (B0-7 CC10
+  engine-restart / OOM / crash branches; B0-7 CC11). Depends
+  only on W3-P4b.
+
+**Dependency edges and recommended landing order.** W3-P4a
+and W3-P4b are independent of each other; W3-P4d depends on
+W3-P4b alone; W3-P4c depends on both W3-P4a and W3-P4b. The
+recommended landing order is P4a → P4b → P4c → P4d so the
+manifest-load and storage-layer foundations land before the
+runner that orchestrates them, with the orphan-detection
+rescue path closing the phase. The first session of W3-P4a
+or W3-P4b may pick either order; either start is correct.
+
+Each sub-phase closes with its own commit and decision-log
+row update; the parent W3-P4 row in the Wave 3 — Phases
+table is marked `split` and the four child rows (W3-P4a /
+W3-P4b / W3-P4c / W3-P4d) carry the individual statuses.
 
 ### Phase 5 — Alerting scaffold
 
@@ -328,9 +372,12 @@ starts. See §Promotion target for the exact log edits.
 
 - **OQ-W3-2.** Whether Phase 4 splits into sub-phases
   (loader / runner / result-write / failure-scope / orphan).
-  **Out-of-scope for current cycle — the first Phase-4 session
-  decides this when it lands and updates the sequencing study
-  if it does split.**
+  **Resolved 2026-05-21 by the first Phase-4 session: Phase 4
+  is split into four sub-phases (W3-P4a Loader, W3-P4b
+  Result-write, W3-P4c Runner+failure-scope, W3-P4d Orphan
+  detection); recommended landing order P4a → P4b → P4c →
+  P4d. See §"Phase 4 — Engine runtime scaffold" above and
+  the Wave 3 — Phases table in the decision log.**
 
 - **OQ-W3-3.** Whether B1 rows (B1-1 through B1-10) resolve
   interleaved with Wave 3 phases or as a parallel stream.

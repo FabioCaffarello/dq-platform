@@ -119,7 +119,11 @@ Each row resolves to the commit reference that closes the phase.
 | W3-P1 | ADR promotion — twelve studies (B0-1…B0-7, W2-1…W2-5) plus this sequencing study, into [`docs/adr/0001–0013`](../../docs/adr/) | closed (Session A `c55799c`, Session B `e411fdb`, Session C lands with this commit; all thirteen ADRs exist) |
 | W3-P2 | Root infrastructure — `go.work`, `Makefile`, `docker-compose.yml`, `.github/`, `.codex/AGENTS.md`, top-level `README.md`, empty workspace layout | closed (commit lands with this session; depends on B1-10 resolved-study upstream) |
 | W3-P3 | Schema-layer — engine schema source, rules schema mirror, `tools/lint` byte-equality gate (B0-1 C2 / C4 / C10) | closed (commit lands with this session; depends on B1-10 resolved-study upstream) |
-| W3-P4 | Engine runtime — loader (B0-7), runner (B0-2), result write (B0-3), failure scope (B0-4), orphan detection (B0-7) | open |
+| W3-P4 | Engine runtime — loader (B0-7), runner (B0-2), result write (B0-3), failure scope (B0-4), orphan detection (B0-7) | split into W3-P4a / W3-P4b / W3-P4c / W3-P4d (2026-05-21, resolves OQ-W3-2; see [`studies/decisions/2026-05-21-wave3-sequencing.md`](../decisions/2026-05-21-wave3-sequencing.md) §"Phase 4") |
+| W3-P4a | Loader — manifest fetch, hash short-circuit, refuse-swap (B0-7 CC1/CC2/CC9; ADR-0005 §4 consumer side) | open |
+| W3-P4b | Result-write layer — append-only `dq_executions` + `dq_check_results` + lazy `dq_executions_current` view (B0-3 CC1/CC2/CC3/CC7) | open |
+| W3-P4c | Runner + failure-scope mapping — `execution_id` computation (B0-2 CC1/CC2/CC6); status mapping (B0-4 CC1/CC2/CC3/CC4); pre-check validation (B0-7 CC8); observability emission (B0-7 CC14). Depends on W3-P4a and W3-P4b. | open |
+| W3-P4d | Orphan-run detection — periodic scan, follow-up `aborted` row with orphan-detector's `engine_version` (B0-7 CC10/CC11). Depends on W3-P4b. | open |
 | W3-P5 | Alerting — Pub/Sub publisher (B0-6), engine-side dedup, `_owners.yaml` schema, linter rule | open |
 | W3-P6 | `rules/` first onboarded entity — end-to-end flow per W2-3 C-W2-3.4 | open |
 | W3-P7 | `deploy/` — Kubernetes manifests, environment overlays; depends on B1-4 | open |
