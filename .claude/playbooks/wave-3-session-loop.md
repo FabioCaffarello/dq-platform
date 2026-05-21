@@ -75,23 +75,54 @@ point [H]**.
 
 9. **[H] Read end-to-end.** Walk the diff. Every TODO / FIXME /
    `_TBD` marker must carry an "out-of-scope for current cycle"
-   reason, **or** be resolved before the commit. If neither, the
-   unit is not ready.
+   reason, **or** be resolved before the PR is opened. If
+   neither, the unit is not ready.
 
-10. **Update the decision log if applicable.** If the
-    scaffolding unit resolved a B1 row (e.g., scaffolding the
-    config model resolves B1-4), update the row to point at the
-    produced scaffold. Then **commit** per the project's commit
-    style — see `git log` for precedent. Include the
-    `Co-Authored-By` trailer used by prior decision and sync
-    commits.
+10. **Land via pull request.** Create a feature branch from
+    `main` using the convention `wave-3/<phase>-<topic-slug>`
+    (e.g., `wave-3/p4b-result-write`,
+    `wave-3/protocol-pr-flow`). Stage all session artifacts —
+    including the decision-log row update for the closing
+    sub-phase and any B-row updates the session resolved — and
+    commit on the branch with the `Co-Authored-By` trailer used
+    by prior commits.
+
+    Push the branch to `origin` and open a PR against `main` via
+    `gh pr create`. The PR body lists:
+    - the citation map (B0 / W2 / W3 / B1 commitments the
+      session implements);
+    - the critique result (blocking / important / minor
+      counts; what was addressed);
+    - a test plan (the local gates from AC-W3-7, the
+      integration tests if any, and a note on which CI
+      workflows from Phase 2 will run on the
+      `pull_request` trigger).
+
+    CI workflows (`lint.yml`, `test.yml`, `schema-mirror.yml`
+    from Phase 2) run on the PR's `pull_request` trigger.
+    Once CI passes and the [H] reviewer (project lead)
+    approves, the PR is merged via the GitHub UI. The squash-
+    vs-merge-commit-vs-rebase choice is a host-primitive
+    follow-up of ADR-0008 (recorded in the decision log
+    under W2-1 sub-decisions); until that lands, the
+    default is whatever the project lead picks at merge time.
+
+    **Direct-to-main commits are reserved for the historical
+    Wave-1, Wave-2, and Wave-3-Phase-0…Phase-3 commits up to
+    `ee0d56f` (the Phase-4 sub-phase split).** Everything from
+    W3-P4a (the loader) onward lands via PR — W3-P4a is the
+    first PR (`#1`) and the playbook update committing this
+    rule lands via the second PR. There is no carve-out for
+    protocol changes: protocol updates also follow PR-flow so
+    the playbook can be reviewed the same way as the
+    scaffolding it governs.
 
 ---
 
-## When to abort the session (no commit)
+## When to abort the session (no PR opened)
 
-Stop the loop **without committing** if any of the following
-appears:
+Stop the loop **without opening a PR** (and without committing
+on the feature branch) if any of the following appears:
 
 - **Out-of-scope creep.** The scaffold introduces production
   code outside the declared Wave 3 unit (e.g., a Phase-4 session
@@ -105,7 +136,13 @@ appears:
   first.
 - **AC-W3 rows fail and cannot be resolved in two critique
   rounds.** Better to leave the unit partially scaffolded with
-  a clear deferral than to commit a half-baked surface.
+  a clear deferral than to open a PR for a half-baked surface.
+
+If a feature branch already carries a commit when one of these
+appears, either rewrite the branch (interactive rebase) before
+opening the PR or delete the branch and re-scope. The PR is
+the contract surface for reviewers; it must not include
+known-broken state when opened.
 
 ---
 
