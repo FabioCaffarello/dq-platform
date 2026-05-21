@@ -94,11 +94,11 @@ listed here so the log is complete.
 
 | # | Topic | Status |
 |---|---|---|
-| W2-1 | Git host choice (affects CI artifact location and syntax) | [resolved-study](../decisions/2026-05-21-platform-decisions-wave2.md) |
-| W2-2 | Multi-agent contract — finalize `.claude/`, `.codex/`, `AGENTS.md` | [resolved-study](../decisions/2026-05-21-platform-decisions-wave2.md) |
-| W2-3 | Docker Compose local scope — which services emulated, which sandboxed | [resolved-study](../decisions/2026-05-21-platform-decisions-wave2.md) |
-| W2-4 | Documentation language policy (English / Portuguese / mixed) | [resolved-study](../decisions/2026-05-21-platform-decisions-wave2.md) |
-| W2-5 | Per-workspace tag prefix conventions (confirm or revise) | [resolved-study](../decisions/2026-05-21-platform-decisions-wave2.md) |
+| W2-1 | Git host choice (affects CI artifact location and syntax) | [resolved-study](../decisions/2026-05-21-platform-decisions-wave2.md) → [resolved-adr](../../docs/adr/0008-git-host.md) |
+| W2-2 | Multi-agent contract — finalize `.claude/`, `.codex/`, `AGENTS.md` | [resolved-study](../decisions/2026-05-21-platform-decisions-wave2.md) → [resolved-adr](../../docs/adr/0009-multi-agent-contract.md) |
+| W2-3 | Docker Compose local scope — which services emulated, which sandboxed | [resolved-study](../decisions/2026-05-21-platform-decisions-wave2.md) → [resolved-adr](../../docs/adr/0010-substrate-posture.md) |
+| W2-4 | Documentation language policy (English / Portuguese / mixed) | [resolved-study](../decisions/2026-05-21-platform-decisions-wave2.md) → [resolved-adr](../../docs/adr/0011-documentation-language.md) |
+| W2-5 | Per-workspace tag prefix conventions (confirm or revise) | [resolved-study](../decisions/2026-05-21-platform-decisions-wave2.md) → [resolved-adr](../../docs/adr/0012-tag-conventions.md) |
 
 ---
 
@@ -115,7 +115,7 @@ Each row resolves to the commit reference that closes the phase.
 | # | Phase | Status |
 |---|---|---|
 | W3-P0 | Protocol — sequencing study + Wave 3 playbook + Wave 3 acceptance criteria | closed (commit `25e06ab`, 2026-05-21) |
-| W3-P1 | ADR promotion — twelve studies (B0-1…B0-7, W2-1…W2-5) plus this sequencing study, into `docs/adr/0001–0013` | in-progress (Session A: B0 batch landed; Sessions B / C pending) |
+| W3-P1 | ADR promotion — twelve studies (B0-1…B0-7, W2-1…W2-5) plus this sequencing study, into `docs/adr/0001–0013` | in-progress (Sessions A and B landed; Session C pending) |
 | W3-P2 | Root infrastructure — `go.work`, `Makefile`, `docker-compose.yml`, `.github/`, `.codex/AGENTS.md`, top-level `README.md`, empty workspace layout | open |
 | W3-P3 | Schema-layer — engine schema source, rules schema mirror, `tools/lint` byte-equality gate (B0-1 C2 / C4 / C10) | open |
 | W3-P4 | Engine runtime — loader (B0-7), runner (B0-2), result write (B0-3), failure scope (B0-4), orphan detection (B0-7) | open |
@@ -170,8 +170,10 @@ Pass when **every B0 row** is at status `resolved-study` or
 
 Pass when the consolidated Wave 2 decisions document exists in
 `studies/decisions/` and addresses every W2 row. Currently:
-**5 of 5 W2 rows resolved — gate met**
-([study](../decisions/2026-05-21-platform-decisions-wave2.md)).
+**5 of 5 W2 rows resolved-adr — gate met**
+(study at
+[`studies/decisions/2026-05-21-platform-decisions-wave2.md`](../decisions/2026-05-21-platform-decisions-wave2.md);
+ADRs at `docs/adr/0008–0012`, promoted 2026-05-21).
 
 ### Wave 3 readiness
 
