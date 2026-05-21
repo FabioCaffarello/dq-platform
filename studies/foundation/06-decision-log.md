@@ -67,7 +67,7 @@
 | B1-7 | Compatibility window duration | open | How long is each schema version supported after its successor is released? | Migration ergonomics for domain teams. | Boundary contract refinement |
 | B1-8 | Manifest cryptographic posture | open | Does the manifest carry signatures beyond checksums? Who signs it? | Defense in depth against tampering or accidental publication. | Security note |
 | B1-9 | CODEOWNERS finalization | open | Final team names and path rules for the asymmetric review model. | Enforces the boundary at PR-review time. | CODEOWNERS file |
-| B1-10 | Workspace tooling stack | open | Confirm Go workspaces (`go.work`) as the tooling choice and finalize the per-tool module structure. | Affects every CI pipeline file. | Topology ADR refinement |
+| B1-10 | Workspace tooling stack | [resolved-study](../decisions/2026-05-21-b1-10-workspace-tooling.md) | Confirm Go workspaces (`go.work`) as the tooling choice and finalize the per-tool module structure. | Affects every CI pipeline file. | Topology ADR refinement |
 
 ---
 
