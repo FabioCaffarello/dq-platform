@@ -11,7 +11,7 @@
 - Audience: project lead, platform engineers, anyone planning the next
   session of work.
 - Status: living document. Update whenever a decision changes state.
-- Last updated: 2026-05-20
+- Last updated: 2026-05-21
 - Promotion target: this document stays in `studies/foundation/` for
   the project's lifetime. Resolved decisions are promoted to ADRs
   under `docs/adr/` during Wave 3; rows here keep the link.
@@ -94,11 +94,11 @@ listed here so the log is complete.
 
 | # | Topic | Status |
 |---|---|---|
-| W2-1 | Git host choice (affects CI artifact location and syntax) | open |
-| W2-2 | Multi-agent contract — finalize `.claude/`, `.codex/`, `AGENTS.md` | open |
-| W2-3 | Docker Compose local scope — which services emulated, which sandboxed | open |
-| W2-4 | Documentation language policy (English / Portuguese / mixed) | open |
-| W2-5 | Per-workspace tag prefix conventions (confirm or revise) | open |
+| W2-1 | Git host choice (affects CI artifact location and syntax) | [resolved-study](../decisions/2026-05-21-platform-decisions-wave2.md) |
+| W2-2 | Multi-agent contract — finalize `.claude/`, `.codex/`, `AGENTS.md` | [resolved-study](../decisions/2026-05-21-platform-decisions-wave2.md) |
+| W2-3 | Docker Compose local scope — which services emulated, which sandboxed | [resolved-study](../decisions/2026-05-21-platform-decisions-wave2.md) |
+| W2-4 | Documentation language policy (English / Portuguese / mixed) | [resolved-study](../decisions/2026-05-21-platform-decisions-wave2.md) |
+| W2-5 | Per-workspace tag prefix conventions (confirm or revise) | [resolved-study](../decisions/2026-05-21-platform-decisions-wave2.md) |
 
 ---
 
@@ -144,7 +144,9 @@ Pass when **every B0 row** is at status `resolved-study` or
 ### Wave 2 gate (platform decisions complete)
 
 Pass when the consolidated Wave 2 decisions document exists in
-`studies/decisions/` and addresses every W2 row.
+`studies/decisions/` and addresses every W2 row. Currently:
+**5 of 5 W2 rows resolved — gate met**
+([study](../decisions/2026-05-21-platform-decisions-wave2.md)).
 
 ### Wave 3 readiness
 
