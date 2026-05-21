@@ -1,0 +1,6 @@
+# path: tools/lint/testdata/owners/invalid/missing-channels.yaml
+# Entity declares an owner but no channels — schema requires channels.
+schema_version: 1
+entities:
+  customer:
+    owner: data-platform

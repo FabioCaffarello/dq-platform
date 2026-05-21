@@ -125,10 +125,40 @@ Wave 3 lands the engine runtime across Phases 3–4:
     `runner_integration_test.go` (build tag
     `integration`).
 
-With Phase 4c, **Phase 4 closes**. Future work:
+With Phase 4c, **Phase 4 closes**. Phase 5 follows:
 
-- **W3-P5** — alerting (Pub/Sub publisher per ADR-0006,
-  `_owners.yaml` schema, linter rule).
+- **W3-P5 (alerting)** — `internal/alerts/` package:
+  - `Event` payload struct + JSON serialization per
+    ADR-0006 §4 (`event.go`).
+  - `MapCategory(source, *result, *status)` implements
+    the non-negotiable category boundary per ADR-0006 CC7
+    (`category.go`).
+  - `AttemptDeduper` — per-attempt engine-side dedup per
+    ADR-0006 CC5; bounded in-memory state discarded when
+    the attempt finalizes (`dedup.go`).
+  - `Publisher` interface + `NoopPublisher` + `PubSubPublisher`
+    (Pub/Sub v2 client; honors `PUBSUB_EMULATOR_HOST` for the
+    local Compose stack).
+  - Integrated into the runner (per-check + execution-level
+    emissions) and orphan detector (per-finalization
+    operational emission). Publish failures are
+    warning-logged, not propagated — alerting is best-effort
+    out-of-band signal.
+  - Engine binary creates the publisher when
+    `DQ_PUBSUB_TOPIC` is set; defaults to `NoopPublisher`
+    otherwise so local-dev binaries don't have to depend on
+    the emulator.
+  - Unit tests + integration test under
+    `alerts_integration_test.go` (build tag `integration`)
+    round-trip an Event through the local emulator.
+
+Phase 5 also adds the `_owners.v1.schema.json` to
+`rules/_schema/` and extends `dq-lint` with the
+ADR-0006 CC9 enforcement: every rule's entity must be
+declared in `_owners.yaml`, or the linter rejects.
+
+Future work:
+
 - **W3-P6** — first onboarded entity end-to-end; HTTP /
   gRPC trigger handler.
 - **W3-P7** — `deploy/` (Kubernetes manifests, env overlays).

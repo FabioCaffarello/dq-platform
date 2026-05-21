@@ -1,0 +1,9 @@
+# path: tools/lint/testdata/owners/invalid/wrong-version.yaml
+# schema_version is not const 1.
+schema_version: 2
+entities:
+  customer:
+    owner: data-platform
+    channels:
+      data_quality:
+        - slack:#dq-customer

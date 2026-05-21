@@ -1,0 +1,6 @@
+# path: tools/lint/testdata/owners/cross-check/covered.yaml
+version: 1
+entity: covered
+checks:
+  - check_id: row_count_positive
+    kind: placeholder

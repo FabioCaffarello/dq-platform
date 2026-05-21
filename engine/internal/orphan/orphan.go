@@ -53,6 +53,7 @@ import (
 	"log/slog"
 	"time"
 
+	"dq-platform/engine/internal/alerts"
 	"dq-platform/engine/internal/results"
 )
 
@@ -92,6 +93,13 @@ type Config struct {
 	// Now is an injectable clock for tests. Optional; nil →
 	// time.Now.
 	Now func() time.Time
+
+	// Publisher is the alerting emission surface per ADR-0006.
+	// Optional; nil → alerts.NoopPublisher (no alerts emitted).
+	// The engine binary wires the same PubSubPublisher used by
+	// the runner; tests inject a capturing publisher to assert
+	// emission.
+	Publisher alerts.Publisher
 }
 
 // Detector finalizes abandoned `running` executions per ADR-0007
@@ -103,6 +111,7 @@ type Detector struct {
 	threshold     time.Duration
 	logger        *slog.Logger
 	now           func() time.Time
+	publisher     alerts.Publisher
 }
 
 // New constructs a Detector from a Scanner and Config.
@@ -124,12 +133,17 @@ func New(scanner Scanner, cfg Config) (*Detector, error) {
 	if clock == nil {
 		clock = time.Now
 	}
+	publisher := cfg.Publisher
+	if publisher == nil {
+		publisher = alerts.NoopPublisher{}
+	}
 	return &Detector{
 		scanner:       scanner,
 		engineVersion: cfg.EngineVersion,
 		threshold:     cfg.Threshold,
 		logger:        logger,
 		now:           clock,
+		publisher:     publisher,
 	}, nil
 }
 
@@ -180,8 +194,38 @@ func (d *Detector) RunOnce(ctx context.Context) (finalized int, errs []error, er
 			"detector_engine_version", d.engineVersion,
 			"adr_reference", "ADR-0007 CC11",
 		)
+		d.emitAbortedAlert(ctx, candidate, followup)
 	}
 	return finalized, errs, nil
+}
+
+// emitAbortedAlert publishes the operational alert that
+// accompanies a successful orphan finalization per ADR-0006 CC7
+// (orphan_detector row maps to operational). Publish failures
+// are warning-logged, not returned: alerting is best-effort and
+// must not block the detection-loop cadence.
+func (d *Detector) emitAbortedAlert(ctx context.Context, candidate, followup results.ExecutionRow) {
+	status := results.StatusAborted
+	summary := followup.ErrorSummary
+	event := alerts.Event{
+		ExecutionID:  &candidate.ExecutionID,
+		AttemptID:    &candidate.AttemptID,
+		Entity:       candidate.Entity,
+		Category:     alerts.CategoryOperational,
+		EventSource:  alerts.SourceOrphanDetector,
+		Status:       &status,
+		RecordedAt:   followup.RecordedAt,
+		ErrorSummary: summary,
+	}
+	if err := d.publisher.Publish(ctx, event); err != nil {
+		d.logger.Warn("alert publish failed (orphan finalization)",
+			"execution_id", candidate.ExecutionID,
+			"attempt_id", candidate.AttemptID,
+			"entity", candidate.Entity,
+			"error", err.Error(),
+			"adr_reference", "ADR-0006 CC4",
+		)
+	}
 }
 
 // buildFollowupRow constructs the aborted follow-up row for one

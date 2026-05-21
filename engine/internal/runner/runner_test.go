@@ -6,9 +6,11 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"dq-platform/engine/internal/alerts"
 	"dq-platform/engine/internal/results"
 )
 
@@ -518,4 +520,277 @@ func (e perCheckEvaluatorWithError) Evaluate(_ context.Context, spec CheckSpec, 
 		return Evaluation{}, errors.New("synthetic evaluator failure")
 	}
 	return Evaluation{Result: results.ResultPass}, nil
+}
+
+// --- publish-hook tests (ADR-0006 CC4 / CC7) ---
+
+// capturePublisher records every Event handed to Publish. Used
+// by the runner publish-hook tests to assert what was emitted.
+// Safe for concurrent use; the runner publishes from one
+// goroutine per Run today but the deduper concurrency contract
+// already exercises multi-goroutine emission.
+type capturePublisher struct {
+	mu     sync.Mutex
+	events []alerts.Event
+	err    error // if non-nil, Publish returns this and still records
+}
+
+func (p *capturePublisher) Publish(_ context.Context, e alerts.Event) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.events = append(p.events, e)
+	return p.err
+}
+
+func (p *capturePublisher) snapshot() []alerts.Event {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	out := make([]alerts.Event, len(p.events))
+	copy(out, p.events)
+	return out
+}
+
+func TestRun_HappyPath_NoAlerts(t *testing.T) {
+	// ADR-0006 CC7: all checks passing → status=success →
+	// neither check-level nor execution-level alert.
+	store := &inMemStore{}
+	pub := &capturePublisher{}
+	r, err := New(Config{
+		Store:          store,
+		EngineVersion:  "0.1.0",
+		RulesetVersion: "rules-v1.0.0",
+		AttemptID:      func() string { return "att-1" },
+		Now:            func() time.Time { return time.Date(2026, 5, 21, 14, 0, 0, 0, time.UTC) },
+		Publisher:      pub,
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if _, err := r.Run(context.Background(), sampleTrigger()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if got := pub.snapshot(); len(got) != 0 {
+		t.Errorf("happy-path emitted %d alert(s); want 0: %+v", len(got), got)
+	}
+}
+
+func TestRun_OneFail_EmitsCheckAndExecutionAlerts(t *testing.T) {
+	// ADR-0006 CC7: one failing check → one data_quality
+	// check-level alert + one operational execution-level alert
+	// (status=failed).
+	store := &inMemStore{}
+	pub := &capturePublisher{}
+	trigger := sampleTrigger()
+	trigger.Checks = []CheckSpec{
+		{CheckID: "a", Kind: "stub"},
+		{CheckID: "b", Kind: "stub"},
+	}
+	evaluator := PerCheckEvaluator{
+		Results: map[string]results.CheckResult{
+			"a": results.ResultPass,
+			"b": results.ResultFail,
+		},
+	}
+	r, err := New(Config{
+		Store:          store,
+		EngineVersion:  "0.1.0",
+		RulesetVersion: "rules-v1.0.0",
+		AttemptID:      func() string { return "att-1" },
+		Now:            func() time.Time { return time.Date(2026, 5, 21, 14, 0, 0, 0, time.UTC) },
+		Evaluator:      evaluator,
+		Publisher:      pub,
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if _, err := r.Run(context.Background(), trigger); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	events := pub.snapshot()
+	if len(events) != 2 {
+		t.Fatalf("alerts emitted = %d; want 2 (one check-level + one execution-level): %+v", len(events), events)
+	}
+	// First emit: check-level for the failing check; second emit:
+	// execution-level. Pass result on "a" must not emit.
+	checkLevel, executionLevel := events[0], events[1]
+	if checkLevel.CheckID == nil || *checkLevel.CheckID != "b" {
+		t.Errorf("first event CheckID = %v; want b", checkLevel.CheckID)
+	}
+	if checkLevel.Category != alerts.CategoryDataQuality {
+		t.Errorf("check-level Category = %q; want data_quality", checkLevel.Category)
+	}
+	if checkLevel.Result == nil || *checkLevel.Result != results.ResultFail {
+		t.Errorf("check-level Result = %v; want fail", checkLevel.Result)
+	}
+	if executionLevel.CheckID != nil {
+		t.Errorf("execution-level event must not carry CheckID; got %v", *executionLevel.CheckID)
+	}
+	if executionLevel.Category != alerts.CategoryOperational {
+		t.Errorf("execution-level Category = %q; want operational", executionLevel.Category)
+	}
+	if executionLevel.Status == nil || *executionLevel.Status != results.StatusFailed {
+		t.Errorf("execution-level Status = %v; want failed", executionLevel.Status)
+	}
+	if executionLevel.ErrorSummary == nil {
+		t.Errorf("execution-level ErrorSummary is nil; want set per ADR-0003 CC3")
+	}
+}
+
+func TestRun_AllError_EmitsCheckAndExecutionOperationalAlerts(t *testing.T) {
+	// ADR-0006 CC7: check result=error maps to operational, not
+	// data_quality. Two errored checks → two operational
+	// check-level alerts + one operational execution-level alert
+	// (status=error).
+	store := &inMemStore{}
+	pub := &capturePublisher{}
+	trigger := sampleTrigger()
+	trigger.Checks = []CheckSpec{
+		{CheckID: "a", Kind: "stub"},
+		{CheckID: "b", Kind: "stub"},
+	}
+	r, err := New(Config{
+		Store:          store,
+		EngineVersion:  "0.1.0",
+		RulesetVersion: "rules-v1.0.0",
+		AttemptID:      func() string { return "att-1" },
+		Now:            func() time.Time { return time.Date(2026, 5, 21, 14, 0, 0, 0, time.UTC) },
+		Evaluator:      FixedResultEvaluator{Result: results.ResultError},
+		Publisher:      pub,
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if _, err := r.Run(context.Background(), trigger); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	events := pub.snapshot()
+	if len(events) != 3 {
+		t.Fatalf("alerts emitted = %d; want 3 (2 check-level + 1 execution-level): %+v", len(events), events)
+	}
+	for i := 0; i < 2; i++ {
+		if events[i].Category != alerts.CategoryOperational {
+			t.Errorf("check-level event %d Category = %q; want operational (ResultError)", i, events[i].Category)
+		}
+	}
+	if events[2].Category != alerts.CategoryOperational {
+		t.Errorf("execution-level Category = %q; want operational", events[2].Category)
+	}
+}
+
+func TestRun_PrecheckAbsent_EmitsOperationalAlert(t *testing.T) {
+	// ADR-0006 CC7: precheck absent → terminal status=error →
+	// one operational execution-level alert, no check-level
+	// alerts.
+	store := &inMemStore{}
+	pub := &capturePublisher{}
+	r, err := New(Config{
+		Store:          store,
+		EngineVersion:  "0.1.0",
+		RulesetVersion: "rules-v1.0.0",
+		AttemptID:      func() string { return "att-1" },
+		Now:            func() time.Time { return time.Date(2026, 5, 21, 14, 0, 0, 0, time.UTC) },
+		Precheck:       fixedPrecheck{present: false},
+		Publisher:      pub,
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if _, err := r.Run(context.Background(), sampleTrigger()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	events := pub.snapshot()
+	if len(events) != 1 {
+		t.Fatalf("alerts emitted = %d; want exactly 1 (operational execution-level): %+v", len(events), events)
+	}
+	e := events[0]
+	if e.Category != alerts.CategoryOperational {
+		t.Errorf("Category = %q; want operational", e.Category)
+	}
+	if e.EventSource != alerts.SourceRunner {
+		t.Errorf("EventSource = %q; want runner", e.EventSource)
+	}
+	if e.Status == nil || *e.Status != results.StatusError {
+		t.Errorf("Status = %v; want error", e.Status)
+	}
+	if e.ErrorSummary == nil || !strings.Contains(*e.ErrorSummary, "source not present") {
+		t.Errorf("ErrorSummary = %v; want it to mention 'source not present'", e.ErrorSummary)
+	}
+	if e.CheckID != nil {
+		t.Errorf("execution-level event must not carry CheckID; got %v", *e.CheckID)
+	}
+}
+
+func TestRun_PublishErrorDoesNotFailRun(t *testing.T) {
+	// ADR-0006 CC4 + CC5: alerting is best-effort. Publish
+	// failures must be logged but not propagated; the execution
+	// finalization is durable independent of the alert.
+	store := &inMemStore{}
+	pub := &capturePublisher{err: errors.New("synthetic publish failure")}
+	trigger := sampleTrigger()
+	trigger.Checks = []CheckSpec{{CheckID: "b", Kind: "stub"}}
+	r, err := New(Config{
+		Store:          store,
+		EngineVersion:  "0.1.0",
+		RulesetVersion: "rules-v1.0.0",
+		AttemptID:      func() string { return "att-1" },
+		Now:            func() time.Time { return time.Date(2026, 5, 21, 14, 0, 0, 0, time.UTC) },
+		Evaluator:      FixedResultEvaluator{Result: results.ResultFail},
+		Publisher:      pub,
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	terminal, err := r.Run(context.Background(), trigger)
+	if err != nil {
+		t.Fatalf("Run must not return publish failures; got %v", err)
+	}
+	if terminal.Status != results.StatusFailed {
+		t.Errorf("terminal status = %q; want failed", terminal.Status)
+	}
+	// Both events were attempted even though Publish errored.
+	if got := pub.snapshot(); len(got) != 2 {
+		t.Errorf("publish attempts = %d; want 2", len(got))
+	}
+}
+
+func TestRun_DedupSuppression_NoDoubleEmit(t *testing.T) {
+	// ADR-0006 CC5: the engine-side deduper suppresses literal
+	// duplicates within an attempt. Run with two trigger.Checks
+	// sharing the same CheckID + the same result; the runner
+	// should publish only one check-level event.
+	store := &inMemStore{}
+	pub := &capturePublisher{}
+	trigger := sampleTrigger()
+	trigger.Checks = []CheckSpec{
+		{CheckID: "duplicate", Kind: "stub"},
+		{CheckID: "duplicate", Kind: "stub"},
+	}
+	r, err := New(Config{
+		Store:          store,
+		EngineVersion:  "0.1.0",
+		RulesetVersion: "rules-v1.0.0",
+		AttemptID:      func() string { return "att-1" },
+		Now:            func() time.Time { return time.Date(2026, 5, 21, 14, 0, 0, 0, time.UTC) },
+		Evaluator:      FixedResultEvaluator{Result: results.ResultFail},
+		Publisher:      pub,
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if _, err := r.Run(context.Background(), trigger); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	events := pub.snapshot()
+	// Expected: 1 check-level (the duplicate emit is suppressed) +
+	// 1 execution-level = 2 total.
+	if len(events) != 2 {
+		t.Fatalf("alerts emitted = %d; want 2 (1 check after dedup + 1 execution): %+v", len(events), events)
+	}
+	if events[0].CheckID == nil || *events[0].CheckID != "duplicate" {
+		t.Errorf("first event CheckID = %v; want duplicate", events[0].CheckID)
+	}
+	if events[1].CheckID != nil {
+		t.Errorf("second event must be execution-level (no CheckID); got %v", *events[1].CheckID)
+	}
 }

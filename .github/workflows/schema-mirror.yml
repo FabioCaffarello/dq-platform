@@ -5,6 +5,14 @@
 # Compares engine/internal/dsl/schema/v<N>.schema.json against the
 # rules/_schema/v<N>.schema.json mirror for every supported N.
 #
+# Scope: only **rule schemas** (filenames matching v<N>.schema.json)
+# are mirrored. Underscore-prefixed files (_owners.v<N>.schema.json
+# and any future workspace-only schemas) live in rules/_schema/ only
+# and are exempt from the mirror invariant. Per ADR-0006 CC12 the
+# _owners.yaml contract evolves under the same protocol as B0-1
+# but, lacking an engine-side consumer, does not require a mirror;
+# if a future ADR introduces one, the mirror can be added then.
+#
 # Stub-safe behavior:
 #   - If neither schema file exists yet (Phase 2 — schema files
 #     land in Phase 3), the job exits success.
@@ -61,8 +69,12 @@ jobs:
           # and vice versa.
           shopt -s nullglob
 
+          # Only enforce on rule schemas: filenames of the form
+          # v<N>.schema.json. Underscore-prefixed files (e.g.
+          # _owners.v1.schema.json) are workspace-only and exempt
+          # per the scope note above.
           mismatches=0
-          for engine_schema in "${engine_dir}"/*.schema.json; do
+          for engine_schema in "${engine_dir}"/v[0-9]*.schema.json; do
             base="$(basename "${engine_schema}")"
             mirror="${rules_dir}/${base}"
             if [[ ! -f "${mirror}" ]]; then
@@ -76,7 +88,7 @@ jobs:
             fi
           done
 
-          for mirror in "${rules_dir}"/*.schema.json; do
+          for mirror in "${rules_dir}"/v[0-9]*.schema.json; do
             base="$(basename "${mirror}")"
             source_file="${engine_dir}/${base}"
             if [[ ! -f "${source_file}" ]]; then
