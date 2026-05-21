@@ -44,13 +44,13 @@
 
 | # | Topic | Status | Key Question | Why It Matters | Expected Output |
 |---|---|---|---|---|---|
-| B0-1 | Engine ↔ rules compatibility | [resolved-study](../decisions/2026-05-20-engine-rules-compatibility.md) | How does the rules workspace declare which schema and linter contract it follows, given both live in the same repository? | Without an explicit contract, the monorepo lets boundaries erode silently. | ADR + boundary contract refinement |
-| B0-2 | Run identity and idempotency | [resolved-study](../decisions/2026-05-20-run-identity-and-idempotency.md) | What uniquely defines a run, and how do reruns of the same window behave? | Reporting trust and alert deduplication depend on it. | Execution semantics ADR |
-| B0-3 | Result write model | [resolved-study](../decisions/2026-05-20-result-write-model.md) | Are `dq_executions` and `dq_check_results` append-only, upserted, or hybrid? | Impacts retries, lineage, and dashboard accuracy. | Storage design ADR |
-| B0-4 | Failure scope | [resolved-study](../decisions/2026-05-20-failure-scope.md) | When one check errors operationally, does the entity error, degrade, or partially complete? | Incidents and alerting become inconsistent without a single policy. | Failure-semantics ADR plus runbook |
-| B0-5 | Manifest publication semantics | [resolved-study](../decisions/2026-05-20-manifest-publication-semantics.md) | What guarantees atomic, reversible ruleset publication to object storage? | Runtime safety depends on manifest discipline. | Control-plane contract ADR |
-| B0-6 | Alert routing contract | [resolved-study](../decisions/2026-05-21-alert-routing-contract.md) | What fields live in `_owners.yaml`, what stays in engine config, and what is deduplicated on the data itself? | Prevents alerting logic from becoming hardcoded chaos. | Governance doc + owners schema |
-| B0-7 | Loader / scheduler / retry failure semantics | [resolved-study](../decisions/2026-05-20-loader-scheduler-retry-failure-semantics.md) | What exactly causes ruleset load failure, scheduler reconciliation failure, and retry budget exhaustion? | The fail-fast registry pattern only helps if failure semantics are explicit and consistent. | Loader and scheduler ADRs |
+| B0-1 | Engine ↔ rules compatibility | [resolved-study](../decisions/2026-05-20-engine-rules-compatibility.md) → [resolved-adr](../../docs/adr/0001-engine-rules-compatibility.md) | How does the rules workspace declare which schema and linter contract it follows, given both live in the same repository? | Without an explicit contract, the monorepo lets boundaries erode silently. | ADR + boundary contract refinement |
+| B0-2 | Run identity and idempotency | [resolved-study](../decisions/2026-05-20-run-identity-and-idempotency.md) → [resolved-adr](../../docs/adr/0002-run-identity-and-idempotency.md) | What uniquely defines a run, and how do reruns of the same window behave? | Reporting trust and alert deduplication depend on it. | Execution semantics ADR |
+| B0-3 | Result write model | [resolved-study](../decisions/2026-05-20-result-write-model.md) → [resolved-adr](../../docs/adr/0003-result-write-model.md) | Are `dq_executions` and `dq_check_results` append-only, upserted, or hybrid? | Impacts retries, lineage, and dashboard accuracy. | Storage design ADR |
+| B0-4 | Failure scope | [resolved-study](../decisions/2026-05-20-failure-scope.md) → [resolved-adr](../../docs/adr/0004-failure-scope.md) | When one check errors operationally, does the entity error, degrade, or partially complete? | Incidents and alerting become inconsistent without a single policy. | Failure-semantics ADR plus runbook |
+| B0-5 | Manifest publication semantics | [resolved-study](../decisions/2026-05-20-manifest-publication-semantics.md) → [resolved-adr](../../docs/adr/0005-manifest-publication-semantics.md) | What guarantees atomic, reversible ruleset publication to object storage? | Runtime safety depends on manifest discipline. | Control-plane contract ADR |
+| B0-6 | Alert routing contract | [resolved-study](../decisions/2026-05-21-alert-routing-contract.md) → [resolved-adr](../../docs/adr/0006-alert-routing-contract.md) | What fields live in `_owners.yaml`, what stays in engine config, and what is deduplicated on the data itself? | Prevents alerting logic from becoming hardcoded chaos. | Governance doc + owners schema |
+| B0-7 | Loader / scheduler / retry failure semantics | [resolved-study](../decisions/2026-05-20-loader-scheduler-retry-failure-semantics.md) → [resolved-adr](../../docs/adr/0007-loader-scheduler-retry-failure-semantics.md) | What exactly causes ruleset load failure, scheduler reconciliation failure, and retry budget exhaustion? | The fail-fast registry pattern only helps if failure semantics are explicit and consistent. | Loader and scheduler ADRs |
 
 ---
 
@@ -114,8 +114,8 @@ Each row resolves to the commit reference that closes the phase.
 
 | # | Phase | Status |
 |---|---|---|
-| W3-P0 | Protocol — sequencing study + Wave 3 playbook + Wave 3 acceptance criteria | resolved-study (closes with the commit that lands this row) |
-| W3-P1 | ADR promotion — twelve studies (B0-1…B0-7, W2-1…W2-5) plus this sequencing study, into `docs/adr/0001–0013` | open |
+| W3-P0 | Protocol — sequencing study + Wave 3 playbook + Wave 3 acceptance criteria | closed (commit `25e06ab`, 2026-05-21) |
+| W3-P1 | ADR promotion — twelve studies (B0-1…B0-7, W2-1…W2-5) plus this sequencing study, into `docs/adr/0001–0013` | in-progress (Session A: B0 batch landed; Sessions B / C pending) |
 | W3-P2 | Root infrastructure — `go.work`, `Makefile`, `docker-compose.yml`, `.github/`, `.codex/AGENTS.md`, top-level `README.md`, empty workspace layout | open |
 | W3-P3 | Schema-layer — engine schema source, rules schema mirror, `tools/lint` byte-equality gate (B0-1 C2 / C4 / C10) | open |
 | W3-P4 | Engine runtime — loader (B0-7), runner (B0-2), result write (B0-3), failure scope (B0-4), orphan detection (B0-7) | open |
@@ -163,7 +163,8 @@ Use this section to confirm whether the project can advance.
 ### Wave 1 gate (B0 complete)
 
 Pass when **every B0 row** is at status `resolved-study` or
-`resolved-adr`. Currently: **7 of 7 resolved — gate met**.
+`resolved-adr`. Currently: **7 of 7 resolved-adr — gate met**
+(all B0 studies promoted to `docs/adr/0001-0007` on 2026-05-21).
 
 ### Wave 2 gate (platform decisions complete)
 
