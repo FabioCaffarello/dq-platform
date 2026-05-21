@@ -1,0 +1,22 @@
+# path: tools/lint/testdata/owners/valid/_owners.yaml
+# Minimum valid _owners.yaml — exercises required fields and the
+# additionalProperties=false constraint.
+schema_version: 1
+entities:
+  customer:
+    owner: data-platform
+    channels:
+      data_quality:
+        - slack:#dq-customer
+      operational:
+        - email:oncall@example.com
+  account:
+    owner: finance-data
+    channels:
+      data_quality:
+        - slack:#dq-finance
+        - pagerduty:finance-dq
+    severity_overrides:
+      data_quality:
+        prod: critical
+        staging: warning

@@ -1,0 +1,8 @@
+# path: tools/lint/testdata/owners/cross-check/_owners.yaml
+schema_version: 1
+entities:
+  covered:
+    owner: data-platform
+    channels:
+      data_quality:
+        - slack:#dq-covered

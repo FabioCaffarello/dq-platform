@@ -32,9 +32,11 @@ import (
 	"time"
 
 	"cloud.google.com/go/bigquery"
+	"cloud.google.com/go/pubsub/v2"
 	"cloud.google.com/go/storage"
 	"google.golang.org/api/option"
 
+	"dq-platform/engine/internal/alerts"
 	"dq-platform/engine/internal/loader"
 	"dq-platform/engine/internal/orphan"
 	"dq-platform/engine/internal/results"
@@ -50,13 +52,17 @@ type envConfig struct {
 	GCSBucket             string
 	BigQueryProject       string
 	BigQueryDataset       string
+	PubSubProject         string // empty → reuse BigQueryProject
+	PubSubTopic           string // empty → NoopPublisher (no alerts emitted)
 	LoaderRefreshInterval time.Duration
 	OrphanThreshold       time.Duration
 	OrphanScanInterval    time.Duration
 	LogLevel              slog.Level
 
 	// Endpoint overrides for the local emulator. Honored when
-	// non-empty; ignored in production.
+	// non-empty; ignored in production. PUBSUB_EMULATOR_HOST is
+	// honored by the Pub/Sub SDK itself; the binary does not have
+	// to plumb it (see cloud.google.com/go/pubsub/v2).
 	StorageEmulatorHost  string
 	BigQueryEmulatorHost string
 }
@@ -94,6 +100,18 @@ func main() {
 		os.Exit(1)
 	}
 	defer bqClient.Close()
+
+	// Alerts publisher per ADR-0006. If DQ_PUBSUB_TOPIC is empty
+	// the binary runs with NoopPublisher — useful for local-dev
+	// processes that don't need to depend on the Pub/Sub emulator.
+	// The Pub/Sub SDK honors PUBSUB_EMULATOR_HOST automatically;
+	// the binary does not have to plumb it.
+	publisher, closePublisher, err := newAlertsPublisher(ctx, cfg, logger)
+	if err != nil {
+		logger.Error("create alerts publisher", "error", err.Error())
+		os.Exit(1)
+	}
+	defer closePublisher()
 
 	// Result-write layer.
 	store := results.NewBigQueryStore(bqClient, cfg.BigQueryProject, cfg.BigQueryDataset, logger)
@@ -135,6 +153,7 @@ func main() {
 		EngineVersion: cfg.EngineVersion,
 		Threshold:     cfg.OrphanThreshold,
 		Logger:        logger,
+		Publisher:     publisher,
 	})
 	if err != nil {
 		logger.Error("new orphan detector", "error", err.Error())
@@ -146,6 +165,7 @@ func main() {
 		EngineVersion:  cfg.EngineVersion,
 		RulesetVersion: initial.RulesetVersion,
 		Logger:         logger,
+		Publisher:      publisher,
 	})
 	if err != nil {
 		logger.Error("new runner", "error", err.Error())
@@ -192,6 +212,8 @@ func readEnv() (envConfig, error) {
 	cfg.GCSBucket = os.Getenv("DQ_GCS_BUCKET")
 	cfg.BigQueryProject = os.Getenv("DQ_BIGQUERY_PROJECT")
 	cfg.BigQueryDataset = os.Getenv("DQ_BIGQUERY_DATASET")
+	cfg.PubSubProject = os.Getenv("DQ_PUBSUB_PROJECT")
+	cfg.PubSubTopic = os.Getenv("DQ_PUBSUB_TOPIC")
 
 	if cfg.EngineVersion == "" {
 		return cfg, errors.New("DQ_ENGINE_VERSION is required")
@@ -263,6 +285,43 @@ func newBQClient(ctx context.Context, cfg envConfig) (*bigquery.Client, error) {
 		)
 	}
 	return bigquery.NewClient(ctx, cfg.BigQueryProject)
+}
+
+// newAlertsPublisher constructs the engine-process alerting
+// publisher per ADR-0006. Returns the publisher plus a close
+// function the caller defers; the close function is a no-op when
+// no Pub/Sub topic is configured. Returns an error only when
+// topic configuration is requested but the Pub/Sub client cannot
+// be created — the binary exits non-zero in that case so a
+// misconfigured deployment fails loudly at startup rather than
+// silently swallowing alerts.
+func newAlertsPublisher(ctx context.Context, cfg envConfig, logger *slog.Logger) (alerts.Publisher, func(), error) {
+	if cfg.PubSubTopic == "" {
+		logger.Info("DQ_PUBSUB_TOPIC not set; using NoopPublisher (no alerts will be emitted)")
+		return alerts.NoopPublisher{}, func() {}, nil
+	}
+	project := cfg.PubSubProject
+	if project == "" {
+		project = cfg.BigQueryProject
+	}
+	client, err := pubsub.NewClient(ctx, project)
+	if err != nil {
+		return nil, nil, fmt.Errorf("pubsub.NewClient(project=%q): %w", project, err)
+	}
+	pub := alerts.NewPubSubPublisher(client, cfg.PubSubTopic)
+	logger.Info("alerts publisher wired",
+		"pubsub_project", project,
+		"pubsub_topic", cfg.PubSubTopic,
+	)
+	closeFn := func() {
+		// Close the publisher first to flush in-flight emits, then
+		// close the underlying client.
+		pub.Close()
+		if err := client.Close(); err != nil {
+			logger.Warn("pubsub client close", "error", err.Error())
+		}
+	}
+	return pub, closeFn, nil
 }
 
 // manifestHolder is the in-process atomic holder for the current

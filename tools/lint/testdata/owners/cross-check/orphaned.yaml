@@ -1,0 +1,8 @@
+# path: tools/lint/testdata/owners/cross-check/orphaned.yaml
+# This rule's entity is NOT declared in _owners.yaml; the linter
+# rejects it per ADR-0006 CC9.
+version: 1
+entity: orphaned
+checks:
+  - check_id: row_count_positive
+    kind: placeholder

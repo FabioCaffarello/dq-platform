@@ -37,6 +37,7 @@ import (
 
 	"github.com/Masterminds/semver/v3"
 
+	"dq-platform/engine/internal/alerts"
 	"dq-platform/engine/internal/results"
 )
 
@@ -74,7 +75,7 @@ type CheckSpec struct {
 // Config configures a Runner. Required fields: Store,
 // EngineVersion, RulesetVersion. Optional fields default to safe
 // values (no-op precheck, no-op evaluator, uuid-based attempt
-// IDs, time.Now clock, discarding logger).
+// IDs, time.Now clock, discarding logger, no-op publisher).
 type Config struct {
 	Store          results.Store
 	Precheck       EntityPrecheck
@@ -84,6 +85,11 @@ type Config struct {
 	AttemptID      AttemptIDFunc
 	Now            func() time.Time
 	Logger         *slog.Logger
+	// Publisher is the alerting emission surface per ADR-0006.
+	// Optional; nil → alerts.NoopPublisher (no alerts emitted).
+	// The engine binary wires a real PubSubPublisher; tests
+	// inject a capturing publisher to assert emission.
+	Publisher alerts.Publisher
 }
 
 // Runner orchestrates one execution at a time. Multiple goroutines
@@ -98,6 +104,7 @@ type Runner struct {
 	attemptID      AttemptIDFunc
 	now            func() time.Time
 	logger         *slog.Logger
+	publisher      alerts.Publisher
 }
 
 // New validates the Config and returns a Runner. Returns an error
@@ -137,6 +144,10 @@ func New(cfg Config) (*Runner, error) {
 	if logger == nil {
 		logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
+	publisher := cfg.Publisher
+	if publisher == nil {
+		publisher = alerts.NoopPublisher{}
+	}
 
 	return &Runner{
 		store:          cfg.Store,
@@ -147,6 +158,7 @@ func New(cfg Config) (*Runner, error) {
 		attemptID:      attemptID,
 		now:            clock,
 		logger:         logger,
+		publisher:      publisher,
 	}, nil
 }
 
@@ -190,6 +202,13 @@ func (r *Runner) Run(ctx context.Context, trigger TriggerRequest) (*results.Exec
 	attemptID := r.attemptID()
 	startedAt := r.now().UTC()
 
+	// ADR-0006 CC5: engine-side dedup is per-attempt state. The
+	// deduper is discarded when Run returns; retries get a fresh
+	// instance, so the consumer-side dedup is the only thing that
+	// collapses retries to one user-visible alert per failing
+	// check.
+	dedup := alerts.NewAttemptDeduper()
+
 	r.logger.Info("execution attempt starting",
 		"execution_id", executionID,
 		"attempt_id", attemptID,
@@ -205,11 +224,11 @@ func (r *Runner) Run(ctx context.Context, trigger TriggerRequest) (*results.Exec
 		// terminal error row with a distinct summary so operators
 		// can tell this apart from "source absent".
 		summary := fmt.Sprintf("pre-check operational failure: %v", err)
-		return r.writePreCheckErrorRow(ctx, executionID, attemptID, startedAt, trigger, &summary)
+		return r.writePreCheckErrorRow(ctx, dedup, executionID, attemptID, startedAt, trigger, &summary)
 	}
 	if !present {
 		summary := "pre-check entity-level: source not present (ADR-0007 CC8)"
-		return r.writePreCheckErrorRow(ctx, executionID, attemptID, startedAt, trigger, &summary)
+		return r.writePreCheckErrorRow(ctx, dedup, executionID, attemptID, startedAt, trigger, &summary)
 	}
 
 	// Step 5 — write the running transition row (ADR-0003 CC3).
@@ -258,6 +277,12 @@ func (r *Runner) Run(ctx context.Context, trigger TriggerRequest) (*results.Exec
 		if err := r.store.WriteCheckResultRow(ctx, row); err != nil {
 			return nil, fmt.Errorf("write check_result row for %s: %w", spec.CheckID, err)
 		}
+
+		// ADR-0006 CC4: emit check-level event after the row is
+		// durable. Publish failures are warning-logged, not
+		// returned, so an alerting-substrate outage cannot block
+		// execution finalization.
+		r.emitCheckEvent(ctx, dedup, executionID, attemptID, trigger.Entity, spec.CheckID, eval.Result, row.ExecutedAt)
 	}
 
 	// Step 7 — terminal status per ADR-0004 CC2.
@@ -267,14 +292,14 @@ func (r *Runner) Run(ctx context.Context, trigger TriggerRequest) (*results.Exec
 		// error at the trigger level. Map to terminal `error` with
 		// a clear summary.
 		summary := "trigger contained zero checks (ADR-0004 CC2 branch 2)"
-		return r.writeTerminalRow(ctx, executionID, attemptID, startedAt, trigger, results.StatusError, &summary)
+		return r.writeTerminalRow(ctx, dedup, executionID, attemptID, startedAt, trigger, results.StatusError, &summary)
 	}
 
 	// Step 8 — terminal row. ADR-0003 CC3 commits that
 	// error_summary is populated when status is failed or error;
 	// for status=success it remains nil.
 	terminalSummary := terminalErrorSummary(terminalStatus, checkResults)
-	return r.writeTerminalRow(ctx, executionID, attemptID, startedAt, trigger, terminalStatus, terminalSummary)
+	return r.writeTerminalRow(ctx, dedup, executionID, attemptID, startedAt, trigger, terminalStatus, terminalSummary)
 }
 
 // terminalErrorSummary returns a brief one-line summary suitable
@@ -359,8 +384,9 @@ func (r *Runner) buildRunningRow(executionID, attemptID string, startedAt time.T
 
 // writePreCheckErrorRow writes the single terminal `error` row
 // for the ADR-0007 CC8 / ADR-0004 CC2 branch 2 case — no `running`
-// row, no check rows.
-func (r *Runner) writePreCheckErrorRow(ctx context.Context, executionID, attemptID string, startedAt time.Time, trigger TriggerRequest, summary *string) (*results.ExecutionRow, error) {
+// row, no check rows. After the row is durable, emits the
+// operational alert per ADR-0006 CC7.
+func (r *Runner) writePreCheckErrorRow(ctx context.Context, dedup *alerts.AttemptDeduper, executionID, attemptID string, startedAt time.Time, trigger TriggerRequest, summary *string) (*results.ExecutionRow, error) {
 	now := r.now().UTC()
 	row := results.ExecutionRow{
 		ExecutionID:           executionID,
@@ -385,14 +411,17 @@ func (r *Runner) writePreCheckErrorRow(ctx context.Context, executionID, attempt
 		"entity", trigger.Entity,
 		"adr_reference", "ADR-0007 CC8",
 	)
+	r.emitExecutionEvent(ctx, dedup, executionID, attemptID, trigger.Entity, results.StatusError, now, summary)
 	return &row, nil
 }
 
 // writeTerminalRow writes the terminal transition row after
 // per-check evaluation completes. terminalStatus comes from
 // MapStatus; errorSummary is nil for success and non-nil for
-// failed/error paths if known.
-func (r *Runner) writeTerminalRow(ctx context.Context, executionID, attemptID string, startedAt time.Time, trigger TriggerRequest, terminalStatus results.ExecutionStatus, errorSummary *string) (*results.ExecutionRow, error) {
+// failed/error paths if known. After the row is durable, emits
+// the execution-level alert per ADR-0006 CC7 (no-op for
+// status=success).
+func (r *Runner) writeTerminalRow(ctx context.Context, dedup *alerts.AttemptDeduper, executionID, attemptID string, startedAt time.Time, trigger TriggerRequest, terminalStatus results.ExecutionStatus, errorSummary *string) (*results.ExecutionRow, error) {
 	now := r.now().UTC()
 	row := results.ExecutionRow{
 		ExecutionID:           executionID,
@@ -418,5 +447,80 @@ func (r *Runner) writeTerminalRow(ctx context.Context, executionID, attemptID st
 		"status", string(terminalStatus),
 		"adr_reference", "ADR-0004 CC2",
 	)
+	r.emitExecutionEvent(ctx, dedup, executionID, attemptID, trigger.Entity, terminalStatus, now, errorSummary)
 	return &row, nil
+}
+
+// emitCheckEvent constructs and publishes a check-level alert
+// event per ADR-0006 §4. MapCategory filters out passing checks
+// (no emission). The per-attempt deduper guards against literal
+// duplicate emits. Publish failures are warning-logged, not
+// returned: alerting-substrate outages must not block execution
+// finalization (ADR-0006 CC5: engine-side dedup is the belt,
+// consumer-side dedup is the suspenders; alerting is best-effort
+// out-of-band signal, not part of the execution's durability
+// contract).
+func (r *Runner) emitCheckEvent(ctx context.Context, dedup *alerts.AttemptDeduper, executionID, attemptID, entity, checkID string, result results.CheckResult, recordedAt time.Time) {
+	category, emit := alerts.MapCategory(alerts.SourceRunner, &result, nil)
+	if !emit {
+		return
+	}
+	event := alerts.Event{
+		ExecutionID: &executionID,
+		AttemptID:   &attemptID,
+		Entity:      entity,
+		CheckID:     &checkID,
+		Category:    category,
+		EventSource: alerts.SourceRunner,
+		Result:      &result,
+		RecordedAt:  recordedAt,
+	}
+	if !dedup.ShouldPublish(event) {
+		return
+	}
+	if err := r.publisher.Publish(ctx, event); err != nil {
+		r.logger.Warn("alert publish failed (check-level)",
+			"execution_id", executionID,
+			"attempt_id", attemptID,
+			"check_id", checkID,
+			"category", string(category),
+			"error", err.Error(),
+			"adr_reference", "ADR-0006 CC4",
+		)
+	}
+}
+
+// emitExecutionEvent constructs and publishes an execution-level
+// alert event per ADR-0006 §4. MapCategory filters out
+// status=success (no emission). The per-attempt deduper guards
+// against literal duplicate emits. Publish failures are
+// warning-logged, not returned (see emitCheckEvent).
+func (r *Runner) emitExecutionEvent(ctx context.Context, dedup *alerts.AttemptDeduper, executionID, attemptID, entity string, status results.ExecutionStatus, recordedAt time.Time, errorSummary *string) {
+	category, emit := alerts.MapCategory(alerts.SourceRunner, nil, &status)
+	if !emit {
+		return
+	}
+	event := alerts.Event{
+		ExecutionID:  &executionID,
+		AttemptID:    &attemptID,
+		Entity:       entity,
+		Category:     category,
+		EventSource:  alerts.SourceRunner,
+		Status:       &status,
+		RecordedAt:   recordedAt,
+		ErrorSummary: errorSummary,
+	}
+	if !dedup.ShouldPublish(event) {
+		return
+	}
+	if err := r.publisher.Publish(ctx, event); err != nil {
+		r.logger.Warn("alert publish failed (execution-level)",
+			"execution_id", executionID,
+			"attempt_id", attemptID,
+			"category", string(category),
+			"status", string(status),
+			"error", err.Error(),
+			"adr_reference", "ADR-0006 CC4",
+		)
+	}
 }

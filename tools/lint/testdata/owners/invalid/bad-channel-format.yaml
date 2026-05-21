@@ -1,0 +1,9 @@
+# path: tools/lint/testdata/owners/invalid/bad-channel-format.yaml
+# Channel reference is missing the `<type>:<id>` colon separator.
+schema_version: 1
+entities:
+  customer:
+    owner: data-platform
+    channels:
+      data_quality:
+        - dq-channel-no-colon

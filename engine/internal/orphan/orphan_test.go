@@ -6,11 +6,36 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"dq-platform/engine/internal/alerts"
 	"dq-platform/engine/internal/results"
 )
+
+// capturePublisher records every Event handed to Publish. Used
+// by orphan publish-hook tests to assert what was emitted.
+type capturePublisher struct {
+	mu     sync.Mutex
+	events []alerts.Event
+	err    error
+}
+
+func (p *capturePublisher) Publish(_ context.Context, e alerts.Event) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.events = append(p.events, e)
+	return p.err
+}
+
+func (p *capturePublisher) snapshot() []alerts.Event {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	out := make([]alerts.Event, len(p.events))
+	copy(out, p.events)
+	return out
+}
 
 // mockScanner is the in-memory test double. It records writes so
 // tests can assert the follow-up row shape, and it can be
@@ -284,5 +309,84 @@ func TestRunOnce_ScanFailure(t *testing.T) {
 	}
 	if finalized != 0 || len(errs) != 0 {
 		t.Errorf("on scan failure: finalized=%d errs=%v; want 0 and empty", finalized, errs)
+	}
+}
+
+func TestRunOnce_PublishesAbortedAlert(t *testing.T) {
+	// ADR-0006 CC7 row 7: orphan-detector finalization → one
+	// operational alert per finalized row with
+	// EventSource=orphan_detector and Status=aborted.
+	now := time.Date(2026, 5, 21, 12, 0, 0, 0, time.UTC)
+	scanner := &mockScanner{candidates: []results.ExecutionRow{candidateRow(now)}}
+	pub := &capturePublisher{}
+	d, err := New(scanner, Config{
+		EngineVersion: "1.0.0",
+		Threshold:     30 * time.Minute,
+		Now:           fixedClock(now),
+		Publisher:     pub,
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if _, _, err := d.RunOnce(context.Background()); err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+	events := pub.snapshot()
+	if len(events) != 1 {
+		t.Fatalf("alerts emitted = %d; want 1", len(events))
+	}
+	e := events[0]
+	if e.EventSource != alerts.SourceOrphanDetector {
+		t.Errorf("EventSource = %q; want orphan_detector", e.EventSource)
+	}
+	if e.Category != alerts.CategoryOperational {
+		t.Errorf("Category = %q; want operational", e.Category)
+	}
+	if e.Status == nil || *e.Status != results.StatusAborted {
+		t.Errorf("Status = %v; want aborted", e.Status)
+	}
+	if e.Entity != "customer" {
+		t.Errorf("Entity = %q; want customer", e.Entity)
+	}
+	if e.ExecutionID == nil || *e.ExecutionID != "exec-orphan-1" {
+		t.Errorf("ExecutionID = %v; want exec-orphan-1", e.ExecutionID)
+	}
+	if e.ErrorSummary == nil || *e.ErrorSummary != AbandonmentSummary {
+		t.Errorf("ErrorSummary = %v; want %q", e.ErrorSummary, AbandonmentSummary)
+	}
+}
+
+func TestRunOnce_PublishErrorDoesNotBlockFinalization(t *testing.T) {
+	// ADR-0006 CC4: alerting is best-effort. A publisher that
+	// errors must not prevent the next candidate's finalization
+	// nor flip the RunOnce return value.
+	now := time.Date(2026, 5, 21, 12, 0, 0, 0, time.UTC)
+	c1 := candidateRow(now)
+	c1.ExecutionID = "exec-A"
+	c2 := candidateRow(now)
+	c2.ExecutionID = "exec-B"
+	scanner := &mockScanner{candidates: []results.ExecutionRow{c1, c2}}
+	pub := &capturePublisher{err: errors.New("synthetic publish failure")}
+	d, err := New(scanner, Config{
+		EngineVersion: "1.0.0",
+		Threshold:     30 * time.Minute,
+		Now:           fixedClock(now),
+		Publisher:     pub,
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	finalized, errs, runErr := d.RunOnce(context.Background())
+	if runErr != nil {
+		t.Fatalf("RunOnce: %v", runErr)
+	}
+	if finalized != 2 {
+		t.Errorf("finalized = %d; want 2 (publish errors do not block)", finalized)
+	}
+	if len(errs) != 0 {
+		t.Errorf("errs = %v; want empty (publish errors do not surface here)", errs)
+	}
+	if got := pub.snapshot(); len(got) != 2 {
+		t.Errorf("publish attempts = %d; want 2", len(got))
 	}
 }
