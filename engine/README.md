@@ -79,8 +79,26 @@ Wave 3 lands the engine runtime across Phases 3–4:
     `integration`), runnable via
     `make test-engine-integration` after `make up`.
 
-Future work (later sub-phases):
+- **W3-P4d (orphan-run detection)** — `internal/orphan/`
+  package:
+  - `Detector.RunOnce(ctx)` — one scan pass per ADR-0007
+    CC11: lists `running` rows whose `started_at` is older
+    than the configured threshold and writes a follow-up
+    `aborted` row carrying the **detector's own**
+    `engine_version` (load-bearing per CC11).
+  - Tolerates per-row write failures: continues finalizing
+    siblings, returns the count + per-row errors.
+  - Emits a structured `slog.Info` per finalized row for
+    ADR-0007 CC14 observability.
+  - Consumes a narrow `Scanner` interface that the
+    `results.Store` already satisfies (extended in this
+    sub-phase with `ListRunningOlderThan`).
+  - Unit tests under `internal/orphan/orphan_test.go`;
+    integration tests under
+    `orphan_integration_test.go` (build tag `integration`).
 
-- **W3-P4c** — runner + failure-scope mapping; the engine
-  binary entry point also lands here.
-- **W3-P4d** — orphan-run detection.
+Future work (last sub-phase):
+
+- **W3-P4c** — runner + failure-scope mapping; assembles
+  the engine binary entry point and the periodic loops
+  that drive the loader refresh and the orphan detector.

@@ -183,9 +183,8 @@ func TestCheckResultRow_NilJSONFields(t *testing.T) {
 }
 
 // mockStore is an in-memory Store for tests that exercise callers
-// of the Store interface (the runner / orphan detector will use
-// this pattern; for Phase 4b the mock validates the interface
-// shape).
+// of the Store interface (the runner / orphan detector use this
+// pattern; the mock validates the interface shape).
 type mockStore struct {
 	executions []ExecutionRow
 	checks     []CheckResultRow
@@ -204,6 +203,38 @@ func (m *mockStore) WriteCheckResultRow(_ context.Context, row CheckResultRow) e
 }
 
 func (m *mockStore) QueryCurrentExecution(_ context.Context, executionID string) (*ExecutionRow, error) {
+	latest := m.latestPerExecution(executionID)
+	if latest == nil {
+		return nil, ErrExecutionNotFound
+	}
+	return latest, nil
+}
+
+// ListRunningOlderThan satisfies the extended Reader contract.
+// Mirrors the SQL semantic: per execution_id, take the row with
+// the latest recorded_at; include only those whose status is
+// running and started_at is non-nil and before the cutoff.
+func (m *mockStore) ListRunningOlderThan(_ context.Context, before time.Time) ([]ExecutionRow, error) {
+	// Collect distinct execution_ids.
+	seen := map[string]struct{}{}
+	for _, r := range m.executions {
+		seen[r.ExecutionID] = struct{}{}
+	}
+	out := []ExecutionRow{}
+	for id := range seen {
+		latest := m.latestPerExecution(id)
+		if latest == nil || latest.Status != StatusRunning {
+			continue
+		}
+		if latest.StartedAt == nil || !latest.StartedAt.Before(before) {
+			continue
+		}
+		out = append(out, *latest)
+	}
+	return out, nil
+}
+
+func (m *mockStore) latestPerExecution(executionID string) *ExecutionRow {
 	var latest *ExecutionRow
 	for i := range m.executions {
 		r := m.executions[i]
@@ -215,10 +246,7 @@ func (m *mockStore) QueryCurrentExecution(_ context.Context, executionID string)
 			latest = &cp
 		}
 	}
-	if latest == nil {
-		return nil, ErrExecutionNotFound
-	}
-	return latest, nil
+	return latest
 }
 
 func TestStoreInterface_MockShape(t *testing.T) {

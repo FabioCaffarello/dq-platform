@@ -123,7 +123,7 @@ Each row resolves to the commit reference that closes the phase.
 | W3-P4a | Loader — manifest fetch, hash short-circuit, refuse-swap (B0-7 CC1/CC2/CC9; ADR-0005 §4 consumer side) | closed (commit lands with this session; unit + integration tests against the local Compose stack pass) |
 | W3-P4b | Result-write layer — append-only `dq_executions` + `dq_check_results` + lazy `dq_executions_current` view (B0-3 CC1/CC2/CC3/CC7) | closed (lands via PR; unit + integration tests against local bigquery-emulator pass; lazy-view fidelity gap honored per ADR-0010 / B1-11 pattern) |
 | W3-P4c | Runner + failure-scope mapping — `execution_id` computation (B0-2 CC1/CC2/CC6); status mapping (B0-4 CC1/CC2/CC3/CC4); pre-check validation (B0-7 CC8); observability emission (B0-7 CC14). Depends on W3-P4a and W3-P4b. | open |
-| W3-P4d | Orphan-run detection — periodic scan, follow-up `aborted` row with orphan-detector's `engine_version` (B0-7 CC10/CC11). Depends on W3-P4b. | open |
+| W3-P4d | Orphan-run detection — periodic scan, follow-up `aborted` row with orphan-detector's `engine_version` (B0-7 CC10/CC11). Depends on W3-P4b. | closed (lands via PR; unit + integration tests pass; partial-failure tolerance + detector-engine-version invariant exercised) |
 | W3-P5 | Alerting — Pub/Sub publisher (B0-6), engine-side dedup, `_owners.yaml` schema, linter rule | open |
 | W3-P6 | `rules/` first onboarded entity — end-to-end flow per W2-3 C-W2-3.4 | open |
 | W3-P7 | `deploy/` — Kubernetes manifests, environment overlays; depends on B1-4 | open |
