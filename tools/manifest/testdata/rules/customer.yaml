@@ -1,0 +1,7 @@
+# path: tools/manifest/testdata/rules/customer.yaml
+version: 1
+entity: customer
+description: Test rule for manifest-publisher unit tests.
+checks:
+  - check_id: row_count_positive
+    kind: placeholder
