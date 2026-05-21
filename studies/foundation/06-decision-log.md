@@ -49,7 +49,7 @@
 | B0-3 | Result write model | [resolved-study](../decisions/2026-05-20-result-write-model.md) | Are `dq_executions` and `dq_check_results` append-only, upserted, or hybrid? | Impacts retries, lineage, and dashboard accuracy. | Storage design ADR |
 | B0-4 | Failure scope | [resolved-study](../decisions/2026-05-20-failure-scope.md) | When one check errors operationally, does the entity error, degrade, or partially complete? | Incidents and alerting become inconsistent without a single policy. | Failure-semantics ADR plus runbook |
 | B0-5 | Manifest publication semantics | [resolved-study](../decisions/2026-05-20-manifest-publication-semantics.md) | What guarantees atomic, reversible ruleset publication to object storage? | Runtime safety depends on manifest discipline. | Control-plane contract ADR |
-| B0-6 | Alert routing contract | open | What fields live in `_owners.yaml`, what stays in engine config, and what is deduplicated on the data itself? | Prevents alerting logic from becoming hardcoded chaos. | Governance doc + owners schema |
+| B0-6 | Alert routing contract | [resolved-study](../decisions/2026-05-21-alert-routing-contract.md) | What fields live in `_owners.yaml`, what stays in engine config, and what is deduplicated on the data itself? | Prevents alerting logic from becoming hardcoded chaos. | Governance doc + owners schema |
 | B0-7 | Loader / scheduler / retry failure semantics | [resolved-study](../decisions/2026-05-20-loader-scheduler-retry-failure-semantics.md) | What exactly causes ruleset load failure, scheduler reconciliation failure, and retry budget exhaustion? | The fail-fast registry pattern only helps if failure semantics are explicit and consistent. | Loader and scheduler ADRs |
 
 ---
@@ -139,7 +139,7 @@ Use this section to confirm whether the project can advance.
 ### Wave 1 gate (B0 complete)
 
 Pass when **every B0 row** is at status `resolved-study` or
-`resolved-adr`. Currently: 6 of 7 resolved.
+`resolved-adr`. Currently: **7 of 7 resolved — gate met**.
 
 ### Wave 2 gate (platform decisions complete)
 
