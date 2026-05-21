@@ -187,10 +187,13 @@ This makes outputs reconstructible if extracted, zipped, or moved.
 
 ADRs, schemas, technical READMEs, code comments, and contract
 documents are in English. Internal onboarding guides may be in
-Portuguese, clearly marked. Default to English unless instructed
-otherwise.
+Portuguese; each such file must open with a one-line language
+marker (e.g., `> Language: Portuguese (Brazilian)`). Default to
+English unless instructed otherwise.
 
-(This rule is provisional until Wave 2 confirms it.)
+(Confirmed in Wave 2 — see
+[`studies/decisions/2026-05-21-platform-decisions-wave2.md`](studies/decisions/2026-05-21-platform-decisions-wave2.md)
+§4 W2-4.)
 
 ### R8. Reasoning artifacts in `studies/` are not part of the published repository
 
