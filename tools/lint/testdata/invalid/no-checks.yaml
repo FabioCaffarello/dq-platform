@@ -1,0 +1,6 @@
+# path: tools/lint/testdata/invalid/no-checks.yaml
+# Fails the schema's minItems=1 on the checks array — a rule
+# with no checks would never execute and is rejected at lint time.
+version: 1
+entity: customer
+checks: []

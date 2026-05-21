@@ -1,0 +1,7 @@
+# path: tools/lint/testdata/invalid/wrong-version.yaml
+# Fails ADR-0001 — version 2 is not yet a supported schema.
+version: 2
+entity: customer
+checks:
+  - check_id: c1
+    kind: placeholder

@@ -1,0 +1,6 @@
+# path: tools/lint/testdata/invalid/no-version.yaml
+# Fails ADR-0001 C4 — rule has no version field.
+entity: customer
+checks:
+  - check_id: c1
+    kind: placeholder

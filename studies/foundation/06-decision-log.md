@@ -118,7 +118,7 @@ Each row resolves to the commit reference that closes the phase.
 | W3-P0 | Protocol — sequencing study at [`studies/decisions/2026-05-21-wave3-sequencing.md`](../decisions/2026-05-21-wave3-sequencing.md) → [`docs/adr/0013-wave3-sequencing.md`](../../docs/adr/0013-wave3-sequencing.md) + Wave 3 playbook + Wave 3 acceptance criteria | closed (commit `25e06ab`, 2026-05-21) |
 | W3-P1 | ADR promotion — twelve studies (B0-1…B0-7, W2-1…W2-5) plus this sequencing study, into [`docs/adr/0001–0013`](../../docs/adr/) | closed (Session A `c55799c`, Session B `e411fdb`, Session C lands with this commit; all thirteen ADRs exist) |
 | W3-P2 | Root infrastructure — `go.work`, `Makefile`, `docker-compose.yml`, `.github/`, `.codex/AGENTS.md`, top-level `README.md`, empty workspace layout | closed (commit lands with this session; depends on B1-10 resolved-study upstream) |
-| W3-P3 | Schema-layer — engine schema source, rules schema mirror, `tools/lint` byte-equality gate (B0-1 C2 / C4 / C10) | open |
+| W3-P3 | Schema-layer — engine schema source, rules schema mirror, `tools/lint` byte-equality gate (B0-1 C2 / C4 / C10) | closed (commit lands with this session; depends on B1-10 resolved-study upstream) |
 | W3-P4 | Engine runtime — loader (B0-7), runner (B0-2), result write (B0-3), failure scope (B0-4), orphan detection (B0-7) | open |
 | W3-P5 | Alerting — Pub/Sub publisher (B0-6), engine-side dedup, `_owners.yaml` schema, linter rule | open |
 | W3-P6 | `rules/` first onboarded entity — end-to-end flow per W2-3 C-W2-3.4 | open |

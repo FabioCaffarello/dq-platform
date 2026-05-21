@@ -1,0 +1,7 @@
+# path: tools/lint/testdata/invalid/pipe-entity.yaml
+# Fails ADR-0002 input-safety — entity name contains the ASCII pipe.
+version: 1
+entity: "cust|omer"
+checks:
+  - check_id: c1
+    kind: placeholder

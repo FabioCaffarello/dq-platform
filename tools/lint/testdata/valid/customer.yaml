@@ -1,0 +1,10 @@
+# path: tools/lint/testdata/valid/customer.yaml
+# Minimum valid rule YAML — exercises required fields and the
+# additionalProperties=false constraint.
+version: 1
+entity: customer
+description: Minimum valid rule for linter self-tests.
+checks:
+  - check_id: row_count_positive
+    kind: placeholder
+    description: Phase 4+ replaces 'placeholder' with the DSL kind discriminator.

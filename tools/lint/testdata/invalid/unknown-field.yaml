@@ -1,0 +1,11 @@
+# path: tools/lint/testdata/invalid/unknown-field.yaml
+# Fails additionalProperties=false — unknown top-level field is
+# rejected to keep the rules surface forward-compatible (Phase-4+
+# extensions land in v2 schemas, not as additive top-level fields
+# in v1).
+version: 1
+entity: customer
+checks:
+  - check_id: c1
+    kind: placeholder
+typo_field: 42
