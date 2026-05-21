@@ -189,6 +189,44 @@ func (s *BigQueryStore) QueryCurrentExecution(ctx context.Context, executionID s
 	return fromExecutionRecord(rec), nil
 }
 
+// ListRunningOlderThan returns the canonical row of every
+// execution whose latest state is `running` and whose started_at
+// is strictly before the given cutoff. Used by the orphan-run
+// detector (engine/internal/orphan) per ADR-0007 CC11.
+func (s *BigQueryStore) ListRunningOlderThan(ctx context.Context, before time.Time) ([]ExecutionRow, error) {
+	dataset := s.fullyQualifiedDataset()
+	sql := strings.ReplaceAll(runningOlderThanSQL, "{{dataset}}", dataset)
+
+	q := s.client.Query(sql)
+	q.QueryConfig.UseLegacySQL = false
+	q.Parameters = []bigquery.QueryParameter{
+		{Name: "before", Value: before.UTC()},
+	}
+
+	it, err := q.Read(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("submit ListRunningOlderThan query: %w", err)
+	}
+
+	var rows []ExecutionRow
+	for {
+		var rec executionRecord
+		if err := it.Next(&rec); err != nil {
+			if errors.Is(err, iterator.Done) {
+				break
+			}
+			return nil, fmt.Errorf("read ListRunningOlderThan row: %w", err)
+		}
+		rows = append(rows, *fromExecutionRecord(rec))
+	}
+	if rows == nil {
+		// Return an empty (non-nil) slice so callers can range
+		// safely without a nil-vs-empty check.
+		rows = []ExecutionRow{}
+	}
+	return rows, nil
+}
+
 func (s *BigQueryStore) fullyQualifiedDataset() string {
 	return fmt.Sprintf("%s.%s", s.projectID, s.datasetID)
 }

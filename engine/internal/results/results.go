@@ -21,6 +21,7 @@ package results
 import (
 	"context"
 	"errors"
+	"time"
 )
 
 // ErrExecutionNotFound is returned by Reader.QueryCurrentExecution
@@ -53,6 +54,21 @@ type Reader interface {
 	// ErrExecutionNotFound (or an error wrapping it) if no rows
 	// exist for that execution_id.
 	QueryCurrentExecution(ctx context.Context, executionID string) (*ExecutionRow, error)
+
+	// ListRunningOlderThan returns the canonical row of every
+	// execution whose latest state is `running` and whose
+	// `started_at` is strictly before the given cutoff. Consumed by
+	// the orphan-run detector per ADR-0007 CC11 to identify
+	// abandoned executions (engine restart / OOM / crash mid-
+	// execution). Returns an empty slice (not nil) when no rows
+	// match.
+	//
+	// The query targets the canonical-view semantics from ADR-0003
+	// CC2: an execution that already has a terminal follow-up row
+	// (e.g., aborted, success) is **not** returned even if its
+	// initial `running` row's started_at is old — the canonical
+	// view's latest-by-recorded_at projection filters it out.
+	ListRunningOlderThan(ctx context.Context, before time.Time) ([]ExecutionRow, error)
 }
 
 // Store is the full result-write surface: Writer + Reader +

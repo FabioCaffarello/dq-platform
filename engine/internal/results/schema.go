@@ -92,6 +92,41 @@ FROM (
 WHERE rn = 1
 `
 
+// runningOlderThanSQL is the query the Go API uses for
+// ListRunningOlderThan (orphan-run detection per ADR-0007 CC11).
+// It returns the canonical row of every execution whose latest
+// state is `running` and whose started_at is strictly before
+// @before — same canonical-view semantics as
+// currentExecutionsInlineSQL but multi-row, filtered.
+//
+// Critically, the outer WHERE clause runs **after** the
+// ROW_NUMBER() OVER projection, so an execution whose latest
+// row is a terminal status (aborted, success, etc.) is excluded
+// even if an earlier `running` row has a stale started_at. This
+// is the load-bearing semantic that prevents the orphan detector
+// from re-finalizing already-finalized rows.
+//
+// The {{dataset}} placeholder is replaced with the configured
+// project + dataset identifier; @before is bound at query time.
+const runningOlderThanSQL = `
+SELECT execution_id, attempt_id, recorded_at, status,
+       engine_version, ruleset_version, entity, trigger_source,
+       started_at, completed_at, error_summary,
+       supersedes_execution_id
+FROM (
+  SELECT *,
+         ROW_NUMBER() OVER (
+           PARTITION BY execution_id
+           ORDER BY recorded_at DESC
+         ) AS rn
+  FROM ` + "`{{dataset}}." + tableExecutions + "`" + `
+)
+WHERE rn = 1
+  AND status = 'running'
+  AND started_at IS NOT NULL
+  AND started_at < @before
+`
+
 // currentExecutionsInlineSQL is the query the Go API uses for
 // QueryCurrentExecution. Same semantics as the view; portable
 // across the emulator's view fidelity gap.
