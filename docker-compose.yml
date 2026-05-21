@@ -1,0 +1,124 @@
+# path: docker-compose.yml
+#
+# Local development substrate for the DQ Platform.
+#
+# Wires up the Yes-row capabilities from the ADR-0010 capability
+# matrix. Image picks below are commodity emulators selected to
+# satisfy specific capabilities; they are flagged as a Phase 2
+# scaffolding choice and can be swapped in a future commit so long
+# as the ADR-0010 capability matrix is preserved.
+#
+# Image references currently use tags (not digests). Digest pinning
+# is a follow-up sub-decision of ADR-0008 (Git host / registry
+# primitives) and lands before Phase 3 hard-wires the byte-equality
+# CI gate.
+
+services:
+
+  # ADR-0010 capability: "Pub/Sub publish/subscribe" (Yes).
+  # The Pub/Sub emulator from the cloud SDK image. Exposes a REST
+  # surface on :8085 for publish, subscribe, pull, and ack.
+  pubsub:
+    image: gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators
+    container_name: dq-pubsub
+    command:
+      - /bin/bash
+      - -c
+      - >
+        gcloud beta emulators pubsub start
+        --host-port=0.0.0.0:8085
+        --project=dq-local
+    ports:
+      - "8085:8085"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8085 || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # ADR-0010 capabilities (with known fidelity gap; see below):
+  #   - "Object store: by-hash immutability with sha256" (Yes).
+  #   - "Object store: generation-conditional pointer write" — the
+  #     ADR-0010 matrix lists this as Yes, but Phase 2's emulator
+  #     evaluation found commodity emulators do not faithfully
+  #     enforce ifGenerationMatch preconditions on overwrite:
+  #       * fsouza/fake-gcs-server (selected here): supports the
+  #         full object API surface — bucket/object create, read,
+  #         delete, content-addressed paths — and accepts the
+  #         ifGenerationMatch query parameter without error, but
+  #         does not enforce it (stale writes succeed). This
+  #         covers round-trip + by-hash; CAS enforcement does not
+  #         run locally.
+  #       * gcr.io/cloud-storage-image/storage-testbench:
+  #         enforces preconditions but is gated by Google
+  #         Artifact Registry auth not available to commodity
+  #         contributor workflows.
+  #       * oittaa/gcp-storage-emulator: enforces preconditions
+  #         but does not implement the /upload/storage/v1/...
+  #         media upload endpoint that the ADR-0005 publication
+  #         primitive relies on.
+  #     Selected image: fsouza/fake-gcs-server. Full-fidelity CAS
+  #     validation runs in the sandbox-required CI lane (matches
+  #     the existing pattern documented for the tabular-store
+  #     lazy-view row).
+  #     Phase 2 follow-up: revise ADR-0010 to reflect this
+  #     emulator-fidelity reality (Object-store generation-
+  #     conditional row from Yes → Partial). Tracked as B1-11
+  #     in studies/foundation/06-decision-log.md.
+  object-store:
+    image: fsouza/fake-gcs-server:latest
+    container_name: dq-object-store
+    command:
+      - -scheme
+      - http
+      - -port
+      - "4443"
+      - -public-host
+      - "localhost:4443"
+      - -external-url
+      - "http://localhost:4443"
+    ports:
+      - "4443:4443"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:4443/storage/v1/b || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # ADR-0010 capability: "Tabular store: append-only writes" (Yes).
+  # The lazy-view row from ADR-0010 is marked Partial; this
+  # emulator covers the append + basic query surface needed for
+  # local smoke tests. Full lazy-view fidelity (ROW_NUMBER OVER
+  # PARTITION BY ... ORDER BY recorded_at DESC per ADR-0003) is
+  # validated in the sandbox-required CI lane.
+  tabular-store:
+    image: ghcr.io/goccy/bigquery-emulator:latest
+    container_name: dq-tabular-store
+    command:
+      - --project=dq-local
+      - --port=9050
+    ports:
+      - "9050:9050"
+    # No in-container healthcheck: the emulator image is distroless
+    # and ships no shell or http client. `make up --wait` treats a
+    # container without a healthcheck as ready once it reaches
+    # "running" state; real readiness is verified by
+    # scripts/smoke/tabular-store-smoke.sh, which polls the
+    # emulator's API surface from the host.
+
+# Notes on capability-matrix coverage:
+#
+# - Pub/Sub publish/subscribe (Yes) ............ pubsub
+# - Object store: generation-conditional (Yes in ADR-0010, but
+#   commodity emulators have a fidelity gap — see object-store
+#   comment block above; CAS enforcement runs in the sandbox-
+#   required CI lane until an emulator gap is closed or ADR-0010
+#   is amended to Partial).
+# - Object store: by-hash sha256 immutability .. object-store
+# - Tabular store: append-only writes .......... tabular-store
+# - Tabular store: lazy view (Partial) ......... tabular-store (best effort; sandbox for full fidelity)
+# - OIDC / service identity (No) ............... not stood up locally; sandbox required.
+# - Unforgeable linter image pin (Partial) ..... tag-based here; production pin lives in the host registry per ADR-0008.
+# - Structured logs / metrics endpoint (Yes) ... engine-side; lands in Phase 4 (engine runtime).
+# - Orphan-run detection polling (Yes) ......... engine-side; lands in Phase 4.
+# - Cost-ceiling enforcement (Yes) ............. engine-side; lands in Phase 4.

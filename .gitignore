@@ -1,3 +1,5 @@
+# path: .gitignore
+
 # macOS / Windows shell crud
 .DS_Store
 Thumbs.db
@@ -21,3 +23,28 @@ Thumbs.db
 
 # Claude Code per-user local state (the rest of .claude/ is tracked)
 .claude/settings.local.json
+
+# Go build artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+/bin/
+/dist/
+**/bin/
+**/dist/
+
+# Go coverage
+*.cover
+coverage.txt
+coverage.html
+
+# Go workspace local cache (sum file is workspace-local; tracked module sums live in go.sum per module)
+go.work.sum
+
+# Local docker-compose state (data volumes, generated artifacts)
+.local/
+.compose-data/

@@ -1,0 +1,8 @@
+// path: go.work
+
+go 1.22
+
+use (
+	./engine
+	./tools/lint
+)

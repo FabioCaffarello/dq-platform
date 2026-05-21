@@ -1,0 +1,93 @@
+# path: .github/workflows/schema-mirror.yml
+#
+# Implements the byte-equality CI gate from ADR-0001 (compatibility
+# contract, commitment "the byte-equality CI gate is load-bearing").
+# Compares engine/internal/dsl/schema/v<N>.schema.json against the
+# rules/_schema/v<N>.schema.json mirror for every supported N.
+#
+# Stub-safe behavior:
+#   - If neither schema file exists yet (Phase 2 — schema files
+#     land in Phase 3), the job exits success.
+#   - If both exist, runs `cmp` on each pair; any divergence fails
+#     the job.
+#   - If one exists without the other (mismatched layout), the job
+#     fails — the mirror invariant requires both halves.
+#
+# This workflow is wired up in Phase 2 so it is already in place
+# the moment Phase 3 lands the schema files; branch protection
+# (configured outside this file, per ADR-0008) makes the gate
+# non-bypassable on main.
+
+name: schema-mirror
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  schema-mirror:
+    name: byte-equality
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Byte-equality check
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          engine_dir="engine/internal/dsl/schema"
+          rules_dir="rules/_schema"
+
+          # Neither layer scaffolded yet — Phase 2 baseline; pass.
+          if [[ ! -d "${engine_dir}" && ! -d "${rules_dir}" ]]; then
+            echo "schema-mirror: schema layer not scaffolded yet (pre-Phase-3); exiting success."
+            exit 0
+          fi
+
+          # Half-scaffolded — fail loud. The mirror invariant
+          # requires both halves to exist.
+          if [[ ! -d "${engine_dir}" || ! -d "${rules_dir}" ]]; then
+            echo "schema-mirror: FAIL — only one of ${engine_dir} / ${rules_dir} exists."
+            echo "Both must be present for the mirror invariant to hold."
+            exit 1
+          fi
+
+          # Both directories exist — every engine schema file must
+          # have a byte-identical counterpart in the rules mirror,
+          # and vice versa.
+          shopt -s nullglob
+
+          mismatches=0
+          for engine_schema in "${engine_dir}"/*.schema.json; do
+            base="$(basename "${engine_schema}")"
+            mirror="${rules_dir}/${base}"
+            if [[ ! -f "${mirror}" ]]; then
+              echo "schema-mirror: FAIL — mirror missing for ${engine_schema} (expected ${mirror})."
+              mismatches=$((mismatches+1))
+              continue
+            fi
+            if ! cmp -s "${engine_schema}" "${mirror}"; then
+              echo "schema-mirror: FAIL — ${engine_schema} differs from ${mirror}."
+              mismatches=$((mismatches+1))
+            fi
+          done
+
+          for mirror in "${rules_dir}"/*.schema.json; do
+            base="$(basename "${mirror}")"
+            source_file="${engine_dir}/${base}"
+            if [[ ! -f "${source_file}" ]]; then
+              echo "schema-mirror: FAIL — ${mirror} has no source counterpart at ${source_file}."
+              mismatches=$((mismatches+1))
+            fi
+          done
+
+          if [[ "${mismatches}" -gt 0 ]]; then
+            echo "schema-mirror: FAIL — ${mismatches} mismatch(es)."
+            exit 1
+          fi
+
+          echo "schema-mirror: OK — all engine schema files match their rules mirror."

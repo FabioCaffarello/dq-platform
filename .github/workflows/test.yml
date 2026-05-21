@@ -1,0 +1,39 @@
+# path: .github/workflows/test.yml
+#
+# Brings up the local docker-compose substrate, runs `make test`
+# (substrate smoke scripts + go test across modules), tears it
+# down. Mirrors the local contributor workflow so "passes locally,
+# fails in CI" is structurally avoided for substrate-bound code.
+# Required-check candidate for branch protection per ADR-0008.
+
+name: test
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    name: make test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: engine/go.mod
+          cache: true
+
+      - name: Bring up docker-compose substrate
+        run: make up
+
+      - name: Run tests
+        run: make test
+
+      - name: Tear down docker-compose substrate
+        if: always()
+        run: make down

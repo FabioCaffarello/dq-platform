@@ -1,0 +1,29 @@
+# path: .github/workflows/lint.yml
+#
+# Runs `make lint` on every pull request and every push to main.
+# Required-check candidate for branch protection per ADR-0008.
+
+name: lint
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  lint:
+    name: make lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: engine/go.mod
+          cache: true
+
+      - name: make lint
+        run: make lint
