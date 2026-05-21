@@ -102,6 +102,30 @@ listed here so the log is complete.
 
 ---
 
+## Wave 3 — Phases (Scaffolding Sequencing)
+
+Phase structure committed in
+[`studies/decisions/2026-05-21-wave3-sequencing.md`](../decisions/2026-05-21-wave3-sequencing.md).
+Each phase's sessions run under
+[`.claude/playbooks/wave-3-session-loop.md`](../../.claude/playbooks/wave-3-session-loop.md)
+and self-verify against
+[`.claude/playbooks/wave-3-acceptance-criteria.md`](../../.claude/playbooks/wave-3-acceptance-criteria.md).
+Each row resolves to the commit reference that closes the phase.
+
+| # | Phase | Status |
+|---|---|---|
+| W3-P0 | Protocol — sequencing study + Wave 3 playbook + Wave 3 acceptance criteria | resolved-study (closes with the commit that lands this row) |
+| W3-P1 | ADR promotion — twelve studies (B0-1…B0-7, W2-1…W2-5) plus this sequencing study, into `docs/adr/0001–0013` | open |
+| W3-P2 | Root infrastructure — `go.work`, `Makefile`, `docker-compose.yml`, `.github/`, `.codex/AGENTS.md`, top-level `README.md`, empty workspace layout | open |
+| W3-P3 | Schema-layer — engine schema source, rules schema mirror, `tools/lint` byte-equality gate (B0-1 C2 / C4 / C10) | open |
+| W3-P4 | Engine runtime — loader (B0-7), runner (B0-2), result write (B0-3), failure scope (B0-4), orphan detection (B0-7) | open |
+| W3-P5 | Alerting — Pub/Sub publisher (B0-6), engine-side dedup, `_owners.yaml` schema, linter rule | open |
+| W3-P6 | `rules/` first onboarded entity — end-to-end flow per W2-3 C-W2-3.4 | open |
+| W3-P7 | `deploy/` — Kubernetes manifests, environment overlays; depends on B1-4 | open |
+| W3-P8 | `docs/` content beyond ADRs — glossary, governance, contribution guide, runbook seeds | open |
+
+---
+
 ## Process
 
 ### When a decision moves from `open` to `in-progress`
@@ -151,7 +175,10 @@ Pass when the consolidated Wave 2 decisions document exists in
 ### Wave 3 readiness
 
 Pass when both Wave 1 gate and Wave 2 gate have passed. Wave 3 (full
-scaffolding) cannot start before this.
+scaffolding) cannot start before this. Currently: **gate met as of
+2026-05-21**; phase progression tracked in the
+[Wave 3 — Phases](#wave-3--phases-scaffolding-sequencing) table
+above.
 
 ---
 
