@@ -55,11 +55,32 @@ Wave 3 lands the engine runtime across Phases 3–4:
     integration tests under `loader_integration_test.go`
     (build tag `integration`), runnable via
     `make test-engine-integration` after `make up`.
+- **W3-P4b (result-write layer)** — `internal/results/`
+  package:
+  - `ExecutionRow` / `CheckResultRow` types matching
+    ADR-0003 CC3 / CC7 columns; closed enums for
+    `ExecutionStatus`, `CheckResult`, `TriggerSource`.
+  - `Store` interface (Writer + Reader + EnsureSchema).
+  - `BigQueryStore` impl backed by
+    `cloud.google.com/go/bigquery`. Append-only writes via
+    streaming insert per ADR-0003 CC1; no UPDATE or DELETE
+    from engine code paths.
+  - `EnsureSchema` is idempotent — creates dataset +
+    tables + the `dq_executions_current` view (best-
+    effort against the emulator per ADR-0010 lazy-view
+    Partial row).
+  - `QueryCurrentExecution` uses an inline `ROW_NUMBER()
+    OVER (PARTITION BY execution_id ORDER BY recorded_at
+    DESC)` so engine internals are portable across the
+    emulator's view fidelity gap.
+  - Unit tests under `internal/results/results_test.go`;
+    integration tests under
+    `results_integration_test.go` (build tag
+    `integration`), runnable via
+    `make test-engine-integration` after `make up`.
 
 Future work (later sub-phases):
 
-- **W3-P4b** — result-write layer (`dq_executions`,
-  `dq_check_results`, `dq_executions_current`).
 - **W3-P4c** — runner + failure-scope mapping; the engine
   binary entry point also lands here.
 - **W3-P4d** — orphan-run detection.
