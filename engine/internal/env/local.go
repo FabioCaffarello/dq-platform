@@ -1,0 +1,31 @@
+// path: engine/internal/env/local.go
+
+package env
+
+import "time"
+
+// Local is the canonical configuration for the local environment.
+// Values match the docker-compose substrate (see
+// docker-compose.yml and the project IDs / bucket names hardcoded
+// there) so `make demo-p6` and the engine binary's local runs
+// share the same wiring without per-run env-var overrides.
+//
+// LoaderRefreshInterval is set to 2s so local iteration cycles
+// (re-publish manifest, observe refresh) are fast. OrphanThreshold
+// is shorter than the production default for the same reason.
+var Local = EnvConfig{
+	Name:                  NameLocal,
+	EngineVersion:         "0.1.0",
+	GCSBucket:             "dq-local",
+	BigQueryProject:       "dq-local",
+	BigQueryDataset:       "dq_results_local",
+	PubSubProject:         "dq-local",
+	PubSubTopic:           "dq-alerts-local",
+	SourceProject:         "dq-local",
+	SourceDataset:         "dq_fixture",
+	HTTPAddr:              ":8080",
+	LogLevel:              LogLevelInfo,
+	LoaderRefreshInterval: 2 * time.Second,
+	OrphanThreshold:       5 * time.Minute,
+	OrphanScanInterval:    1 * time.Minute,
+}

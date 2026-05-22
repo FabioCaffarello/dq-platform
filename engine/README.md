@@ -159,6 +159,14 @@ Phase 5 also adds the `_owners.v1.schema.json` to
 ADR-0006 CC9 enforcement: every rule's entity must be
 declared in `_owners.yaml`, or the linter rejects.
 
+Configuration: see `engine/internal/env/` — typed
+multi-environment package per foundation 04 §PAT-4 and
+B1-4 MD-4. The binary's runtime selector is `DQ_ENV`
+(closed-enum `local` / `qa` / `prod`); two emulator-host
+overrides (`STORAGE_EMULATOR_HOST`,
+`BIGQUERY_EMULATOR_HOST`) remain env-var-driven as
+substrate concerns honored directly by the GCP SDKs.
+
 Future work:
 
 - **W3-P4e** — HTTP trigger handler (POST `/v1/trigger`,
