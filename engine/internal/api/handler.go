@@ -28,6 +28,38 @@ type Dispatcher interface {
 	Run(ctx context.Context, trigger runner.TriggerRequest) (*results.ExecutionRow, error)
 }
 
+// ErrEntityNotInManifest is the sentinel a ResolveChecks closure
+// returns when the requested entity has no rule in the active
+// manifest. The handler maps it to HTTP 404 with the
+// ENTITY_NOT_IN_MANIFEST error code. All other resolver errors
+// map to HTTP 502 (upstream config failure) per the W3-P6d
+// wiring; the resolver is treated as an upstream dependency that
+// the handler cannot fix in-band.
+var ErrEntityNotInManifest = errors.New("api: entity not in active manifest")
+
+// ResolveChecksFunc is the signature of the closure the engine
+// binary supplies to translate a trigger entity into the list of
+// CheckSpecs the runner should evaluate. Implementation reads
+// the entity's YAML body from the object store and parses it
+// (see engine/internal/dsl/spec). The closure runs on the
+// HTTP request path and respects the request context.
+//
+// Return contract:
+//
+//   - (specs, nil) — checks resolved; handler passes them through
+//     to the runner.
+//   - (nil, ErrEntityNotInManifest) — no rule for the entity;
+//     handler returns 404.
+//   - (_, other err) — system failure (object-store read,
+//     parser error, etc.); handler returns 502.
+//
+// A nil ResolveChecksFunc means "Phase-4e behavior" — handler
+// passes Checks: nil to the runner (the runner's check loop
+// runs zero iterations and writes a terminal error row per
+// ADR-0004 CC2 branch 2). Used by tests that exercise the
+// handler in isolation.
+type ResolveChecksFunc func(ctx context.Context, entity string) ([]runner.CheckSpec, error)
+
 // Handler is the HTTP trigger handler scaffolded by W3-P4e. It
 // exposes the three endpoints committed by ADR-0014: POST
 // /v1/trigger, GET /healthz, GET /readyz.
@@ -43,6 +75,7 @@ type Dispatcher interface {
 type Handler struct {
 	dispatcher     Dispatcher
 	activeManifest func() *loader.Manifest
+	resolveChecks  ResolveChecksFunc
 	engineCtx      context.Context
 	now            func() time.Time
 	logger         *slog.Logger
@@ -99,6 +132,16 @@ type HandlerConfig struct {
 	// alerts.NoopPublisher (no alerts emitted; panics still
 	// recorded via Logger).
 	Publisher alerts.Publisher
+
+	// ResolveChecks translates a trigger entity into the
+	// []runner.CheckSpec the runner evaluates. The engine binary
+	// supplies a closure that reads the entity's YAML body from
+	// the object store and parses it via dsl/spec.Parse.
+	//
+	// Optional; nil preserves Phase-4e behavior (handler passes
+	// Checks: nil to the runner). See ResolveChecksFunc for the
+	// full return contract.
+	ResolveChecks ResolveChecksFunc
 }
 
 // NewHandler validates the config and returns a Handler. Returns
@@ -116,6 +159,7 @@ func NewHandler(cfg HandlerConfig) (*Handler, error) {
 	h := &Handler{
 		dispatcher:     cfg.Dispatcher,
 		activeManifest: cfg.ActiveManifest,
+		resolveChecks:  cfg.ResolveChecks,
 		engineCtx:      cfg.EngineCtx,
 		now:            cfg.Now,
 		logger:         cfg.Logger,
@@ -210,6 +254,39 @@ func (h *Handler) HandleTrigger(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// W3-P6d: resolve the entity's check list from the active
+	// manifest before computing the response DTO. The closure
+	// reads the YAML body from the object store and parses it
+	// (see engine/internal/dsl/spec); errors short-circuit the
+	// trigger so the runner never starts on an unresolvable
+	// entity. When ResolveChecks is nil the handler preserves
+	// Phase-4e behavior (Checks: nil) for tests that exercise
+	// the handler in isolation.
+	var checks []runner.CheckSpec
+	if h.resolveChecks != nil {
+		var resolveErr error
+		checks, resolveErr = h.resolveChecks(r.Context(), req.Entity)
+		if resolveErr != nil {
+			if errors.Is(resolveErr, ErrEntityNotInManifest) {
+				writeError(w, http.StatusNotFound, &ErrorResponse{
+					Code:    ErrCodeEntityNotInManifest,
+					Field:   "entity",
+					Message: fmt.Sprintf("no rule for entity %q in active manifest", req.Entity),
+				})
+				return
+			}
+			h.logger.Error("check resolution failed",
+				"entity", req.Entity,
+				"error", resolveErr.Error(),
+			)
+			writeError(w, http.StatusBadGateway, &ErrorResponse{
+				Code:    ErrCodeCheckResolutionFailed,
+				Message: "check resolution upstream failure",
+			})
+			return
+		}
+	}
+
 	attemptID := h.attemptID()
 	acceptedAt := h.now().UTC()
 
@@ -220,10 +297,10 @@ func (h *Handler) HandleTrigger(w http.ResponseWriter, r *http.Request) {
 		TriggerSource:  triggerSource,
 		RulesetVersion: manifest.RulesetVersion,
 		AttemptID:      &attemptID,
-		// Phase 4e: empty Checks list. Manifest-driven check
-		// resolution is W3-P6 work; the runner's loop runs zero
-		// iterations and writes the running + terminal rows.
-		Checks: nil,
+		// W3-P6d wires manifest-driven check resolution above.
+		// When ResolveChecks is nil (test path), Checks stays
+		// nil and the runner's loop runs zero iterations.
+		Checks: checks,
 	}
 
 	// Dispatch the runner under the engine context so the work

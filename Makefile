@@ -90,3 +90,6 @@ smoke-substrate: ## Run the three substrate smoke tests against the running loca
 	@bash scripts/smoke/pubsub-smoke.sh
 	@bash scripts/smoke/object-store-smoke.sh
 	@bash scripts/smoke/tabular-store-smoke.sh
+
+demo-p6: ## End-to-end Phase 6 demo (W3-P6d). Closes the W2-3 C-W2-3.4 invariant locally. Requires `make up` first.
+	@bash scripts/smoke/demo-p6.sh

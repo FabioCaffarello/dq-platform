@@ -1,0 +1,17 @@
+# path: rules/_owners.yaml
+#
+# First production _owners.yaml entry (W3-P6d). Schema committed by
+# rules/_schema/_owners.v1.schema.json (W3-P5 / ADR-0006 CC1). The
+# linter (`dq-lint`) rejects any rule whose entity has no entry
+# here per ADR-0006 CC9.
+
+schema_version: 1
+entities:
+  customer:
+    owner: data-platform
+    description: First onboarded entity end-to-end (W3-P6d).
+    channels:
+      data_quality:
+        - slack:#dq-customer
+      operational:
+        - email:oncall@example.com
