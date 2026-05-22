@@ -7,22 +7,24 @@ is part of the published repository product (per
 `CLAUDE.md` R8):
 
 - **[`adr/`](adr/)** — Architecture Decision Records
-  (MADR-aligned). ADRs `0001–0013` cover Wave 1, Wave 2,
-  and the Wave 3 sequencing.
-- Glossary, governance, contribution guide, runbook seeds
-  (lands in Phase 8 of Wave 3).
+  (MADR-aligned). ADRs `0001–0014` cover Wave 1, Wave 2,
+  the Wave 3 sequencing, and the HTTP trigger handler
+  contract.
+- **[`glossary.md`](glossary.md)** — canonical terminology
+  for terms with codebase-specific meaning (lands in
+  W3-P8a).
+- Governance, contribution guide, runbook seeds — land in
+  W3-P8b / W3-P8c / W3-P8d.
 
-## Current state (Phase 2)
+## Current state (Phase 8)
 
-This directory holds the ADRs promoted in Wave 3 Phase 1
-([Sessions A, B, C](../studies/foundation/06-decision-log.md)):
+This directory holds:
 
 - `adr/0001–0007` — Wave 1 commitments (B0).
 - `adr/0008–0012` — Wave 2 commitments (W2).
 - `adr/0013` — the Wave 3 phase-sequencing ADR.
-
-Future content (glossary, governance, runbooks) lands in
-Phase 8.
+- `adr/0014` — the HTTP trigger handler contract (W3-P4e).
+- `glossary.md` — codebase-specific terminology (W3-P8a).
 
 ## Reading conventions
 
