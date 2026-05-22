@@ -11,7 +11,7 @@
 - Audience: project lead, platform engineers, anyone planning the next
   session of work.
 - Status: living document. Update whenever a decision changes state.
-- Last updated: 2026-05-21
+- Last updated: 2026-05-22
 - Promotion target: this document stays in `studies/foundation/` for
   the project's lifetime. Resolved decisions are promoted to ADRs
   under `docs/adr/` during Wave 3; rows here keep the link.
@@ -127,7 +127,7 @@ Each row resolves to the commit reference that closes the phase.
 | W3-P5 | Alerting — Pub/Sub publisher (B0-6), engine-side dedup, `_owners.yaml` schema, linter rule | closed (lands via PR; `engine/internal/alerts` implements `MapCategory` per ADR-0006 CC7, per-attempt `AttemptDeduper` per CC5, JSON Event payload per §4, Pub/Sub v2 publisher; runner + orphan detector wire emissions; engine binary creates the publisher from `DQ_PUBSUB_TOPIC` env; `_owners.v1.schema.json` lands in `rules/_schema/`; `dq-lint` rejects rules whose entity has no `_owners.yaml` entry per CC9; channel encoding committed as `<type>:<id>` per CC2's Wave 3 deferral; unit + integration tests pass) |
 | W3-P6 | `rules/` first onboarded entity — end-to-end flow per W2-3 C-W2-3.4 | split into W3-P6a / W3-P6b / W3-P6c / W3-P6d (2026-05-21; aligns with the W3-P4 split precedent — manifest publisher, HTTP trigger handler, first DSL kind interpreter, end-to-end demo each get an independent critique pass and PR) |
 | W3-P6a | Manifest publisher tool — `tools/manifest/` implements ADR-0005 §4 verify-write-CAS sequence end-to-end | closed (lands via PR; new Go module + `dq-manifest` CLI binary; in-mem Store fake covers CAS race-loser branch; integration test against fake-gcs-server covers happy path + idempotent re-publish + dry-run; CLI exit codes 0/1/2/3/64 documented; B1-11 CAS fidelity gap honored) |
-| W3-P6b | HTTP trigger handler — exposes POST `/v1/trigger`, dispatches to runner per ADR-0002. Depends on W3-P6a. | open |
+| W3-P6b | HTTP trigger handler — exposes POST `/v1/trigger`, dispatches to runner per ADR-0002. Depends on W3-P6a. | [resolved-study](../decisions/2026-05-22-trigger-handler-contract.md) |
 | W3-P6c | First DSL kind interpreter — real `CheckEvaluator` against BigQuery for at least one check kind. Depends on W3-P4c. | open |
 | W3-P6d | First entity rule YAML + first `_owners.yaml` entry + end-to-end demo target. Depends on W3-P6a/b/c. Closes the C-W2-3.4 invariant locally. | open |
 | W3-P7 | `deploy/` — Kubernetes manifests, environment overlays; depends on B1-4 | open |
