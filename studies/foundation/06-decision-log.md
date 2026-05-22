@@ -83,7 +83,7 @@
 | B2-5 | Entity onboarding workflow | open | What exact checklist determines when a new entity is ready for test channel and later for production alerting? | Governance quality depends on repeatable onboarding. | Runbook + checklist |
 | B2-6 | Dashboard contract | open | Which metrics and dimensions are guaranteed for downstream consumers (Looker, Grafana, etc.)? | Avoids each consumer inventing its own interpretation. | Reporting contract |
 | B2-7 | Documentation site generator | open | Does `docs/` get a static site generator, or stay as raw markdown? | Affects how documentation is discovered by non-developers. | Documentation infrastructure note |
-| B2-8 | Infrastructure tooling | open | Kustomize, Helm, Terraform, or a combination for `deploy/`? | Affects deployment ergonomics and environment isolation. | Infrastructure ADR |
+| B2-8 | Infrastructure tooling | [resolved-study](../decisions/2026-05-22-b2-8-infrastructure-tooling.md) | Kustomize, Helm, Terraform, or a combination for `deploy/`? | Affects deployment ergonomics and environment isolation. | Infrastructure ADR |
 
 ---
 
