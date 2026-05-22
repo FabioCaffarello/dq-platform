@@ -18,13 +18,11 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -38,6 +36,7 @@ import (
 	"dq-platform/engine/internal/alerts"
 	"dq-platform/engine/internal/api"
 	"dq-platform/engine/internal/dsl/spec"
+	"dq-platform/engine/internal/env"
 	"dq-platform/engine/internal/eval"
 	"dq-platform/engine/internal/loader"
 	"dq-platform/engine/internal/orphan"
@@ -45,29 +44,24 @@ import (
 	"dq-platform/engine/internal/runner"
 )
 
-// envConfig collects the environment variables the binary reads
-// at startup. Future scaffolding (B1-4 environment configuration
-// model) may refine the surface; this is the minimum workable
-// twelve-factor default.
-type envConfig struct {
-	EngineVersion         string
-	GCSBucket             string
-	BigQueryProject       string
-	BigQueryDataset       string
-	PubSubProject         string // empty → reuse BigQueryProject
-	PubSubTopic           string // empty → NoopPublisher (no alerts emitted)
-	LoaderRefreshInterval time.Duration
-	OrphanThreshold       time.Duration
-	OrphanScanInterval    time.Duration
-	HTTPAddr              string
-	SourceProject         string // empty → eval.Evaluator defaults to BigQuery client project
-	SourceDataset         string // empty → row_count_positive returns ResultError
-	LogLevel              slog.Level
+// startupConfig is the engine binary's startup-time configuration.
+// The 13 application-config fields are sourced from the typed
+// engine/internal/env package per foundation 04 §PAT-4 and B1-4
+// MD-4 — the binary reads DQ_ENV at startup, calls env.Select to
+// obtain the canonical EnvConfig for that env, and embeds it
+// here so existing call sites that read cfg.GCSBucket / etc.
+// continue to work via Go struct embedding.
+//
+// The two emulator-host overrides remain env-var driven (B1-4
+// OQ-MD-4.1) — they are local-substrate concerns honored by the
+// GCP SDKs directly, not application configuration.
+//
+// SlogLevel is the slog.Level resolved from EnvConfig.LogLevel at
+// readEnv time so logging setup doesn't have to re-parse.
+type startupConfig struct {
+	env.EnvConfig
 
-	// Endpoint overrides for the local emulator. Honored when
-	// non-empty; ignored in production. PUBSUB_EMULATOR_HOST is
-	// honored by the Pub/Sub SDK itself; the binary does not have
-	// to plumb it (see cloud.google.com/go/pubsub/v2).
+	SlogLevel            slog.Level
 	StorageEmulatorHost  string
 	BigQueryEmulatorHost string
 }
@@ -80,9 +74,10 @@ func main() {
 		os.Exit(2)
 	}
 
-	logger := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: cfg.LogLevel}))
+	logger := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: cfg.SlogLevel}))
 	slog.SetDefault(logger)
 	logger.Info("dq-engine starting",
+		"env", string(cfg.Name),
 		"engine_version", cfg.EngineVersion,
 		"bigquery_project", cfg.BigQueryProject,
 		"bigquery_dataset", cfg.BigQueryDataset,
@@ -303,82 +298,34 @@ func main() {
 	}
 }
 
-func readEnv() (envConfig, error) {
-	cfg := envConfig{
-		LoaderRefreshInterval: 30 * time.Second,
-		OrphanThreshold:       time.Hour,
-		OrphanScanInterval:    5 * time.Minute,
-		HTTPAddr:              ":8080",
-		LogLevel:              slog.LevelInfo,
-		StorageEmulatorHost:   os.Getenv("STORAGE_EMULATOR_HOST"),
-		BigQueryEmulatorHost:  os.Getenv("BIGQUERY_EMULATOR_HOST"),
+// readEnv resolves the startup configuration. DQ_ENV selects one
+// of the closed-enum environments (local / qa / prod) committed
+// by B1-4 MD-2; env.Select returns the canonical EnvConfig for
+// that env. The two emulator-host overrides
+// (STORAGE_EMULATOR_HOST / BIGQUERY_EMULATOR_HOST) remain
+// env-var-driven per B1-4 §4.3.
+func readEnv() (startupConfig, error) {
+	envName := os.Getenv("DQ_ENV")
+	if envName == "" {
+		return startupConfig{}, fmt.Errorf("DQ_ENV is required (one of local|qa|prod per B1-4 MD-2)")
 	}
-
-	cfg.EngineVersion = os.Getenv("DQ_ENGINE_VERSION")
-	cfg.GCSBucket = os.Getenv("DQ_GCS_BUCKET")
-	cfg.BigQueryProject = os.Getenv("DQ_BIGQUERY_PROJECT")
-	cfg.BigQueryDataset = os.Getenv("DQ_BIGQUERY_DATASET")
-	cfg.PubSubProject = os.Getenv("DQ_PUBSUB_PROJECT")
-	cfg.PubSubTopic = os.Getenv("DQ_PUBSUB_TOPIC")
-
-	if cfg.EngineVersion == "" {
-		return cfg, errors.New("DQ_ENGINE_VERSION is required")
+	envCfg, err := env.Select(envName)
+	if err != nil {
+		return startupConfig{}, fmt.Errorf("DQ_ENV: %w", err)
 	}
-	if cfg.GCSBucket == "" {
-		return cfg, errors.New("DQ_GCS_BUCKET is required")
+	slogLevel, err := envCfg.LogLevel.Slog()
+	if err != nil {
+		return startupConfig{}, fmt.Errorf("env %q: %w", envCfg.Name, err)
 	}
-	if cfg.BigQueryProject == "" {
-		return cfg, errors.New("DQ_BIGQUERY_PROJECT is required")
-	}
-	if cfg.BigQueryDataset == "" {
-		return cfg, errors.New("DQ_BIGQUERY_DATASET is required")
-	}
-
-	if v := os.Getenv("DQ_LOADER_REFRESH_INTERVAL"); v != "" {
-		d, err := time.ParseDuration(v)
-		if err != nil {
-			return cfg, fmt.Errorf("DQ_LOADER_REFRESH_INTERVAL: %w", err)
-		}
-		cfg.LoaderRefreshInterval = d
-	}
-	if v := os.Getenv("DQ_ORPHAN_THRESHOLD"); v != "" {
-		d, err := time.ParseDuration(v)
-		if err != nil {
-			return cfg, fmt.Errorf("DQ_ORPHAN_THRESHOLD: %w", err)
-		}
-		cfg.OrphanThreshold = d
-	}
-	if v := os.Getenv("DQ_ORPHAN_SCAN_INTERVAL"); v != "" {
-		d, err := time.ParseDuration(v)
-		if err != nil {
-			return cfg, fmt.Errorf("DQ_ORPHAN_SCAN_INTERVAL: %w", err)
-		}
-		cfg.OrphanScanInterval = d
-	}
-	if v := os.Getenv("DQ_HTTP_ADDR"); v != "" {
-		cfg.HTTPAddr = v
-	}
-	cfg.SourceProject = os.Getenv("DQ_SOURCE_PROJECT")
-	cfg.SourceDataset = os.Getenv("DQ_SOURCE_DATASET")
-	if v := os.Getenv("DQ_LOG_LEVEL"); v != "" {
-		switch strings.ToLower(v) {
-		case "debug":
-			cfg.LogLevel = slog.LevelDebug
-		case "info":
-			cfg.LogLevel = slog.LevelInfo
-		case "warn":
-			cfg.LogLevel = slog.LevelWarn
-		case "error":
-			cfg.LogLevel = slog.LevelError
-		default:
-			return cfg, fmt.Errorf("DQ_LOG_LEVEL: unknown value %q (expected debug/info/warn/error)", v)
-		}
-	}
-
-	return cfg, nil
+	return startupConfig{
+		EnvConfig:            envCfg,
+		SlogLevel:            slogLevel,
+		StorageEmulatorHost:  os.Getenv("STORAGE_EMULATOR_HOST"),
+		BigQueryEmulatorHost: os.Getenv("BIGQUERY_EMULATOR_HOST"),
+	}, nil
 }
 
-func newGCSClient(ctx context.Context, cfg envConfig) (*storage.Client, error) {
+func newGCSClient(ctx context.Context, cfg startupConfig) (*storage.Client, error) {
 	if cfg.StorageEmulatorHost != "" {
 		return storage.NewClient(ctx,
 			option.WithoutAuthentication(),
@@ -388,7 +335,7 @@ func newGCSClient(ctx context.Context, cfg envConfig) (*storage.Client, error) {
 	return storage.NewClient(ctx)
 }
 
-func newBQClient(ctx context.Context, cfg envConfig) (*bigquery.Client, error) {
+func newBQClient(ctx context.Context, cfg startupConfig) (*bigquery.Client, error) {
 	if cfg.BigQueryEmulatorHost != "" {
 		return bigquery.NewClient(ctx, cfg.BigQueryProject,
 			option.WithoutAuthentication(),
@@ -406,7 +353,7 @@ func newBQClient(ctx context.Context, cfg envConfig) (*bigquery.Client, error) {
 // be created — the binary exits non-zero in that case so a
 // misconfigured deployment fails loudly at startup rather than
 // silently swallowing alerts.
-func newAlertsPublisher(ctx context.Context, cfg envConfig, logger *slog.Logger) (alerts.Publisher, func(), error) {
+func newAlertsPublisher(ctx context.Context, cfg startupConfig, logger *slog.Logger) (alerts.Publisher, func(), error) {
 	if cfg.PubSubTopic == "" {
 		logger.Info("DQ_PUBSUB_TOPIC not set; using NoopPublisher (no alerts will be emitted)")
 		return alerts.NoopPublisher{}, func() {}, nil

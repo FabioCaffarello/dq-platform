@@ -51,10 +51,10 @@ BQ_HOST="${BIGQUERY_EMULATOR_HOST:-localhost:9050}"
 PROJECT="dq-local"
 BUCKET="dq-local"
 SOURCE_DATASET="dq_fixture"
-RESULTS_DATASET="dq_results_demo"
-TOPIC="dq-alerts-demo"
-SUB="dq-alerts-demo-sub"
-ENGINE_ADDR="127.0.0.1:8090"
+RESULTS_DATASET="dq_results_local"
+TOPIC="dq-alerts-local"
+SUB="dq-alerts-local-sub"
+ENGINE_ADDR="127.0.0.1:8080"
 LOG_DIR="${ROOT}/bin/demo-p6"
 
 mkdir -p "${LOG_DIR}"
@@ -158,16 +158,13 @@ echo "[demo-p6] publishing manifest"
 # 4. Start engine in background.
 # ---------------------------------------------------------------------
 echo "[demo-p6] starting engine (logs at ${ENGINE_LOG})"
-DQ_ENGINE_VERSION="0.1.0" \
-DQ_GCS_BUCKET="${BUCKET}" \
-DQ_BIGQUERY_PROJECT="${PROJECT}" \
-DQ_BIGQUERY_DATASET="${RESULTS_DATASET}" \
-DQ_PUBSUB_PROJECT="${PROJECT}" \
-DQ_PUBSUB_TOPIC="${TOPIC}" \
-DQ_SOURCE_PROJECT="${PROJECT}" \
-DQ_SOURCE_DATASET="${SOURCE_DATASET}" \
-DQ_LOADER_REFRESH_INTERVAL="2s" \
-DQ_HTTP_ADDR="${ENGINE_ADDR}" \
+# W3-P7a: the engine reads DQ_ENV (selector) + the two
+# emulator-host overrides. All 13 application-config values come
+# from engine/internal/env/local.go (B1-4 MD-4 typed-env model).
+# The substrate names declared above (PROJECT, BUCKET, etc.) must
+# match local.go's hardcoded values; the demo would fail loud
+# (wrong bucket / dataset / topic) if they drifted.
+DQ_ENV="local" \
 STORAGE_EMULATOR_HOST="${GCS_HOST}" \
 BIGQUERY_EMULATOR_HOST="${BQ_HOST}" \
 PUBSUB_EMULATOR_HOST="${PUBSUB_HOST}" \
