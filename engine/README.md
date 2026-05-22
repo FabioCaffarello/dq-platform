@@ -167,6 +167,10 @@ overrides (`STORAGE_EMULATOR_HOST`,
 `BIGQUERY_EMULATOR_HOST`) remain env-var-driven as
 substrate concerns honored directly by the GCP SDKs.
 
+Deployment: see `deploy/base/` for the tool-neutral
+Kubernetes manifests (W3-P7b). Per-env overlays land at
+W3-P7c.
+
 Future work:
 
 - **W3-P4e** — HTTP trigger handler (POST `/v1/trigger`,
