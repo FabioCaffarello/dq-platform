@@ -117,9 +117,11 @@ Wave 3 lands the engine runtime across Phases 3–4:
     (process-exit on failure per ADR-0007 CC1), starts
     two periodic loops (loader refresh + orphan
     detection), waits for SIGTERM/SIGINT.
-  - HTTP / gRPC trigger handler is deferred; the binary
-    holds a Runner but does not exercise it at runtime.
-    Phase 6 (first onboarded entity) wires triggers.
+  - HTTP trigger handler is deferred to W3-P4e
+    (resolved-study 2026-05-22; provisional ADR-0014); the
+    binary holds a Runner but does not exercise it at
+    runtime. P4e implementation wires triggers. gRPC is
+    deferred (OQ-CC.3 in the contract study).
   - Unit tests under `internal/runner/runner_test.go`;
     integration tests under
     `runner_integration_test.go` (build tag
@@ -159,7 +161,10 @@ declared in `_owners.yaml`, or the linter rejects.
 
 Future work:
 
-- **W3-P6** — first onboarded entity end-to-end; HTTP /
-  gRPC trigger handler.
+- **W3-P4e** — HTTP trigger handler (POST `/v1/trigger`,
+  dispatches to runner per ADR-0002; contract per the
+  W3-P4e trigger-handler-contract study, provisional ADR-0014
+  slot).
+- **W3-P6** — first onboarded entity end-to-end.
 - **W3-P7** — `deploy/` (Kubernetes manifests, env overlays).
 - **W3-P8** — `docs/` content beyond ADRs.
