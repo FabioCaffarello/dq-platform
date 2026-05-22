@@ -1,0 +1,26 @@
+# path: deploy/base/service.yaml
+#
+# ClusterIP Service fronting the engine Deployment. Exposes the
+# HTTP listener (port 8080, matching `env.Local.HTTPAddr` from
+# W3-P7a) inside the cluster. External exposure (Ingress, Cloud
+# Run, etc.) is per-env overlay territory at W3-P7c — operators
+# decide per env whether the engine accepts traffic from outside
+# the cluster.
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dq-engine
+  labels:
+    app.kubernetes.io/name: dq-engine
+    app.kubernetes.io/component: engine
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: dq-engine
+    app.kubernetes.io/component: engine
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP

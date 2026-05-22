@@ -1,0 +1,29 @@
+# path: deploy/base/configmap.yaml
+#
+# Empty ConfigMap that the Deployment's `envFrom` block consumes.
+# The base carries no data — overlays at W3-P7c patch the
+# ConfigMap to inject the per-env DQ_ENV selector plus, for the
+# local overlay only, the emulator-host overrides
+# (STORAGE_EMULATOR_HOST, BIGQUERY_EMULATOR_HOST). qa and prod
+# overlays set only DQ_ENV.
+#
+# Overlay-patched shape (W3-P7c will commit the actual files):
+#
+#   data:
+#     DQ_ENV: local                       # or "qa" / "prod"
+#     STORAGE_EMULATOR_HOST: "host:port"  # local only
+#     BIGQUERY_EMULATOR_HOST: "host:port" # local only
+#
+# Per B1-4 MD-4 the engine reads only these three env vars at
+# runtime; all 13 application-config fields come from the typed
+# `engine/internal/env/{local,qa,prod}.go` package selected by
+# DQ_ENV.
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dq-engine-env
+  labels:
+    app.kubernetes.io/name: dq-engine
+    app.kubernetes.io/component: engine
+# No `data:` block in the base. Overlays inject data per env.

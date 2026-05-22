@@ -1,0 +1,111 @@
+# path: deploy/base/deployment.yaml
+#
+# Engine Deployment for the DQ Platform engine binary. Plain
+# Kubernetes YAML so the base is tool-neutral — overlays at
+# W3-P7c (Kustomize / Helm / other per B2-8) reference this
+# document.
+#
+# The container env is sourced from the `dq-engine-env`
+# ConfigMap (see configmap.yaml). The base ConfigMap has no
+# data; overlays patch it to set DQ_ENV + (for local only) the
+# emulator-host overrides.
+#
+# Probes wire /healthz (liveness) and /readyz (readiness) per
+# ADR-0014 §4. The container port 8080 matches
+# `env.Local.HTTPAddr` from W3-P7a's typed env package.
+#
+# Image is intentionally a placeholder; the overlay session (or
+# a future release-engineering session per B2-3) sets the real
+# registry / tag.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dq-engine
+  labels:
+    app.kubernetes.io/name: dq-engine
+    app.kubernetes.io/component: engine
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: dq-engine
+      app.kubernetes.io/component: engine
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: dq-engine
+        app.kubernetes.io/component: engine
+    spec:
+      serviceAccountName: dq-engine
+      containers:
+        - name: dq-engine
+          # PLACEHOLDER — overlays / a future release-engineering
+          # session (B2-3) set the real registry and tag. With the
+          # placeholder in place, `kubectl apply` resolves to an
+          # ImagePullBackOff until a real image lands; the
+          # deployment artifact is structurally complete.
+          image: dq-engine:placeholder
+          # IfNotPresent suits local dev with a locally-built
+          # image. Overlays for qa/prod set this to "Always" or
+          # pin by digest for the production posture.
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: dq-engine-env
+          volumeMounts:
+            # Writable /tmp so the Go runtime and the GCP SDKs
+            # have somewhere to spill (chunked-upload retries,
+            # pprof, os.CreateTemp). The volume is an emptyDir
+            # — no persistence across restarts. Pairs with
+            # readOnlyRootFilesystem: true below: the rootfs
+            # stays immutable while /tmp is writable.
+            - name: tmp
+              mountPath: /tmp
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            # UID 65532 is the distroless "nobody" UID. The
+            # future engine image (release-engineering session
+            # per B2-3) must use a base image where this UID
+            # can execute the binary; common distroless variants
+            # (e.g., gcr.io/distroless/static:nonroot) honor
+            # this contract. Overlays may override if the
+            # picked base image uses a different non-root UID.
+            runAsUser: 65532
+            capabilities:
+              drop:
+                - ALL
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      volumes:
+        - name: tmp
+          emptyDir: {}
