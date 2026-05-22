@@ -37,6 +37,7 @@ import (
 
 	"dq-platform/engine/internal/alerts"
 	"dq-platform/engine/internal/api"
+	"dq-platform/engine/internal/eval"
 	"dq-platform/engine/internal/loader"
 	"dq-platform/engine/internal/orphan"
 	"dq-platform/engine/internal/results"
@@ -58,6 +59,8 @@ type envConfig struct {
 	OrphanThreshold       time.Duration
 	OrphanScanInterval    time.Duration
 	HTTPAddr              string
+	SourceProject         string // empty → eval.Evaluator defaults to BigQuery client project
+	SourceDataset         string // empty → row_count_positive returns ResultError
 	LogLevel              slog.Level
 
 	// Endpoint overrides for the local emulator. Honored when
@@ -158,6 +161,23 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Evaluator (W3-P6c). The BigQuery-backed evaluator
+	// dispatches on CheckSpec.Kind; P6c ships
+	// `row_count_positive`. Construction is fail-soft: if
+	// DQ_SOURCE_DATASET is unset the engine still starts, but
+	// data-plane checks return ResultError with a clear
+	// "source dataset not configured" diagnostic per ADR-0004 CC1.
+	evaluator, err := eval.New(eval.Config{
+		Client:        bqClient,
+		SourceProject: cfg.SourceProject,
+		SourceDataset: cfg.SourceDataset,
+		Logger:        logger,
+	})
+	if err != nil {
+		logger.Error("new evaluator", "error", err.Error())
+		os.Exit(1)
+	}
+
 	// Runner shared between every HTTP trigger acceptance
 	// (W3-P4e). Per ADR-0007 §3 the in-flight execution is
 	// isolated against the manifest active at plan creation; the
@@ -167,6 +187,7 @@ func main() {
 	// pin.
 	r, err := runner.New(runner.Config{
 		Store:          store,
+		Evaluator:      evaluator,
 		EngineVersion:  cfg.EngineVersion,
 		RulesetVersion: initial.RulesetVersion,
 		Logger:         logger,
@@ -288,6 +309,8 @@ func readEnv() (envConfig, error) {
 	if v := os.Getenv("DQ_HTTP_ADDR"); v != "" {
 		cfg.HTTPAddr = v
 	}
+	cfg.SourceProject = os.Getenv("DQ_SOURCE_PROJECT")
+	cfg.SourceDataset = os.Getenv("DQ_SOURCE_DATASET")
 	if v := os.Getenv("DQ_LOG_LEVEL"); v != "" {
 		switch strings.ToLower(v) {
 		case "debug":
