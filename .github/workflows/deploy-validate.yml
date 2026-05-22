@@ -1,0 +1,28 @@
+# path: .github/workflows/deploy-validate.yml
+#
+# Renders + client-side validates every Kustomize overlay under
+# deploy/overlays/{local,qa,prod}/ on every pull request and every
+# push to main. Implements the B2-8 CC2 CI validity gate (study at
+# studies/decisions/2026-05-22-b2-8-infrastructure-tooling.md;
+# provisional ADR-0017). ubuntu-latest runners ship `kubectl`
+# pre-installed, and Kustomize is built into kubectl 1.14+ via
+# `kubectl apply -k` — no separate install step required.
+
+name: deploy-validate
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  validate:
+    name: make validate-deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: make validate-deploy
+        run: make validate-deploy

@@ -1,0 +1,23 @@
+# path: deploy/overlays/prod/kustomization.yaml
+#
+# Prod overlay. Sets DQ_ENV=prod on the dq-engine-env ConfigMap
+# and annotates the dq-engine ServiceAccount with the prod-project
+# Workload Identity binding (per B1-4 MD-3). The
+# `dq-prod-PLACEHOLDER` project marker mirrors
+# engine/internal/env/prod.go; the operational session that
+# provisions the real prod project replaces both the SA email
+# here and the project IDs in prod.go in the same change.
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+patches:
+  - path: configmap-data.yaml
+    target:
+      kind: ConfigMap
+      name: dq-engine-env
+  - path: serviceaccount-annotations.yaml
+    target:
+      kind: ServiceAccount
+      name: dq-engine

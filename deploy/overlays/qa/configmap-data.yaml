@@ -1,0 +1,13 @@
+# path: deploy/overlays/qa/configmap-data.yaml
+#
+# QA ConfigMap patch. DQ_ENV is the only env var the engine
+# binary reads at qa runtime (per B1-4 MD-4 + W3-P7a); the rest
+# of the configuration comes from engine/internal/env/qa.go via
+# the selector.
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dq-engine-env
+data:
+  DQ_ENV: qa

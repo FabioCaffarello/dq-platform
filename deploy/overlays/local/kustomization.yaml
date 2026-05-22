@@ -1,0 +1,24 @@
+# path: deploy/overlays/local/kustomization.yaml
+#
+# Local overlay. Targets the docker-compose substrate from
+# docker-compose.yml: DQ_ENV=local plus the two emulator-host
+# overrides the engine binary reads at runtime (per B1-4 MD-4 +
+# W3-P7a). Real in-cluster addresses depend on how the Compose
+# stack is exposed inside the local cluster (Kind / k3d /
+# Minikube); the PLACEHOLDER markers mirror the qa/prod
+# `dq-{qa,prod}-PLACEHOLDER` posture in
+# engine/internal/env/{qa,prod}.go and are filled in by the
+# operational session that wires Compose to the local cluster.
+#
+# No ServiceAccount annotation patch — local has no Workload
+# Identity binding.
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+patches:
+  - path: configmap-data.yaml
+    target:
+      kind: ConfigMap
+      name: dq-engine-env

@@ -1,0 +1,16 @@
+# path: deploy/overlays/local/configmap-data.yaml
+#
+# Patch fragment merged into the base dq-engine-env ConfigMap.
+# Sets the engine's three runtime env vars for the local
+# substrate. The emulator-host values are PLACEHOLDERs — the
+# operational session that exposes the Compose stack inside the
+# local cluster replaces them.
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dq-engine-env
+data:
+  DQ_ENV: local
+  STORAGE_EMULATOR_HOST: "PLACEHOLDER-local-storage:9023"
+  BIGQUERY_EMULATOR_HOST: "PLACEHOLDER-local-bigquery:9050"

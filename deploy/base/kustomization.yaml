@@ -1,0 +1,16 @@
+# path: deploy/base/kustomization.yaml
+#
+# Kustomize base. Lists the four tool-neutral resources from
+# W3-P7b; overlays under deploy/overlays/{local,qa,prod}/ patch
+# the dq-engine-env ConfigMap and (for qa/prod) annotate the
+# dq-engine ServiceAccount. Tool choice committed in B2-8 (study
+# at studies/decisions/2026-05-22-b2-8-infrastructure-tooling.md;
+# provisional ADR-0017).
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - deployment.yaml
+  - service.yaml
+  - configmap.yaml
+  - serviceaccount.yaml
