@@ -43,7 +43,7 @@ import (
 
 // TriggerRequest is the input to Runner.Run. The five identity
 // fields (Entity, WindowStart, WindowEnd, TriggerSource, plus the
-// engine's RulesetVersion) are the inputs to the execution_id
+// effective RulesetVersion) are the inputs to the execution_id
 // hash per ADR-0002 CC1.
 type TriggerRequest struct {
 	Entity        string
@@ -62,6 +62,23 @@ type TriggerRequest struct {
 	// driven check lookup so the trigger handler discovers the
 	// entity's check list from the loaded manifest.
 	Checks []CheckSpec
+
+	// RulesetVersion overrides the runner's constructor-time pin
+	// for this call only. The trigger handler (W3-P4e) sets this
+	// to the active manifest's RulesetVersion at trigger
+	// acceptance per ADR-0007 §3 (in-flight execution isolation
+	// against the manifest active at plan creation). Empty
+	// string falls back to the runner's constructor-time value
+	// for Phase-4c backwards compatibility.
+	RulesetVersion string
+
+	// AttemptID overrides the runner's constructor-time
+	// AttemptIDFunc for this call only. The trigger handler
+	// (W3-P4e) mints the UUID at trigger acceptance per ADR-0003
+	// §4 so the response DTO and the persisted row carry the
+	// same identifier. Nil falls back to the runner's
+	// configured AttemptIDFunc.
+	AttemptID *string
 }
 
 // CheckSpec is the per-check descriptor passed to the
@@ -189,8 +206,17 @@ func (r *Runner) Run(ctx context.Context, trigger TriggerRequest) (*results.Exec
 		return nil, fmt.Errorf("trigger validation: %w", err)
 	}
 
+	// Per-call effective values. The trigger handler (W3-P4e)
+	// sets these at acceptance so the persisted row carries the
+	// same execution_id and attempt_id as the response DTO.
+	// Phase-4c callers that omit them get the runner's
+	// constructor-time defaults.
+	if trigger.RulesetVersion == "" {
+		trigger.RulesetVersion = r.rulesetVersion
+	}
+
 	executionID, err := Compute(
-		r.rulesetVersion,
+		trigger.RulesetVersion,
 		trigger.Entity,
 		trigger.WindowStart,
 		trigger.WindowEnd,
@@ -199,7 +225,12 @@ func (r *Runner) Run(ctx context.Context, trigger TriggerRequest) (*results.Exec
 	if err != nil {
 		return nil, fmt.Errorf("compute execution_id: %w", err)
 	}
-	attemptID := r.attemptID()
+	var attemptID string
+	if trigger.AttemptID != nil {
+		attemptID = *trigger.AttemptID
+	} else {
+		attemptID = r.attemptID()
+	}
 	startedAt := r.now().UTC()
 
 	// ADR-0006 CC5: engine-side dedup is per-attempt state. The
@@ -372,7 +403,7 @@ func (r *Runner) buildRunningRow(executionID, attemptID string, startedAt time.T
 		RecordedAt:            startedAt,
 		Status:                results.StatusRunning,
 		EngineVersion:         r.engineVersion,
-		RulesetVersion:        r.rulesetVersion,
+		RulesetVersion:        trigger.RulesetVersion,
 		Entity:                trigger.Entity,
 		TriggerSource:         trigger.TriggerSource,
 		StartedAt:             nil, // ADR-0003 CC3: nullable on running row
@@ -394,7 +425,7 @@ func (r *Runner) writePreCheckErrorRow(ctx context.Context, dedup *alerts.Attemp
 		RecordedAt:            now,
 		Status:                results.StatusError,
 		EngineVersion:         r.engineVersion,
-		RulesetVersion:        r.rulesetVersion,
+		RulesetVersion:        trigger.RulesetVersion,
 		Entity:                trigger.Entity,
 		TriggerSource:         trigger.TriggerSource,
 		StartedAt:             &startedAt,
@@ -429,7 +460,7 @@ func (r *Runner) writeTerminalRow(ctx context.Context, dedup *alerts.AttemptDedu
 		RecordedAt:            now,
 		Status:                terminalStatus,
 		EngineVersion:         r.engineVersion,
-		RulesetVersion:        r.rulesetVersion,
+		RulesetVersion:        trigger.RulesetVersion,
 		Entity:                trigger.Entity,
 		TriggerSource:         trigger.TriggerSource,
 		StartedAt:             &startedAt,
