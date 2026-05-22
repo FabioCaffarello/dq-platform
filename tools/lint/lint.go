@@ -148,6 +148,16 @@ func ValidateRulesDir(schema *jsonschema.Schema, dir string, verbose bool) (resu
 		if !strings.HasSuffix(name, ".yaml") && !strings.HasSuffix(name, ".yml") {
 			return nil
 		}
+		// Skip files whose basename begins with an underscore.
+		// The manifest publisher (tools/manifest) uses the same
+		// convention: `_owners.yaml`, `_schema/`, and any future
+		// metadata files prefixed with `_` are not rule YAMLs.
+		// The dq-lint binary validates `_owners.yaml` separately
+		// via the `--owners` flag; the rule-schema walker must
+		// not re-validate it against the rule schema.
+		if strings.HasPrefix(name, "_") {
+			return nil
+		}
 		if verbose {
 			fmt.Fprintf(os.Stderr, "dq-lint: checking %s\n", path)
 		}

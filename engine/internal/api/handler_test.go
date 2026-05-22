@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -461,6 +462,119 @@ func TestResponseContentType(t *testing.T) {
 	waitForDispatch(t, complete)
 	if got := w.Header().Get("Content-Type"); got != "application/json" {
 		t.Errorf("Content-Type = %q; want application/json", got)
+	}
+}
+
+// --- ResolveChecks (W3-P6d) ---------------------------------------------
+
+func TestHandleTrigger_ResolveChecks_PassesChecksToRunner(t *testing.T) {
+	manifest := &loader.Manifest{RulesetVersion: "rules-v1.0.0"}
+	d := &captureDispatcher{}
+	complete := make(chan struct{}, 8)
+	h, err := NewHandler(HandlerConfig{
+		Dispatcher:     d,
+		ActiveManifest: func() *loader.Manifest { return manifest },
+		EngineCtx:      context.Background(),
+		AttemptID:      func() string { return "00000000-0000-0000-0000-00000000aaaa" },
+		OnComplete:     func(_ string, _ error) { complete <- struct{}{} },
+		ResolveChecks: func(_ context.Context, entity string) ([]runner.CheckSpec, error) {
+			if entity != "customer" {
+				t.Errorf("resolver called with entity %q; want customer", entity)
+			}
+			return []runner.CheckSpec{
+				{CheckID: "row_count_positive", Kind: "row_count_positive"},
+			}, nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewHandler: %v", err)
+	}
+	w := post(t, h.HandleTrigger, validBody)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d; want 200. body=%s", w.Code, w.Body.String())
+	}
+	waitForDispatch(t, complete)
+	got := d.lastCall()
+	if len(got.Checks) != 1 {
+		t.Fatalf("dispatcher Checks length = %d; want 1", len(got.Checks))
+	}
+	if got.Checks[0].Kind != "row_count_positive" {
+		t.Errorf("dispatcher Check Kind = %q; want row_count_positive", got.Checks[0].Kind)
+	}
+}
+
+func TestHandleTrigger_ResolveChecks_EntityNotInManifest_Returns404(t *testing.T) {
+	manifest := &loader.Manifest{RulesetVersion: "rules-v1.0.0"}
+	d := &captureDispatcher{}
+	h, err := NewHandler(HandlerConfig{
+		Dispatcher:     d,
+		ActiveManifest: func() *loader.Manifest { return manifest },
+		EngineCtx:      context.Background(),
+		ResolveChecks: func(_ context.Context, _ string) ([]runner.CheckSpec, error) {
+			return nil, ErrEntityNotInManifest
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewHandler: %v", err)
+	}
+	w := post(t, h.HandleTrigger, validBody)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("status = %d; want 404", w.Code)
+	}
+	var env ErrorResponse
+	_ = json.Unmarshal(w.Body.Bytes(), &env)
+	if env.Code != ErrCodeEntityNotInManifest {
+		t.Errorf("code = %q; want %q", env.Code, ErrCodeEntityNotInManifest)
+	}
+	if env.Field != "entity" {
+		t.Errorf("field = %q; want entity", env.Field)
+	}
+	if d.callCount() != 0 {
+		t.Errorf("dispatcher invoked despite entity-not-in-manifest rejection")
+	}
+}
+
+func TestHandleTrigger_ResolveChecks_SystemError_Returns502(t *testing.T) {
+	manifest := &loader.Manifest{RulesetVersion: "rules-v1.0.0"}
+	d := &captureDispatcher{}
+	h, err := NewHandler(HandlerConfig{
+		Dispatcher:     d,
+		ActiveManifest: func() *loader.Manifest { return manifest },
+		EngineCtx:      context.Background(),
+		ResolveChecks: func(_ context.Context, _ string) ([]runner.CheckSpec, error) {
+			return nil, errors.New("simulated object-store read failure")
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewHandler: %v", err)
+	}
+	w := post(t, h.HandleTrigger, validBody)
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d; want 502", w.Code)
+	}
+	var env ErrorResponse
+	_ = json.Unmarshal(w.Body.Bytes(), &env)
+	if env.Code != ErrCodeCheckResolutionFailed {
+		t.Errorf("code = %q; want %q", env.Code, ErrCodeCheckResolutionFailed)
+	}
+	if d.callCount() != 0 {
+		t.Errorf("dispatcher invoked despite resolver system error")
+	}
+}
+
+func TestHandleTrigger_ResolveChecks_NilFunc_PreservesP4eBehavior(t *testing.T) {
+	// When ResolveChecks is nil, the handler must pass Checks: nil
+	// to the runner — preserving the P4e contract for tests that
+	// exercise the handler in isolation.
+	h, d, _, complete := testHandler(t)
+	w := post(t, h.HandleTrigger, validBody)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d; want 200", w.Code)
+	}
+	waitForDispatch(t, complete)
+	got := d.lastCall()
+	if got.Checks != nil {
+		t.Errorf("Checks = %v; want nil (P4e backwards-compat)", got.Checks)
 	}
 }
 

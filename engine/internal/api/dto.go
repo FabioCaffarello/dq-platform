@@ -96,15 +96,17 @@ type ErrorResponse struct {
 // at every rejection site so the taxonomy can be updated in one
 // place when the amendment lands.
 const (
-	ErrCodeUnknownField        = "UNKNOWN_FIELD"
-	ErrCodeDecodeError         = "DECODE_ERROR"
-	ErrCodeMissingField        = "MISSING_FIELD"
-	ErrCodeInvalidUTF8         = "INVALID_UTF8"
-	ErrCodePipeInInput         = "PIPE_IN_INPUT"
-	ErrCodeInvalidFieldLength  = "INVALID_FIELD_LENGTH"
-	ErrCodeInvalidWindowFormat = "INVALID_WINDOW_FORMAT"
-	ErrCodeInvalidWindowOrder  = "INVALID_WINDOW_ORDER"
-	ErrCodeInvalidTriggerSrc   = "INVALID_TRIGGER_SOURCE"
-	ErrCodeMethodNotAllowed    = "METHOD_NOT_ALLOWED"
-	ErrCodeInternal            = "INTERNAL_ERROR"
+	ErrCodeUnknownField          = "UNKNOWN_FIELD"
+	ErrCodeDecodeError           = "DECODE_ERROR"
+	ErrCodeMissingField          = "MISSING_FIELD"
+	ErrCodeInvalidUTF8           = "INVALID_UTF8"
+	ErrCodePipeInInput           = "PIPE_IN_INPUT"
+	ErrCodeInvalidFieldLength    = "INVALID_FIELD_LENGTH"
+	ErrCodeInvalidWindowFormat   = "INVALID_WINDOW_FORMAT"
+	ErrCodeInvalidWindowOrder    = "INVALID_WINDOW_ORDER"
+	ErrCodeInvalidTriggerSrc     = "INVALID_TRIGGER_SOURCE"
+	ErrCodeMethodNotAllowed      = "METHOD_NOT_ALLOWED"
+	ErrCodeInternal              = "INTERNAL_ERROR"
+	ErrCodeEntityNotInManifest   = "ENTITY_NOT_IN_MANIFEST"
+	ErrCodeCheckResolutionFailed = "CHECK_RESOLUTION_FAILED"
 )

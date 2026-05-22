@@ -37,6 +37,7 @@ import (
 
 	"dq-platform/engine/internal/alerts"
 	"dq-platform/engine/internal/api"
+	"dq-platform/engine/internal/dsl/spec"
 	"dq-platform/engine/internal/eval"
 	"dq-platform/engine/internal/loader"
 	"dq-platform/engine/internal/orphan"
@@ -198,12 +199,60 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Resolve a trigger entity into the runner's []CheckSpec
+	// (W3-P6d). Reads the entity's YAML body from the same
+	// object store the loader uses, then parses it via the
+	// dsl/spec strict parser.
+	//
+	// ADR ties:
+	//
+	//   - ADR-0001 — `kind` is the discriminator on each check;
+	//     parsed into runner.CheckSpec.Kind and dispatched by
+	//     engine/internal/eval per check-kind.
+	//   - ADR-0005 §1 — rule YAMLs are content-addressed at
+	//     `yamls/by-hash/sha256-<hex>.yaml`; the manifest publisher
+	//     (W3-P6a) wrote the body the closure reads here.
+	//   - ADR-0007 §3 — in-flight executions isolate against the
+	//     manifest active at plan creation; the closure captures
+	//     the manifest reference via current.get() once per
+	//     accepted trigger.
+	//
+	// Per the W3-P6d AskUserQuestion answer this is a per-trigger
+	// read; caching at refresh time is deferred to a future
+	// cost-discipline ADR.
+	resolveChecks := func(reqCtx context.Context, entity string) ([]runner.CheckSpec, error) {
+		m := current.get()
+		if m == nil {
+			return nil, fmt.Errorf("active manifest is unavailable")
+		}
+		var rule *loader.ManifestRule
+		for i := range m.Rules {
+			if m.Rules[i].Entity == entity {
+				rule = &m.Rules[i]
+				break
+			}
+		}
+		if rule == nil {
+			return nil, api.ErrEntityNotInManifest
+		}
+		body, err := gcsStore.ReadObject(reqCtx, rule.YamlPath)
+		if err != nil {
+			return nil, fmt.Errorf("read yaml body %q: %w", rule.YamlPath, err)
+		}
+		parsed, err := spec.Parse(body)
+		if err != nil {
+			return nil, fmt.Errorf("parse yaml %q: %w", rule.YamlPath, err)
+		}
+		return parsed.ToCheckSpecs(), nil
+	}
+
 	// HTTP trigger handler (W3-P4e per ADR-0014). The listener
 	// binds only after the initial manifest load completes
 	// (ADR-0014 §1 eager-at-load).
 	apiHandler, err := api.NewHandler(api.HandlerConfig{
 		Dispatcher:     r,
 		ActiveManifest: current.get,
+		ResolveChecks:  resolveChecks,
 		EngineCtx:      ctx,
 		Logger:         logger,
 		Publisher:      publisher,
