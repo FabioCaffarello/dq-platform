@@ -2,19 +2,18 @@
 
 // Command dq-engine is the DQ Platform runtime binary.
 //
-// Phase 4c scope: minimal wiring that demonstrates the loader,
-// result-write layer, and orphan detector run together. The
-// binary loads the active manifest at startup (process-exit on
-// failure per ADR-0007 CC1), starts two periodic loops (loader
-// refresh per ADR-0007 CC9 and orphan-run detection per
+// The binary loads the active manifest at startup (process-exit
+// on failure per ADR-0007 CC1), starts the HTTP trigger handler
+// (W3-P4e per ADR-0014 §1 eager-at-load — listener binds only
+// after the initial load completes), starts two periodic loops
+// (loader refresh per ADR-0007 CC9 and orphan-run detection per
 // ADR-0007 CC11), and waits for SIGTERM / SIGINT for graceful
 // shutdown.
 //
-// The HTTP / gRPC trigger handler is deferred to a later phase.
-// Without a trigger surface the binary's Runner is instantiated
-// but never invoked at runtime; the runner is exercised through
-// Go integration tests instead. The wiring proves the full
-// stack assembles cleanly.
+// The runner is constructed at startup and invoked by the HTTP
+// handler for every accepted trigger; in-flight executions are
+// isolated against the manifest active at trigger acceptance per
+// ADR-0007 §3.
 package main
 
 import (
@@ -37,6 +36,7 @@ import (
 	"google.golang.org/api/option"
 
 	"dq-platform/engine/internal/alerts"
+	"dq-platform/engine/internal/api"
 	"dq-platform/engine/internal/loader"
 	"dq-platform/engine/internal/orphan"
 	"dq-platform/engine/internal/results"
@@ -57,6 +57,7 @@ type envConfig struct {
 	LoaderRefreshInterval time.Duration
 	OrphanThreshold       time.Duration
 	OrphanScanInterval    time.Duration
+	HTTPAddr              string
 	LogLevel              slog.Level
 
 	// Endpoint overrides for the local emulator. Honored when
@@ -145,10 +146,7 @@ func main() {
 	current := &manifestHolder{}
 	current.set(initial)
 
-	// Orphan detector (ADR-0007 CC11). The Runner from the
-	// runner package is constructed but not exercised at runtime
-	// in Phase 4c; the binary holds it so Phase 6 (HTTP trigger
-	// handler) can use the same wiring.
+	// Orphan detector (ADR-0007 CC11).
 	detector, err := orphan.New(store, orphan.Config{
 		EngineVersion: cfg.EngineVersion,
 		Threshold:     cfg.OrphanThreshold,
@@ -160,6 +158,13 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Runner shared between every HTTP trigger acceptance
+	// (W3-P4e). Per ADR-0007 §3 the in-flight execution is
+	// isolated against the manifest active at plan creation; the
+	// trigger handler captures the manifest reference at
+	// acceptance and passes its RulesetVersion through
+	// TriggerRequest, overriding the runner's constructor-time
+	// pin.
 	r, err := runner.New(runner.Config{
 		Store:          store,
 		EngineVersion:  cfg.EngineVersion,
@@ -171,16 +176,46 @@ func main() {
 		logger.Error("new runner", "error", err.Error())
 		os.Exit(1)
 	}
-	_ = r // Phase 4c: held but not exercised. Phase 6 wires triggers.
+
+	// HTTP trigger handler (W3-P4e per ADR-0014). The listener
+	// binds only after the initial manifest load completes
+	// (ADR-0014 §1 eager-at-load).
+	apiHandler, err := api.NewHandler(api.HandlerConfig{
+		Dispatcher:     r,
+		ActiveManifest: current.get,
+		EngineCtx:      ctx,
+		Logger:         logger,
+		Publisher:      publisher,
+	})
+	if err != nil {
+		logger.Error("new api handler", "error", err.Error())
+		os.Exit(1)
+	}
+	httpServer := api.NewServer(cfg.HTTPAddr, apiHandler, logger)
 
 	var wg sync.WaitGroup
-	wg.Add(2)
+	wg.Add(3)
 	go loaderRefreshLoop(ctx, &wg, logger, ldr, current, cfg.LoaderRefreshInterval)
 	go orphanScanLoop(ctx, &wg, logger, detector, cfg.OrphanScanInterval)
+	go func() {
+		defer wg.Done()
+		if err := httpServer.ListenAndServe(); err != nil {
+			logger.Error("http server exited with error", "error", err.Error())
+		}
+	}()
 
 	// Wait for signal.
 	<-ctx.Done()
 	logger.Info("shutdown signal received", "reason", ctx.Err())
+
+	// Drain the HTTP listener before letting the periodic loops
+	// wind down — this stops accepting new triggers and waits
+	// (bounded) for in-flight handlers to return.
+	shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), 5*time.Second)
+	if err := httpServer.Shutdown(shutdownCtx); err != nil {
+		logger.Warn("http server shutdown returned error", "error", err.Error())
+	}
+	cancelShutdown()
 
 	// Give goroutines a bounded window to finish their current
 	// iteration. signal.NotifyContext cancellation already
@@ -203,6 +238,7 @@ func readEnv() (envConfig, error) {
 		LoaderRefreshInterval: 30 * time.Second,
 		OrphanThreshold:       time.Hour,
 		OrphanScanInterval:    5 * time.Minute,
+		HTTPAddr:              ":8080",
 		LogLevel:              slog.LevelInfo,
 		StorageEmulatorHost:   os.Getenv("STORAGE_EMULATOR_HOST"),
 		BigQueryEmulatorHost:  os.Getenv("BIGQUERY_EMULATOR_HOST"),
@@ -248,6 +284,9 @@ func readEnv() (envConfig, error) {
 			return cfg, fmt.Errorf("DQ_ORPHAN_SCAN_INTERVAL: %w", err)
 		}
 		cfg.OrphanScanInterval = d
+	}
+	if v := os.Getenv("DQ_HTTP_ADDR"); v != "" {
+		cfg.HTTPAddr = v
 	}
 	if v := os.Getenv("DQ_LOG_LEVEL"); v != "" {
 		switch strings.ToLower(v) {
