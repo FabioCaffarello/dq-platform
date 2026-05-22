@@ -1,0 +1,24 @@
+# path: deploy/overlays/qa/kustomization.yaml
+#
+# QA overlay. Sets DQ_ENV=qa on the dq-engine-env ConfigMap and
+# annotates the dq-engine ServiceAccount with the qa-project
+# Workload Identity binding (per B1-4 MD-3 — separate GCP project
+# per env, IAM is the isolation boundary). The `dq-qa-PLACEHOLDER`
+# project marker mirrors engine/internal/env/qa.go; the
+# operational session that provisions the real qa project
+# replaces both the SA email here and the project IDs in qa.go in
+# the same change.
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+patches:
+  - path: configmap-data.yaml
+    target:
+      kind: ConfigMap
+      name: dq-engine-env
+  - path: serviceaccount-annotations.yaml
+    target:
+      kind: ServiceAccount
+      name: dq-engine

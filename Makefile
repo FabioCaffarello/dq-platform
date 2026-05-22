@@ -26,7 +26,8 @@ COMPOSE := docker compose -p $(COMPOSE_PROJECT_NAME)
 	sync-schema \
 	build-lint build-engine build-manifest \
 	up down \
-	smoke-substrate
+	smoke-substrate \
+	validate-deploy
 
 help: ## Show this help.
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z][a-zA-Z0-9_-]+:.*?## / { printf "  \033[1m%-20s\033[0m %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
@@ -93,3 +94,20 @@ smoke-substrate: ## Run the three substrate smoke tests against the running loca
 
 demo-p6: ## End-to-end Phase 6 demo (W3-P6d). Closes the W2-3 C-W2-3.4 invariant locally. Requires `make up` first.
 	@bash scripts/smoke/demo-p6.sh
+
+# B2-8 CC2 names `kubectl apply -k --dry-run=client` as the validation
+# lane. Empirically that command still performs API-server discovery
+# before parsing — `unable to recognize` fails on any cluster-free
+# host (verified with kubectl 1.36 against an empty kubeconfig).
+# `kubectl kustomize` is the maximum-portable cluster-free surface of
+# CC2's intent: it catches YAML syntax errors, missing-resource
+# references, patch-target mismatches, and strategic-merge conflicts.
+# Deeper schema validation (field-name typos, e.g. `replicass:`) is a
+# follow-up lane — `kubeconform` or a kind-based CI cluster —
+# deferred to B2-3 release-engineering or a Phase-7 follow-up.
+validate-deploy: ## Render every overlay via `kubectl kustomize` (per B2-8 CC2/CC7).
+	@set -e; \
+	for env in local qa prod; do \
+		echo "→ rendering deploy/overlays/$$env/"; \
+		kubectl kustomize deploy/overlays/$$env/ > /dev/null; \
+	done

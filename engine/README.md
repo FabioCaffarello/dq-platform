@@ -168,8 +168,9 @@ overrides (`STORAGE_EMULATOR_HOST`,
 substrate concerns honored directly by the GCP SDKs.
 
 Deployment: see `deploy/base/` for the tool-neutral
-Kubernetes manifests (W3-P7b). Per-env overlays land at
-W3-P7c.
+Kubernetes manifests (W3-P7b) and `deploy/overlays/{local,qa,prod}/`
+for the Kustomize per-env overlays (W3-P7c). With W3-P7c,
+**Phase 7 closes**.
 
 Future work:
 
@@ -178,5 +179,4 @@ Future work:
   W3-P4e trigger-handler-contract study, provisional ADR-0014
   slot).
 - **W3-P6** — first onboarded entity end-to-end.
-- **W3-P7** — `deploy/` (Kubernetes manifests, env overlays).
 - **W3-P8** — `docs/` content beyond ADRs.
