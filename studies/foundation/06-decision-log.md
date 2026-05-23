@@ -11,7 +11,7 @@
 - Audience: project lead, platform engineers, anyone planning the next
   session of work.
 - Status: living document. Update whenever a decision changes state.
-- Last updated: 2026-05-23 (W3-P8d closed — Phase 8 closes; B2-9/B2-10 registered from W3-P8b/P8d follow-ups; B1-9 promoted to ADR-0015)
+- Last updated: 2026-05-23 (W3-P8d closed — Phase 8 closes; B2-9/B2-10 registered from W3-P8b/P8d follow-ups; B1-9 → ADR-0015, B1-10 → ADR-0016, B1-11 → ADR-0017, B1-4 → ADR-0018, B2-8 → ADR-0019; Wave 3 completion gate met)
 - Promotion target: this document stays in `studies/foundation/` for
   the project's lifetime. Resolved decisions are promoted to ADRs
   under `docs/adr/` during Wave 3; rows here keep the link.
@@ -61,14 +61,14 @@
 | B1-1 | Baseline strategy | open | Where do moving averages and historical references come from, and what happens with sparse history? | Volume and freshness checks depend on consistent history semantics. | Check design note |
 | B1-2 | BigQuery cost ceilings | open | What are the per-environment limits for window size, concurrency, failed samples, and dry-run enforcement? | Cost drift is predictable; designing around it is cheap. | Operations doc + defaults policy |
 | B1-3 | Scheduler catchup behavior | open | How are catchup, missed windows, and manual triggers represented? | A scheduler without precise semantics causes duplicate or missing evaluations. | Scheduling design note |
-| B1-4 | Environment configuration model | [resolved-study](../decisions/2026-05-22-b1-4-environment-configuration-model.md) | Which configuration lives in code, deployment, or data, and how are `local`, `qa`, and `prod` isolated? | Prevents configuration sprawl and implicit behavior drift. | Env strategy ADR |
+| B1-4 | Environment configuration model | [resolved-study](../decisions/2026-05-22-b1-4-environment-configuration-model.md) → [resolved-adr](../../docs/adr/0018-environment-configuration-model.md) | Which configuration lives in code, deployment, or data, and how are `local`, `qa`, and `prod` isolated? | Prevents configuration sprawl and implicit behavior drift. | Env strategy ADR |
 | B1-5 | Local testing strategy | open | What can be tested offline, what needs BigQuery sandbox access, and how is generated SQL inspected? | Developer experience shapes long-term quality. | Dev guide + tooling scope |
 | B1-6 | Evidence retention parameters | open | How many violating samples per check, for how long, under what privacy constraints? | Storage cost and privacy compliance depend on it. | Storage and security note |
 | B1-7 | Compatibility window duration | open | How long is each schema version supported after its successor is released? | Migration ergonomics for domain teams. | Boundary contract refinement |
 | B1-8 | Manifest cryptographic posture | open | Does the manifest carry signatures beyond checksums? Who signs it? | Defense in depth against tampering or accidental publication. | Security note |
 | B1-9 | CODEOWNERS finalization | [resolved-study](../decisions/2026-05-22-b1-9-codeowners.md) → [resolved-adr](../../docs/adr/0015-codeowners.md) | Final team names and path rules for the asymmetric review model. | Enforces the boundary at PR-review time. | CODEOWNERS file |
-| B1-10 | Workspace tooling stack | [resolved-study](../decisions/2026-05-21-b1-10-workspace-tooling.md) | Confirm Go workspaces (`go.work`) as the tooling choice and finalize the per-tool module structure. | Affects every CI pipeline file. | Topology ADR refinement |
-| B1-11 | ADR-0010 substrate-posture amendment — object-store CAS row | [resolved-study](../decisions/2026-05-21-b1-11-substrate-posture-amendment.md) | The ADR-0010 "Object store: generation-conditional pointer write" row is committed as `Yes`, but Phase 2 emulator evaluation found commodity emulators do not faithfully enforce `ifGenerationMatch` (fake-gcs-server accepts stale-generation writes; storage-testbench requires GCP auth; oittaa lacks the media-upload endpoint). The row should be amended to `Partial` so production-shape CAS enforcement is explicitly sandbox-required, matching the existing pattern for the tabular-store lazy-view row. | Without amendment, the ADR-0010 contract and the deployed `docker-compose.yml` disagree on whether local CAS is faithful. | Amendment ADR (or a Wave 3 follow-up adjusting ADR-0010's matrix row). |
+| B1-10 | Workspace tooling stack | [resolved-study](../decisions/2026-05-21-b1-10-workspace-tooling.md) → [resolved-adr](../../docs/adr/0016-workspace-tooling.md) | Confirm Go workspaces (`go.work`) as the tooling choice and finalize the per-tool module structure. | Affects every CI pipeline file. | Topology ADR refinement |
+| B1-11 | ADR-0010 substrate-posture amendment — object-store CAS row | [resolved-study](../decisions/2026-05-21-b1-11-substrate-posture-amendment.md) → [resolved-adr](../../docs/adr/0017-substrate-posture-amendment.md) | The ADR-0010 "Object store: generation-conditional pointer write" row is committed as `Yes`, but Phase 2 emulator evaluation found commodity emulators do not faithfully enforce `ifGenerationMatch` (fake-gcs-server accepts stale-generation writes; storage-testbench requires GCP auth; oittaa lacks the media-upload endpoint). The row should be amended to `Partial` so production-shape CAS enforcement is explicitly sandbox-required, matching the existing pattern for the tabular-store lazy-view row. | Without amendment, the ADR-0010 contract and the deployed `docker-compose.yml` disagree on whether local CAS is faithful. | Amendment ADR (or a Wave 3 follow-up adjusting ADR-0010's matrix row). |
 
 ---
 
@@ -83,7 +83,7 @@
 | B2-5 | Entity onboarding workflow | open | What exact checklist determines when a new entity is ready for test channel and later for production alerting? | Governance quality depends on repeatable onboarding. | Runbook + checklist |
 | B2-6 | Dashboard contract | open | Which metrics and dimensions are guaranteed for downstream consumers (Looker, Grafana, etc.)? | Avoids each consumer inventing its own interpretation. | Reporting contract |
 | B2-7 | Documentation site generator | open | Does `docs/` get a static site generator, or stay as raw markdown? | Affects how documentation is discovered by non-developers. | Documentation infrastructure note |
-| B2-8 | Infrastructure tooling | [resolved-study](../decisions/2026-05-22-b2-8-infrastructure-tooling.md) | Kustomize, Helm, Terraform, or a combination for `deploy/`? | Affects deployment ergonomics and environment isolation. | Infrastructure ADR |
+| B2-8 | Infrastructure tooling | [resolved-study](../decisions/2026-05-22-b2-8-infrastructure-tooling.md) → [resolved-adr](../../docs/adr/0019-infrastructure-tooling.md) | Kustomize, Helm, Terraform, or a combination for `deploy/`? | Affects deployment ergonomics and environment isolation. | Infrastructure ADR |
 | B2-9 | Owner ↔ CODEOWNERS-group linter cross-check | open | Should `dq-lint` parse `.github/CODEOWNERS` and reject `_owners.yaml` entries whose `owner:` does not correspond to an existing CODEOWNERS group? | ADR-0006 §9 commits the linter as the first enforcement point for "no alert without owner"; without the cross-check, a stale or typo'd group reference only fails at PR-review time. Defense-in-depth complement to OQ-B1-9.3 (publisher/loader-side validation). Flagged when W3-P8b closed. | Linter rule design note + `dq-lint` extension |
 | B2-10 | `dq-manifest set-pointer` rollback subcommand | open | Should `dq-manifest` expose a first-class `set-pointer <hash>` subcommand to execute the rollback procedure in `docs/runbooks/manifest-rollback.md`? Today the CLI exposes only `publish`, and operators fall back to `gsutil`/console writes that bypass CLI contract enforcement. | Rollback ergonomics during incident response; the runbook's §2 procedure is TBD-blocked on this CLI surface. Flagged when W3-P8d closed. | CLI design note + subcommand under `tools/manifest/` |
 
@@ -201,9 +201,70 @@ scaffolding) cannot start before this. Currently: **gate met as of
 [Wave 3 — Phases](#wave-3--phases-scaffolding-sequencing) table
 above.
 
+### Wave 3 completion gate (all phases scaffolded)
+
+Pass when **every row in the [Wave 3 — Phases](#wave-3--phases-scaffolding-sequencing)
+table is closed**. Currently: **9 of 9 phases closed — gate met as
+of 2026-05-23** (W3-P0 through W3-P8 all closed; the closing
+sub-phases are W3-P4a/b/c/d/e, W3-P5, W3-P6a/c/d, W3-P7a/b/c, and
+W3-P8a/b/c/d).
+
+Five resolved-study items inside or adjacent to Wave 3 are now
+promoted to ADRs alongside this gate: **B1-9 → ADR-0015** (CODEOWNERS),
+**B1-10 → ADR-0016** (workspace tooling), **B1-11 → ADR-0017**
+(substrate-posture amendment to ADR-0010), **B1-4 → ADR-0018**
+(environment configuration model), **B2-8 → ADR-0019** (infrastructure
+tooling — Kustomize). The remaining open B1 and B2 rows above are
+demand-driven follow-ups, not Wave 3 blockers.
+
+**Post-Wave-3 follow-up backlog** (work that survives Wave 3 closure):
+
+- **Open B1 rows** — B1-1 (baseline strategy), B1-2 (BigQuery cost
+  ceilings; referenced by ≥4 runbook TBDs under `docs/runbooks/`),
+  B1-3 (scheduler catchup behavior), B1-5 (local testing strategy),
+  B1-6 (evidence retention parameters), B1-7 (compatibility window
+  duration), B1-8 (manifest cryptographic posture; flagged as a
+  potential B0-5 reopener if strengthened).
+- **Open B2 rows** — B2-1…B2-7 (long-tail implementation-phase
+  items), plus the newly registered B2-9 (owner ↔ CODEOWNERS-group
+  linter cross-check) and B2-10 (`dq-manifest set-pointer` rollback
+  subcommand).
+- **Operational `PLACEHOLDER` substitutions** awaiting the
+  GitHub-org / GCP-project provisioning session: `@PLACEHOLDER-org/…`
+  in `/.github/CODEOWNERS` and `rules/_owners.yaml`;
+  `dq-{qa,prod}-PLACEHOLDER-*` identifiers in
+  `engine/internal/env/{qa,prod}.go` and the matching deploy overlays.
+- **Runbook TBDs** under `docs/runbooks/` waiting on B1 numeric
+  parameters (mostly B1-2) or on B2-10's CLI surface.
+
+These follow-ups do not block any wave gate; each is picked up
+on demand under the same study → critique → promotion protocol that
+governed Waves 1–3.
+
 ---
 
 ## Recommended Next Sequence
+
+Waves 1, 2, and 3 are complete (gates met 2026-05-21, 2026-05-21,
+and 2026-05-23 respectively). The original 9-step sequence below is
+historical; the live sequence from 2026-05-23 onward is demand-
+driven against the post-Wave-3 follow-up backlog enumerated in the
+Wave 3 completion gate section above.
+
+Suggested triage order when starting a follow-up session:
+
+1. **Operational unblocks first.** If a `PLACEHOLDER` substitution
+   or a missing CLI surface (e.g., B2-10) is blocking an imminent
+   operational task, resolve it before any B1 study session.
+2. **B1 rows with downstream consumers next.** B1-2 (cost ceilings)
+   unblocks runbook TBDs; B1-8 (manifest cryptographic posture) is
+   the only open B1 with B0-reopener potential and so deserves
+   priority over the other open B1 rows.
+3. **B2 rows last**, on demand. B2-9 (linter cross-check) and B2-10
+   (CLI rollback subcommand) are demand-driven; the other B2 rows
+   surface as implementation reveals concrete needs.
+
+### Historical sequence (Waves 1–3)
 
 1. Resolve B0-1 (compatibility model) — it underpins B0-5 and B0-7.
 2. Resolve B0-5 (manifest semantics) — required before loader
@@ -217,5 +278,5 @@ above.
 8. Run Wave 2 consolidated decision session.
 9. Begin Wave 3 scaffolding.
 
-This ordering minimizes rework: each decision builds on stable ground
+This ordering minimized rework: each decision built on stable ground
 from the previous.
