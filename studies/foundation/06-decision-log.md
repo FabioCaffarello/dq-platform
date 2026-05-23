@@ -12,8 +12,8 @@
   session of work.
 - Status: living document. Update whenever a decision changes state.
 - Last updated: 2026-05-23 (W3-P8d closed — Phase 8 closes; B2-9/B2-10 registered from W3-P8b/P8d follow-ups; B1-9 → ADR-0015, B1-10 → ADR-0016, B1-11 → ADR-0017, B1-4 → ADR-0018, B2-8 → ADR-0019; Wave 3 completion gate met)
-- Wave-S preparation: 2026-05-23 scope notes applied to ADRs 0002, 0003, 0004, 0006, 0007, 0010, 0014, 0017 declaring set-oriented mode; ADR-0020 (Wave-S launch) forthcoming.
-- Wave-S launch: 2026-05-23 launch study closed at resolved-study (two critique rounds; ref: `studies/decisions/2026-05-23-wave-s-launch.md`); B0-S1…B0-S7 registered in the Wave-S table below; ADR-0020 promotion pending per C-S.6.
+- Wave-S preparation: 2026-05-23 scope notes applied to ADRs 0002, 0003, 0004, 0006, 0007, 0010, 0014, 0017 declaring set-oriented mode; ADR-0020 (Wave-S launch) lands 2026-05-23 — forward-pointers redeemed.
+- Wave-S launch: 2026-05-23 launch study closed at resolved-study (two critique rounds; ref: `studies/decisions/2026-05-23-wave-s-launch.md`) and promoted to [ADR-0020](../../docs/adr/0020-wave-s-launch.md); B0-S1…B0-S7 registered in the Wave-S table below.
 - Promotion target: this document stays in `studies/foundation/` for
   the project's lifetime. Resolved decisions are promoted to ADRs
   under `docs/adr/` during Wave 3; rows here keep the link.
@@ -152,7 +152,7 @@ Wave-S launches record-oriented (stream-based) validation capability
 parallel to the set-oriented capability delivered through Waves 1-3.
 Launch study at
 [`studies/decisions/2026-05-23-wave-s-launch.md`](../decisions/2026-05-23-wave-s-launch.md)
-→ provisional ADR-0020 (subject to C-S.6). Each B0-S item below opens
+→ [ADR-0020](../../docs/adr/0020-wave-s-launch.md). Each B0-S item below opens
 its own study under the `/resolve-b0` protocol that landed B0-1
 through B0-7; sequencing and gate criteria are committed in the
 launch study §6.3.
