@@ -2,8 +2,10 @@
 
 # ADR-0010 — Substrate Posture (Local Compose Scope)
 
-- **Status:** accepted
+- **Status:** accepted; **amended in part by ADR-0017** (object-store CAS row revised from **Yes** to **Partial**; substrate-selection checkpoint gains a CAS-fidelity sub-criterion)
 - **Date:** 2026-05-21
+
+**Scope note (added 2026-05-23):** This ADR currently applies to set-oriented capability (realized over BigQuery). Record-oriented capability is addressed separately in Wave-S (see ADR-0020 forthcoming).
 
 ---
 
