@@ -11,7 +11,7 @@
 - Audience: project lead, platform engineers, anyone planning the next
   session of work.
 - Status: living document. Update whenever a decision changes state.
-- Last updated: 2026-05-22
+- Last updated: 2026-05-22 (B1-9 resolved-study)
 - Promotion target: this document stays in `studies/foundation/` for
   the project's lifetime. Resolved decisions are promoted to ADRs
   under `docs/adr/` during Wave 3; rows here keep the link.
@@ -66,7 +66,7 @@
 | B1-6 | Evidence retention parameters | open | How many violating samples per check, for how long, under what privacy constraints? | Storage cost and privacy compliance depend on it. | Storage and security note |
 | B1-7 | Compatibility window duration | open | How long is each schema version supported after its successor is released? | Migration ergonomics for domain teams. | Boundary contract refinement |
 | B1-8 | Manifest cryptographic posture | open | Does the manifest carry signatures beyond checksums? Who signs it? | Defense in depth against tampering or accidental publication. | Security note |
-| B1-9 | CODEOWNERS finalization | open | Final team names and path rules for the asymmetric review model. | Enforces the boundary at PR-review time. | CODEOWNERS file |
+| B1-9 | CODEOWNERS finalization | [resolved-study](../decisions/2026-05-22-b1-9-codeowners.md) | Final team names and path rules for the asymmetric review model. | Enforces the boundary at PR-review time. | CODEOWNERS file |
 | B1-10 | Workspace tooling stack | [resolved-study](../decisions/2026-05-21-b1-10-workspace-tooling.md) | Confirm Go workspaces (`go.work`) as the tooling choice and finalize the per-tool module structure. | Affects every CI pipeline file. | Topology ADR refinement |
 | B1-11 | ADR-0010 substrate-posture amendment — object-store CAS row | [resolved-study](../decisions/2026-05-21-b1-11-substrate-posture-amendment.md) | The ADR-0010 "Object store: generation-conditional pointer write" row is committed as `Yes`, but Phase 2 emulator evaluation found commodity emulators do not faithfully enforce `ifGenerationMatch` (fake-gcs-server accepts stale-generation writes; storage-testbench requires GCP auth; oittaa lacks the media-upload endpoint). The row should be amended to `Partial` so production-shape CAS enforcement is explicitly sandbox-required, matching the existing pattern for the tabular-store lazy-view row. | Without amendment, the ADR-0010 contract and the deployed `docker-compose.yml` disagree on whether local CAS is faithful. | Amendment ADR (or a Wave 3 follow-up adjusting ADR-0010's matrix row). |
 
