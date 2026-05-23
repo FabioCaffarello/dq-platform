@@ -13,8 +13,11 @@ is part of the published repository product (per
 - **[`glossary.md`](glossary.md)** — canonical terminology
   for terms with codebase-specific meaning (lands in
   W3-P8a).
-- Governance, contribution guide, runbook seeds — land in
-  W3-P8b / W3-P8c / W3-P8d.
+- **[`governance.md`](governance.md)** — review model, the
+  three review groups, contribution-time flows (lands in
+  W3-P8b).
+- Contribution guide, runbook seeds — land in W3-P8c /
+  W3-P8d.
 
 ## Current state (Phase 8)
 
@@ -25,6 +28,8 @@ This directory holds:
 - `adr/0013` — the Wave 3 phase-sequencing ADR.
 - `adr/0014` — the HTTP trigger handler contract (W3-P4e).
 - `glossary.md` — codebase-specific terminology (W3-P8a).
+- `governance.md` — review model and contribution-time
+  flows (W3-P8b).
 
 ## Reading conventions
 

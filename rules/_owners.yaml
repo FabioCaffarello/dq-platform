@@ -8,7 +8,7 @@
 schema_version: 1
 entities:
   customer:
-    owner: data-platform
+    owner: "@PLACEHOLDER-org/rules-authors"
     description: First onboarded entity end-to-end (W3-P6d).
     channels:
       data_quality:
