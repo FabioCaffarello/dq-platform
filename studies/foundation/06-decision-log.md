@@ -11,7 +11,7 @@
 - Audience: project lead, platform engineers, anyone planning the next
   session of work.
 - Status: living document. Update whenever a decision changes state.
-- Last updated: 2026-05-23 (W3-P8d closed — Phase 8 closes)
+- Last updated: 2026-05-23 (W3-P8d closed — Phase 8 closes; B2-9/B2-10 registered from W3-P8b/P8d follow-ups)
 - Promotion target: this document stays in `studies/foundation/` for
   the project's lifetime. Resolved decisions are promoted to ADRs
   under `docs/adr/` during Wave 3; rows here keep the link.
@@ -84,6 +84,8 @@
 | B2-6 | Dashboard contract | open | Which metrics and dimensions are guaranteed for downstream consumers (Looker, Grafana, etc.)? | Avoids each consumer inventing its own interpretation. | Reporting contract |
 | B2-7 | Documentation site generator | open | Does `docs/` get a static site generator, or stay as raw markdown? | Affects how documentation is discovered by non-developers. | Documentation infrastructure note |
 | B2-8 | Infrastructure tooling | [resolved-study](../decisions/2026-05-22-b2-8-infrastructure-tooling.md) | Kustomize, Helm, Terraform, or a combination for `deploy/`? | Affects deployment ergonomics and environment isolation. | Infrastructure ADR |
+| B2-9 | Owner ↔ CODEOWNERS-group linter cross-check | open | Should `dq-lint` parse `.github/CODEOWNERS` and reject `_owners.yaml` entries whose `owner:` does not correspond to an existing CODEOWNERS group? | ADR-0006 §9 commits the linter as the first enforcement point for "no alert without owner"; without the cross-check, a stale or typo'd group reference only fails at PR-review time. Defense-in-depth complement to OQ-B1-9.3 (publisher/loader-side validation). Flagged when W3-P8b closed. | Linter rule design note + `dq-lint` extension |
+| B2-10 | `dq-manifest set-pointer` rollback subcommand | open | Should `dq-manifest` expose a first-class `set-pointer <hash>` subcommand to execute the rollback procedure in `docs/runbooks/manifest-rollback.md`? Today the CLI exposes only `publish`, and operators fall back to `gsutil`/console writes that bypass CLI contract enforcement. | Rollback ergonomics during incident response; the runbook's §2 procedure is TBD-blocked on this CLI surface. Flagged when W3-P8d closed. | CLI design note + subcommand under `tools/manifest/` |
 
 ---
 
