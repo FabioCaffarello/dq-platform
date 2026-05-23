@@ -21,7 +21,10 @@ is part of the published repository product (per
   `make demo-p6`, open a B-item, close a Wave 3 session loop).
   Published at the root per GitHub convention (lands in
   W3-P8c).
-- Runbook seeds — land in W3-P8d.
+- **[`runbooks/`](runbooks/)** — operator-facing playbooks for
+  the four common incident classes: manifest rollback,
+  orphan-run remediation, alert-dedup debugging, refresh-
+  failure escalation (lands in W3-P8d).
 
 ## Current state (Phase 8)
 
@@ -34,6 +37,8 @@ This directory holds:
 - `glossary.md` — codebase-specific terminology (W3-P8a).
 - `governance.md` — review model and contribution-time
   flows (W3-P8b).
+- `runbooks/` — operator-facing playbooks (W3-P8d).
+  Closes **Wave 3 — Phase 8** in full.
 
 The contributor-facing guide lives at the repository root as
 [`../CONTRIBUTING.md`](../CONTRIBUTING.md) per GitHub convention
