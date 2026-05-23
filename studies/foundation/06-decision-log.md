@@ -11,7 +11,7 @@
 - Audience: project lead, platform engineers, anyone planning the next
   session of work.
 - Status: living document. Update whenever a decision changes state.
-- Last updated: 2026-05-22 (W3-P8b closed)
+- Last updated: 2026-05-23 (W3-P8c closed)
 - Promotion target: this document stays in `studies/foundation/` for
   the project's lifetime. Resolved decisions are promoted to ADRs
   under `docs/adr/` during Wave 3; rows here keep the link.
@@ -137,7 +137,7 @@ Each row resolves to the commit reference that closes the phase.
 | W3-P8 | `docs/` content beyond ADRs — glossary, governance, contribution guide, runbook seeds | split into W3-P8a / W3-P8b / W3-P8c / W3-P8d (2026-05-22; mirrors the W3-P4 / W3-P6 / W3-P7 split precedent — each sub-phase gets an independent critique pass and PR) |
 | W3-P8a | Glossary — `docs/glossary.md` collecting terms with codebase-specific meaning across the ADRs, foundation documents, and resolved decisions. Forward-only per R8; no back-links into `studies/` from new content. | closed (lands via PR; ~50 terms across eleven thematic groups — governance, schema boundary, run identity, storage, failure model, manifest plane, loader/runner, trigger plane, alerting, DSL, environment; each entry cites its defining ADR / foundation §) |
 | W3-P8b | Governance — finalize CODEOWNERS for the asymmetric review model from ADR-0001 plus contribution-time roles; the study→ADR promotion flow already lives in `.claude/commands/promote-to-adr.md`. Depends on B1-9. | closed (lands via PR; `/.github/CODEOWNERS` published with `PLACEHOLDER-org/` literals per the path-rule table committed by B1-9; `docs/governance.md` lands as a forward-only referential summary of the review model and contribution-time flows; `rules/_owners.yaml`'s `customer` entity updated to `owner: "@PLACEHOLDER-org/rules-authors"` per B1-9 Consequence #4; substitution to the real org slug remains deferred to the operational session that creates the production org per ADR-0008 follow-up + OQ-B1-9.1) |
-| W3-P8c | Contribution guide — how to add a rule, how to run `make demo-p6`, how to open a B-item, how a Wave 3 session loop closes. Depends on W3-P8a (terminology baseline). | open |
+| W3-P8c | Contribution guide — how to add a rule, how to run `make demo-p6`, how to open a B-item, how a Wave 3 session loop closes. Depends on W3-P8a (terminology baseline). | closed (lands via PR; the stale Wave-1-only `/CONTRIBUTING.md` rewritten in place as the authoritative guide per GitHub convention; covers four practical flows — add a rule, run `make demo-p6`, open a B-item, close a Wave 3 session loop — plus a "what review will look like" pointer to `docs/governance.md`; `docs/README.md` updated to point at the root file; commit conventions section refreshed to mirror the post-Wave-1 `feat(...)`/`docs(...)` taxonomy) |
 | W3-P8d | Runbook seeds — operator-facing playbooks for manifest rollback via CAS pointer write, orphan-run remediation, alert-dedup debugging, refresh-failure escalation. Depends on W3-P8a (terminology baseline). | open |
 
 ---

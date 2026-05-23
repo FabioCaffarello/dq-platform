@@ -16,8 +16,12 @@ is part of the published repository product (per
 - **[`governance.md`](governance.md)** — review model, the
   three review groups, contribution-time flows (lands in
   W3-P8b).
-- Contribution guide, runbook seeds — land in W3-P8c /
-  W3-P8d.
+- [`../CONTRIBUTING.md`](../CONTRIBUTING.md) at the repository
+  root — the four practical contributor flows (add a rule, run
+  `make demo-p6`, open a B-item, close a Wave 3 session loop).
+  Published at the root per GitHub convention (lands in
+  W3-P8c).
+- Runbook seeds — land in W3-P8d.
 
 ## Current state (Phase 8)
 
@@ -30,6 +34,10 @@ This directory holds:
 - `glossary.md` — codebase-specific terminology (W3-P8a).
 - `governance.md` — review model and contribution-time
   flows (W3-P8b).
+
+The contributor-facing guide lives at the repository root as
+[`../CONTRIBUTING.md`](../CONTRIBUTING.md) per GitHub convention
+(W3-P8c).
 
 ## Reading conventions
 
