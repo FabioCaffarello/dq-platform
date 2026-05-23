@@ -12,6 +12,8 @@
   session of work.
 - Status: living document. Update whenever a decision changes state.
 - Last updated: 2026-05-23 (W3-P8d closed — Phase 8 closes; B2-9/B2-10 registered from W3-P8b/P8d follow-ups; B1-9 → ADR-0015, B1-10 → ADR-0016, B1-11 → ADR-0017, B1-4 → ADR-0018, B2-8 → ADR-0019; Wave 3 completion gate met)
+- Wave-S preparation: 2026-05-23 scope notes applied to ADRs 0002, 0003, 0004, 0006, 0007, 0010, 0014, 0017 declaring set-oriented mode; ADR-0020 (Wave-S launch) forthcoming.
+- Wave-S launch: 2026-05-23 launch study closed at resolved-study (two critique rounds; ref: `studies/decisions/2026-05-23-wave-s-launch.md`); B0-S1…B0-S7 registered in the Wave-S table below; ADR-0020 promotion pending per C-S.6.
 - Promotion target: this document stays in `studies/foundation/` for
   the project's lifetime. Resolved decisions are promoted to ADRs
   under `docs/adr/` during Wave 3; rows here keep the link.
@@ -141,6 +143,29 @@ Each row resolves to the commit reference that closes the phase.
 | W3-P8b | Governance — finalize CODEOWNERS for the asymmetric review model from ADR-0001 plus contribution-time roles; the study→ADR promotion flow already lives in `.claude/commands/promote-to-adr.md`. Depends on B1-9. | closed (lands via PR; `/.github/CODEOWNERS` published with `PLACEHOLDER-org/` literals per the path-rule table committed by B1-9; `docs/governance.md` lands as a forward-only referential summary of the review model and contribution-time flows; `rules/_owners.yaml`'s `customer` entity updated to `owner: "@PLACEHOLDER-org/rules-authors"` per B1-9 Consequence #4; substitution to the real org slug remains deferred to the operational session that creates the production org per ADR-0008 follow-up + OQ-B1-9.1) |
 | W3-P8c | Contribution guide — how to add a rule, how to run `make demo-p6`, how to open a B-item, how a Wave 3 session loop closes. Depends on W3-P8a (terminology baseline). | closed (lands via PR; the stale Wave-1-only `/CONTRIBUTING.md` rewritten in place as the authoritative guide per GitHub convention; covers four practical flows — add a rule, run `make demo-p6`, open a B-item, close a Wave 3 session loop — plus a "what review will look like" pointer to `docs/governance.md`; `docs/README.md` updated to point at the root file; commit conventions section refreshed to mirror the post-Wave-1 `feat(...)`/`docs(...)` taxonomy) |
 | W3-P8d | Runbook seeds — operator-facing playbooks for manifest rollback via CAS pointer write, orphan-run remediation, alert-dedup debugging, refresh-failure escalation. Depends on W3-P8a (terminology baseline). | closed (lands via PR; new `docs/runbooks/` directory with index + four runbooks, each following the fixed shape `when to use → preconditions → procedure → verification → rollback → escalation`; each runbook flags TBD markers where a B1 numeric parameter is unresolved (e.g., B1-2 refresh-failure thresholds) or where a CLI subcommand the procedure would prefer does not exist yet (e.g., `dq-manifest set-pointer`, blanket orphan-finalization tool); `docs/README.md` updated to advertise the runbooks directory; **Phase 8 closes with this session — all sub-phases W3-P8a / W3-P8b / W3-P8c / W3-P8d are now closed**) |
+
+---
+
+## Wave-S — Record-Oriented Capability Decisions
+
+Wave-S launches record-oriented (stream-based) validation capability
+parallel to the set-oriented capability delivered through Waves 1-3.
+Launch study at
+[`studies/decisions/2026-05-23-wave-s-launch.md`](../decisions/2026-05-23-wave-s-launch.md)
+→ provisional ADR-0020 (subject to C-S.6). Each B0-S item below opens
+its own study under the `/resolve-b0` protocol that landed B0-1
+through B0-7; sequencing and gate criteria are committed in the
+launch study §6.3.
+
+| # | Topic | Status | Key Question | Why It Matters | Expected Output |
+|---|---|---|---|---|---|
+| B0-S1 | Mode as primitive | open | How is `mode` declared on the rule artefact and entity, and how does capability derive from it (per P3)? | Mode is the architectural primitive (P1); without explicit declaration, downstream capability drifts and the kind-prefix lint gate cannot enforce the boundary. | ADR + mode-field schema + lint rule under `tools/lint/` |
+| B0-S2 | Kind catalog | open | What is the registry of supported `set.*` and `record.*` kinds, and how is the catalog extended? | Without a catalog, source declarations (S3) cannot validate against a kind's expected shape; schema-version governance has nothing to bump. | ADR + `record.*` schema half under `engine/schema/` and `rules/_schema/` |
+| B0-S3 | Sources schema | open | How is a source described per mode — set source (BigQuery table/view) vs record source (stream substrate topic/subscription)? | Sources cross-check against the kind catalog and extend the ADR-0007 loader; last item of the foundational triplet — its promotion meets the partial-Wave-S gate. | ADR + source schema + loader extension |
+| B0-S4 | Window semantics | open | What does "window" mean for record-mode (tumbling, sliding, session, watermark-bounded, or per-record), and how do watermarks interact with the ADR-0002 `execution_id` formula? | Windowing reshapes the record-mode halves of ADR-0002 (identity), ADR-0003 (write model), and ADR-0006 (dedup). | ADR + record-mode `execution_id` rule |
+| B0-S5 | Aggregation & unified-vs-parallel execution | open | One unified runner switching on mode, or two parallel runners — against what objective criterion (satisfies P4's deferral)? | Decides the engine binary layout under `engine/cmd/`; reshapes ADR-0007 (loader/scheduler) and ADR-0014 (trigger handler) on the record side. | ADR + objective criterion + runner-shape decision |
+| B0-S6 | Failure scope aggregated | open | How do per-record failures aggregate into an entity-level status (per ADR-0004) when record-mode lacks a natural batch boundary? | Reshapes the record-mode half of ADR-0004 (status policy) and ADR-0006 (alert routing); B1-6 (evidence retention) needs a record-mode amendment. | ADR + record-mode status mapping + B1-6 amendment scope |
+| B0-S7 | Record-oriented cost guardrails | open | What throughput, backpressure, dead-letter, and consumer-lag ceilings apply to record-mode under each environment (per ADR-0018)? | Cost couples to substrate (DD-S.6); without ceilings, record-mode lacks the cost discipline (P4) that set-mode gets from B1-2. | ADR + per-env ceilings + ADR-0019 overlay extension under `deploy/overlays/` |
 
 ---
 
