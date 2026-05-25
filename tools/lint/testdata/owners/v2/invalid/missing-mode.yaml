@@ -1,0 +1,9 @@
+# path: tools/lint/testdata/owners/v2/invalid/missing-mode.yaml
+# v2 owners schema requires `mode` per entity. This file omits it.
+schema_version: 2
+entities:
+  customer:
+    owner: data-platform
+    channels:
+      data_quality:
+        - slack:#dq-customer

@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "rules/_schema/_owners.v2.schema.json",
+  "title": "DQ Platform _owners.yaml v2",
+  "description": "Canonical JSON Schema for rules/_owners.yaml at schema version 2. v2 extends v1 with a required per-entity `mode` field (per ADR-0021 §C-B0S1.3 mode-as-primitive). The linter cross-checks that each rule's `mode` equals the matching owners entry's `mode`. v2 is rules-side only; no engine-side mirror exists per ADR-0022's carrying convention (owners metadata is consumed by the alerting layer, not the engine query path).",
+  "type": "object",
+  "required": ["schema_version", "entities"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "description": "Owners schema version. Const 2 at this contract level; schema evolution follows ADR-0006 CC12 (additive within a major; breaking change requires a v3 file).",
+      "const": 2
+    },
+    "entities": {
+      "description": "Map of entity identifier to owner descriptor. Keys must match the entity-identifier pattern committed in rules/_schema/v2.schema.json (the rule schema's entity pattern). The linter cross-checks that every rule YAML's entity field is a key here per ADR-0006 CC9, and that the rule's mode equals the entry's mode per ADR-0021.",
+      "type": "object",
+      "minProperties": 0,
+      "additionalProperties": false,
+      "patternProperties": {
+        "^[A-Za-z0-9_.-]+$": {
+          "$ref": "#/$defs/entity"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "entity": {
+      "description": "Owner descriptor for one entity.",
+      "type": "object",
+      "required": ["owner", "mode", "channels"],
+      "additionalProperties": false,
+      "properties": {
+        "owner": {
+          "description": "Human-readable owner identifier (team name, group alias, or rotation). Free-form string; the engine does not interpret it.",
+          "type": "string",
+          "minLength": 1
+        },
+        "mode": {
+          "description": "Evaluation mode the entity runs under (per ADR-0021 §C-B0S1.3). The linter cross-checks that every rule YAML for this entity carries the same mode value.",
+          "type": "string",
+          "enum": ["set", "record"]
+        },
+        "channels": {
+          "$ref": "#/$defs/channels"
+        },
+        "severity_overrides": {
+          "$ref": "#/$defs/severityOverrides"
+        },
+        "description": {
+          "description": "Optional human-readable description of the entity (purpose, upstream provider, etc.). The engine does not interpret it.",
+          "type": "string"
+        }
+      }
+    },
+    "channels": {
+      "description": "Routing map keyed by alert category (data_quality / operational). Each value is a non-empty array of channel references in the form `<type>:<id>`, where <type> is a short lowercase token (e.g., slack, email, pagerduty) and <id> is the channel-specific identifier. The engine does not validate <type> beyond the lexical form here; the alerting consumer (per ADR-0006 CC3) decides which channel types it can route to.",
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "data_quality": {
+          "$ref": "#/$defs/channelList"
+        },
+        "operational": {
+          "$ref": "#/$defs/channelList"
+        }
+      }
+    },
+    "channelList": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "description": "Channel reference in the form `<type>:<id>`. The colon separator is the wire encoding committed by Phase 5 per ADR-0006 CC2's deferral to Wave 3. <type> is a short lowercase token (slack, email, pagerduty, …); <id> is the channel-specific identifier (Slack channel name like #dq-foo, email address like oncall@example.com, PagerDuty service ID, …). The id may contain any non-whitespace character, including #, @, /, since channel naming is substrate-specific.",
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_-]*:\\S+$"
+      }
+    },
+    "severityOverrides": {
+      "description": "Optional map of category -> environment -> severity. The outer key is the alert category (data_quality / operational). The inner key is the environment name (free-form lowercase token; the engine does not enumerate environments at this schema level). The value is one of the ADR-0006 CC6 severity enum values. Absent entries default to the engine deployment's per-category severity default per ADR-0006 CC3.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "data_quality": {
+          "$ref": "#/$defs/severityByEnv"
+        },
+        "operational": {
+          "$ref": "#/$defs/severityByEnv"
+        }
+      }
+    },
+    "severityByEnv": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "patternProperties": {
+        "^[a-z][a-z0-9_-]*$": {
+          "type": "string",
+          "enum": ["info", "warning", "critical"]
+        }
+      }
+    }
+  }
+}

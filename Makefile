@@ -74,10 +74,16 @@ lint-rules: build-lint ## Validate every rule YAML against the schema mirror (pe
 dry-run-rules: ## Stub: generate SQL for every rule without executing (lands in Phase 4 with tools/dryrun).
 	@echo "dry-run-rules: not yet implemented; lands in Phase 4 (tools/dryrun binary)."
 
-sync-schema: ## Mechanically derive the rules schema mirror from the engine source (ADR-0001 C3).
+sync-schema: ## Mechanically derive the rules schema + catalog mirrors from the engine source (ADR-0001 C3, ADR-0022 §C-B0S2.1).
 	@for src in engine/internal/dsl/schema/v*.schema.json; do \
 		base="$$(basename $$src)"; \
 		dst="rules/_schema/$$base"; \
+		cp -p "$$src" "$$dst" && echo "synced $$src -> $$dst"; \
+	done
+	@for src in engine/internal/dsl/catalog/v*.yaml; do \
+		[ -e "$$src" ] || continue; \
+		base="$$(basename $$src)"; \
+		dst="rules/_schema/catalog.$$base"; \
 		cp -p "$$src" "$$dst" && echo "synced $$src -> $$dst"; \
 	done
 

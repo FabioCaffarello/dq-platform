@@ -1,0 +1,18 @@
+# path: tools/lint/testdata/v2/valid/_owners.yaml
+# Valid v2 owners file. Each entity declares its mode per ADR-0021.
+schema_version: 2
+entities:
+  customer:
+    owner: data-platform
+    mode: set
+    channels:
+      data_quality:
+        - slack:#dq-customer
+      operational:
+        - email:oncall@example.com
+  orders_stream:
+    owner: orders-team
+    mode: record
+    channels:
+      data_quality:
+        - slack:#dq-orders

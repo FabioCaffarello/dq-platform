@@ -1,0 +1,19 @@
+# path: tools/lint/testdata/v2/invalid/source-mode-mismatch.yaml
+# Cross-check #7: rule mode "record" expects source.type "kafka" but
+# source.type is "bigquery". The schema's source oneOf still accepts
+# bigquery as a valid structural shape; the cross-check catches the
+# semantic disagreement with rule.mode.
+version: 2
+entity: orders_stream
+mode: record
+source:
+  type: bigquery
+  project_id: dq-local
+  dataset_id: dq_fixture
+  table_id: orders
+checks:
+  - check_id: schema_present
+    kind: record.schema_conformance
+    params:
+      schema:
+        type: object

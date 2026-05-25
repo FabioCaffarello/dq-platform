@@ -1,17 +1,22 @@
 # path: .github/workflows/schema-mirror.yml
 #
 # Implements the byte-equality CI gate from ADR-0001 (compatibility
-# contract, commitment "the byte-equality CI gate is load-bearing").
+# contract, commitment "the byte-equality CI gate is load-bearing")
+# and the catalog-mirror extension from ADR-0022 §C-B0S2.1.
 # Compares engine/internal/dsl/schema/v<N>.schema.json against the
-# rules/_schema/v<N>.schema.json mirror for every supported N.
+# rules/_schema/v<N>.schema.json mirror for every supported N, and
+# engine/internal/dsl/catalog/v<N>.yaml against
+# rules/_schema/catalog.v<N>.yaml.
 #
-# Scope: only **rule schemas** (filenames matching v<N>.schema.json)
-# are mirrored. Underscore-prefixed files (_owners.v<N>.schema.json
-# and any future workspace-only schemas) live in rules/_schema/ only
-# and are exempt from the mirror invariant. Per ADR-0006 CC12 the
-# _owners.yaml contract evolves under the same protocol as B0-1
-# but, lacking an engine-side consumer, does not require a mirror;
-# if a future ADR introduces one, the mirror can be added then.
+# Scope: **rule schemas** (filenames matching v<N>.schema.json) and
+# **kind catalog files** (engine/internal/dsl/catalog/v<N>.yaml ↔
+# rules/_schema/catalog.v<N>.yaml). Underscore-prefixed files
+# (_owners.v<N>.schema.json and any future workspace-only schemas)
+# live in rules/_schema/ only and are exempt from the mirror
+# invariant. Per ADR-0006 CC12 the _owners.yaml contract evolves
+# under the same protocol as B0-1 but, lacking an engine-side
+# consumer, does not require a mirror; if a future ADR introduces
+# one, the mirror can be added then.
 #
 # Stub-safe behavior:
 #   - If neither schema file exists yet (Phase 2 — schema files
@@ -97,9 +102,40 @@ jobs:
             fi
           done
 
+          # Catalog mirror pair per ADR-0022 §C-B0S2.1. The engine
+          # catalog at engine/internal/dsl/catalog/v<N>.yaml mirrors
+          # to rules/_schema/catalog.v<N>.yaml. The catalog directory
+          # may not exist yet at pre-Wave-S baseline; absence on both
+          # sides passes.
+          engine_catalog_dir="engine/internal/dsl/catalog"
+          if [[ -d "${engine_catalog_dir}" ]]; then
+            for engine_catalog in "${engine_catalog_dir}"/v[0-9]*.yaml; do
+              base="$(basename "${engine_catalog}")"
+              mirror="${rules_dir}/catalog.${base}"
+              if [[ ! -f "${mirror}" ]]; then
+                echo "schema-mirror: FAIL — catalog mirror missing for ${engine_catalog} (expected ${mirror})."
+                mismatches=$((mismatches+1))
+                continue
+              fi
+              if ! cmp -s "${engine_catalog}" "${mirror}"; then
+                echo "schema-mirror: FAIL — ${engine_catalog} differs from ${mirror}."
+                mismatches=$((mismatches+1))
+              fi
+            done
+          fi
+
+          for mirror in "${rules_dir}"/catalog.v[0-9]*.yaml; do
+            base="$(basename "${mirror}" | sed 's/^catalog\.//')"
+            source_file="${engine_catalog_dir}/${base}"
+            if [[ ! -f "${source_file}" ]]; then
+              echo "schema-mirror: FAIL — ${mirror} has no source counterpart at ${source_file}."
+              mismatches=$((mismatches+1))
+            fi
+          done
+
           if [[ "${mismatches}" -gt 0 ]]; then
             echo "schema-mirror: FAIL — ${mismatches} mismatch(es)."
             exit 1
           fi
 
-          echo "schema-mirror: OK — all engine schema files match their rules mirror."
+          echo "schema-mirror: OK — all engine schema and catalog files match their rules mirror."

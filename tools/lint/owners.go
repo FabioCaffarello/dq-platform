@@ -15,7 +15,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// LoadOwnersSchema compiles the _owners.yaml JSON Schema. The
+// LoadOwnersSchema compiles an _owners.yaml JSON Schema. The
 // schemaPath must refer to the rules mirror per ADR-0006 CC12 (the
 // schema is the workspace surface against which rule YAMLs and
 // _owners.yaml declare conformance).
@@ -35,33 +35,86 @@ func LoadOwnersSchema(schemaPath string) (*jsonschema.Schema, error) {
 	return sch, nil
 }
 
-// Owners is the in-memory representation of a loaded _owners.yaml,
-// reduced to what the linter cross-checks: the set of declared
-// entity names. The full owner descriptor (channels, severity
-// overrides) is consumed by the alerting consumer at deploy time
-// per ADR-0006 CC3, not by the linter.
+// OwnersSchemaSet holds the v1 and v2 _owners schemas the linter
+// dispatches between, keyed by the `schema_version` field in the
+// _owners.yaml file. Either may be nil; the dispatcher reports a
+// clear error if the loaded file requires a missing schema.
+type OwnersSchemaSet struct {
+	V1 *jsonschema.Schema
+	V2 *jsonschema.Schema
+}
+
+// LoadOwnersSchemaSet loads both v1 and v2 owners schemas. Either
+// path may be empty.
+func LoadOwnersSchemaSet(v1Path, v2Path string) (*OwnersSchemaSet, error) {
+	set := &OwnersSchemaSet{}
+	if v1Path != "" {
+		sch, err := LoadOwnersSchema(v1Path)
+		if err != nil {
+			return nil, fmt.Errorf("v1 owners schema: %w", err)
+		}
+		set.V1 = sch
+	}
+	if v2Path != "" {
+		sch, err := LoadOwnersSchema(v2Path)
+		if err != nil {
+			return nil, fmt.Errorf("v2 owners schema: %w", err)
+		}
+		set.V2 = sch
+	}
+	return set, nil
+}
+
+// OwnerEntity is the reduced in-memory descriptor for one entity
+// in _owners.yaml. The linter retains only what is needed for
+// cross-checks: the entity is declared (presence) and its mode
+// (for v2 cross-check #3). Channels and severity overrides are
+// consumed by the alerting layer per ADR-0006 CC3, not by the
+// linter, so they are intentionally not retained here.
+type OwnerEntity struct {
+	// Mode is "set" or "record" for v2 owners; empty string for
+	// v1 owners (which had no mode field). Cross-check #3 only
+	// fires when both the rule and the owners entry carry a mode.
+	Mode string
+}
+
+// Owners is the in-memory representation of a loaded _owners.yaml.
 type Owners struct {
-	// Entities is the set of entity names declared in
-	// _owners.yaml. Empty when the file is missing.
-	Entities map[string]struct{}
+	// SchemaVersion records which owners schema this file claims
+	// against (1 or 2). 0 means the file was missing.
+	SchemaVersion int
+
+	// Entities is keyed by entity identifier. Empty when the file
+	// is missing.
+	Entities map[string]OwnerEntity
+
 	// Path is the path the linter loaded from, for diagnostics.
 	// Empty when the file was missing.
 	Path string
 }
 
-// LoadOwners reads and validates _owners.yaml against the given
-// compiled schema. A missing file is NOT an error: the returned
-// Owners has an empty Entities set. The caller (CheckRulesHaveOwners)
-// is responsible for rejecting rules whose entity is absent.
-//
-// Returns a validation-error slice when the file exists but does
-// not conform to the schema. The schema-validation errors are
-// surfaced verbatim from the JSON-schema validator.
-func LoadOwners(schema *jsonschema.Schema, ownersPath string) (*Owners, []ValidationError, error) {
+// parseOwnersVersion extracts the `schema_version` field without
+// triggering schema validation. Missing returns 0; the caller
+// treats 0 as "v1 dispatch" so the v1 schema can issue the
+// canonical error about a missing field.
+func parseOwnersVersion(raw []byte) int {
+	var h struct {
+		SchemaVersion int `yaml:"schema_version"`
+	}
+	_ = yaml.Unmarshal(raw, &h)
+	return h.SchemaVersion
+}
+
+// LoadOwners reads and validates _owners.yaml. The schema is
+// dispatched by the `schema_version` field. A missing file is NOT
+// an error: the returned Owners has SchemaVersion 0 and empty
+// Entities. The caller (CheckRulesHaveOwners) rejects rules whose
+// entity is absent.
+func LoadOwners(set *OwnersSchemaSet, ownersPath string) (*Owners, []ValidationError, error) {
 	raw, err := os.ReadFile(ownersPath)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			return &Owners{Entities: map[string]struct{}{}}, nil, nil
+			return &Owners{Entities: map[string]OwnerEntity{}}, nil, nil
 		}
 		return nil, nil, fmt.Errorf("read owners: %w", err)
 	}
@@ -71,20 +124,45 @@ func LoadOwners(schema *jsonschema.Schema, ownersPath string) (*Owners, []Valida
 		return nil, []ValidationError{{Message: fmt.Sprintf("yaml parse error: %v", err)}}, nil
 	}
 
+	version := parseOwnersVersion(raw)
+	var schema *jsonschema.Schema
+	switch version {
+	case 0, 1:
+		schema = set.V1
+		if schema == nil {
+			return nil, []ValidationError{{Message: "no v1 owners schema loaded; cannot validate _owners.yaml"}}, nil
+		}
+	case 2:
+		schema = set.V2
+		if schema == nil {
+			return nil, []ValidationError{{Message: "_owners.yaml declares schema_version 2 but no v2 owners schema is loaded"}}, nil
+		}
+	default:
+		return nil, []ValidationError{{Message: fmt.Sprintf("_owners.yaml declares unsupported schema_version %d", version)}}, nil
+	}
+
 	if err := schema.Validate(doc); err != nil {
 		return nil, []ValidationError{{Message: err.Error()}}, nil
 	}
 
 	owners := &Owners{
-		Entities: map[string]struct{}{},
-		Path:     ownersPath,
+		SchemaVersion: version,
+		Entities:      map[string]OwnerEntity{},
+		Path:          ownersPath,
 	}
-	// Schema validation already enforced the structure; this is a
-	// straightforward extraction of the `entities` map keys.
+	if version == 0 {
+		owners.SchemaVersion = 1
+	}
 	if m, ok := doc.(map[string]any); ok {
 		if entities, ok := m["entities"].(map[string]any); ok {
-			for name := range entities {
-				owners.Entities[name] = struct{}{}
+			for name, entAny := range entities {
+				ent := OwnerEntity{}
+				if entMap, ok := entAny.(map[string]any); ok {
+					if mode, ok := entMap["mode"].(string); ok {
+						ent.Mode = mode
+					}
+				}
+				owners.Entities[name] = ent
 			}
 		}
 	}

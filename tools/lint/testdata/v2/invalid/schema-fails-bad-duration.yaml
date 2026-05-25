@@ -1,0 +1,20 @@
+# path: tools/lint/testdata/v2/invalid/schema-fails-bad-duration.yaml
+# Schema-level failure: duration grammar in the kafka window is
+# enforced by the v2 schema regex. "five minutes" does not match.
+version: 2
+entity: orders_stream
+mode: record
+source:
+  type: kafka
+  topic: orders.events.v1
+  consumer_group: dq-orders-stream
+  window:
+    type: tumbling
+    duration: five minutes
+    lateness_tolerance: 30s
+checks:
+  - check_id: schema_present
+    kind: record.schema_conformance
+    params:
+      schema:
+        type: object

@@ -1,0 +1,11 @@
+# path: tools/lint/testdata/v2/cross-check/_owners.yaml
+# Owners file used by the cross-check #3 test: the customer entity is
+# declared mode=record here, but the rule below declares mode=set.
+schema_version: 2
+entities:
+  customer:
+    owner: data-platform
+    mode: record
+    channels:
+      data_quality:
+        - slack:#dq-customer
