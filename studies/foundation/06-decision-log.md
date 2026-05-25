@@ -67,7 +67,7 @@
 | B1-5 | Local testing strategy | open | What can be tested offline, what needs BigQuery sandbox access, and how is generated SQL inspected? | Developer experience shapes long-term quality. | Dev guide + tooling scope |
 | B1-6 | Evidence retention parameters | open | How many violating samples per check, for how long, under what privacy constraints? | Storage cost and privacy compliance depend on it. | Storage and security note |
 | B1-7 | Compatibility window duration | open | How long is each schema version supported after its successor is released? | Migration ergonomics for domain teams. | Boundary contract refinement |
-| B1-8 | Manifest cryptographic posture | open | Does the manifest carry signatures beyond checksums? Who signs it? | Defense in depth against tampering or accidental publication. | Security note |
+| B1-8 | Manifest cryptographic posture | [resolved-study](../decisions/2026-05-25-b1-8-manifest-cryptographic-posture.md) → [resolved-adr](../../docs/adr/0030-manifest-cryptographic-posture.md) | Does the manifest carry signatures beyond checksums? Who signs it? | Defense in depth against tampering or accidental publication. | Security note |
 | B1-9 | CODEOWNERS finalization | [resolved-study](../decisions/2026-05-22-b1-9-codeowners.md) → [resolved-adr](../../docs/adr/0015-codeowners.md) | Final team names and path rules for the asymmetric review model. | Enforces the boundary at PR-review time. | CODEOWNERS file |
 | B1-10 | Workspace tooling stack | [resolved-study](../decisions/2026-05-21-b1-10-workspace-tooling.md) → [resolved-adr](../../docs/adr/0016-workspace-tooling.md) | Confirm Go workspaces (`go.work`) as the tooling choice and finalize the per-tool module structure. | Affects every CI pipeline file. | Topology ADR refinement |
 | B1-11 | ADR-0010 substrate-posture amendment — object-store CAS row | [resolved-study](../decisions/2026-05-21-b1-11-substrate-posture-amendment.md) → [resolved-adr](../../docs/adr/0017-substrate-posture-amendment.md) | The ADR-0010 "Object store: generation-conditional pointer write" row is committed as `Yes`, but Phase 2 emulator evaluation found commodity emulators do not faithfully enforce `ifGenerationMatch` (fake-gcs-server accepts stale-generation writes; storage-testbench requires GCP auth; oittaa lacks the media-upload endpoint). The row should be amended to `Partial` so production-shape CAS enforcement is explicitly sandbox-required, matching the existing pattern for the tabular-store lazy-view row. | Without amendment, the ADR-0010 contract and the deployed `docker-compose.yml` disagree on whether local CAS is faithful. | Amendment ADR (or a Wave 3 follow-up adjusting ADR-0010's matrix row). |
@@ -247,9 +247,10 @@ demand-driven follow-ups, not Wave 3 blockers.
 - **Open B1 rows** — B1-1 (baseline strategy), B1-3 (scheduler
   catchup behavior), B1-5 (local testing strategy), B1-6
   (evidence retention parameters), B1-7 (compatibility window
-  duration), B1-8 (manifest cryptographic posture; flagged as a
-  potential B0-5 reopener if strengthened). **B1-2 (BigQuery
-  cost ceilings) resolved 2026-05-25 → ADR-0029.**
+  duration). **B1-2 (BigQuery cost ceilings) resolved
+  2026-05-25 → ADR-0029. B1-8 (manifest cryptographic
+  posture) resolved 2026-05-25 → ADR-0030 (deferral with
+  auditable trigger conditions; B0-5 reopener did not fire).**
 - **Open B2 rows** — B2-1…B2-7 (long-tail implementation-phase
   items), plus the newly registered B2-9 (owner ↔ CODEOWNERS-group
   linter cross-check) and B2-10 (`dq-manifest set-pointer` rollback
@@ -286,10 +287,11 @@ Suggested triage order when starting a follow-up session:
 1. **Operational unblocks first.** If a `PLACEHOLDER` substitution
    or a missing CLI surface (e.g., B2-10) is blocking an imminent
    operational task, resolve it before any B1 study session.
-2. **B1 rows with downstream consumers next.** B1-2 (cost ceilings)
-   unblocks runbook TBDs; B1-8 (manifest cryptographic posture) is
-   the only open B1 with B0-reopener potential and so deserves
-   priority over the other open B1 rows.
+2. **B1 rows with downstream consumers next.** B1-2 (cost
+   ceilings → ADR-0029, 2026-05-25) and B1-8 (cryptographic
+   posture → ADR-0030, 2026-05-25) have been resolved. The
+   remaining open B1 rows — B1-1, B1-3, B1-5, B1-6, B1-7 —
+   are demand-driven and have no current B0 reopener.
 3. **B2 rows last**, on demand. B2-9 (linter cross-check) and B2-10
    (CLI rollback subcommand) are demand-driven; the other B2 rows
    surface as implementation reveals concrete needs.
