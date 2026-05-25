@@ -61,7 +61,7 @@
 | # | Topic | Status | Key Question | Why It Matters | Expected Output |
 |---|---|---|---|---|---|
 | B1-1 | Baseline strategy | open | Where do moving averages and historical references come from, and what happens with sparse history? | Volume and freshness checks depend on consistent history semantics. | Check design note |
-| B1-2 | BigQuery cost ceilings | open | What are the per-environment limits for window size, concurrency, failed samples, and dry-run enforcement? | Cost drift is predictable; designing around it is cheap. | Operations doc + defaults policy |
+| B1-2 | BigQuery cost ceilings | [resolved-study](../decisions/2026-05-25-b1-2-bigquery-cost-ceilings.md) → [resolved-adr](../../docs/adr/0029-bigquery-cost-ceilings.md) | What are the per-environment limits for window size, concurrency, failed samples, and dry-run enforcement? | Cost drift is predictable; designing around it is cheap. | Operations doc + defaults policy |
 | B1-3 | Scheduler catchup behavior | open | How are catchup, missed windows, and manual triggers represented? | A scheduler without precise semantics causes duplicate or missing evaluations. | Scheduling design note |
 | B1-4 | Environment configuration model | [resolved-study](../decisions/2026-05-22-b1-4-environment-configuration-model.md) → [resolved-adr](../../docs/adr/0018-environment-configuration-model.md) | Which configuration lives in code, deployment, or data, and how are `local`, `qa`, and `prod` isolated? | Prevents configuration sprawl and implicit behavior drift. | Env strategy ADR |
 | B1-5 | Local testing strategy | open | What can be tested offline, what needs BigQuery sandbox access, and how is generated SQL inspected? | Developer experience shapes long-term quality. | Dev guide + tooling scope |
@@ -244,23 +244,28 @@ demand-driven follow-ups, not Wave 3 blockers.
 
 **Post-Wave-3 follow-up backlog** (work that survives Wave 3 closure):
 
-- **Open B1 rows** — B1-1 (baseline strategy), B1-2 (BigQuery cost
-  ceilings; referenced by ≥4 runbook TBDs under `docs/runbooks/`),
-  B1-3 (scheduler catchup behavior), B1-5 (local testing strategy),
-  B1-6 (evidence retention parameters), B1-7 (compatibility window
+- **Open B1 rows** — B1-1 (baseline strategy), B1-3 (scheduler
+  catchup behavior), B1-5 (local testing strategy), B1-6
+  (evidence retention parameters), B1-7 (compatibility window
   duration), B1-8 (manifest cryptographic posture; flagged as a
-  potential B0-5 reopener if strengthened).
+  potential B0-5 reopener if strengthened). **B1-2 (BigQuery
+  cost ceilings) resolved 2026-05-25 → ADR-0029.**
 - **Open B2 rows** — B2-1…B2-7 (long-tail implementation-phase
   items), plus the newly registered B2-9 (owner ↔ CODEOWNERS-group
   linter cross-check) and B2-10 (`dq-manifest set-pointer` rollback
-  subcommand).
+  subcommand). Two further B2 follow-ups register from ADR-0029
+  pending close-step numbering: `tools/dryrun` binary (compiler-
+  layer cost enforcement) and `row_count_positive` partition-filter
+  retrofit (closes the v1 set-mode cost gap on partition-less
+  tables).
 - **Operational `PLACEHOLDER` substitutions** awaiting the
   GitHub-org / GCP-project provisioning session: `@PLACEHOLDER-org/…`
   in `/.github/CODEOWNERS` and `rules/_owners.yaml`;
   `dq-{qa,prod}-PLACEHOLDER-*` identifiers in
   `engine/internal/env/{qa,prod}.go` and the matching deploy overlays.
-- **Runbook TBDs** under `docs/runbooks/` waiting on B1 numeric
-  parameters (mostly B1-2) or on B2-10's CLI surface.
+- **Runbook TBDs** under `docs/runbooks/` now resolved by ADR-0029
+  for refresh-failure parameters; remaining TBDs wait on B2-10's
+  CLI surface (`dq-manifest set-pointer` for the rollback runbook).
 
 These follow-ups do not block any wave gate; each is picked up
 on demand under the same study → critique → promotion protocol that
