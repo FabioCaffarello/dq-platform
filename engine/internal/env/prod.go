@@ -33,11 +33,16 @@ var Prod = EnvConfig{
 	BigQueryDataset:       "dq_results_prod",
 	PubSubProject:         "dq-prod-PLACEHOLDER",
 	PubSubTopic:           "dq-alerts-prod",
-	SourceProject:         "dq-prod-PLACEHOLDER",
-	SourceDataset:         "dq_source_prod",
+	KafkaBootstrap:        "dq-prod-PLACEHOLDER-kafka:9092",
 	HTTPAddr:              ":8080",
 	LogLevel:              LogLevelInfo,
 	LoaderRefreshInterval: 30 * time.Second,
 	OrphanThreshold:       1 * time.Hour,
 	OrphanScanInterval:    5 * time.Minute,
+	RecordModeCost: RecordModeCost{
+		MaxEvidenceSampleSize: 10000,
+		MaxConsumerLag:        1 * time.Hour,
+		MaxLatenessTolerance:  30 * time.Minute,
+		SampleStorageCapMB:    10000,
+	},
 }

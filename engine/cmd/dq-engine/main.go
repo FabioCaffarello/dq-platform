@@ -35,6 +35,7 @@ import (
 
 	"dq-platform/engine/internal/alerts"
 	"dq-platform/engine/internal/api"
+	"dq-platform/engine/internal/dsl/catalog"
 	"dq-platform/engine/internal/dsl/spec"
 	"dq-platform/engine/internal/env"
 	"dq-platform/engine/internal/eval"
@@ -125,7 +126,7 @@ func main() {
 	gcsStore := loader.NewGCSStore(gcsClient, cfg.GCSBucket)
 	ldr, err := loader.New(gcsStore, loader.Config{
 		EngineVersion:           cfg.EngineVersion,
-		SupportedSchemaVersions: []int{1},
+		SupportedSchemaVersions: []int{1, 2},
 	})
 	if err != nil {
 		logger.Error("new loader", "error", err.Error())
@@ -157,20 +158,32 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Evaluator (W3-P6c). The BigQuery-backed evaluator
-	// dispatches on CheckSpec.Kind; P6c ships
-	// `row_count_positive`. Construction is fail-soft: if
-	// DQ_SOURCE_DATASET is unset the engine still starts, but
-	// data-plane checks return ResultError with a clear
-	// "source dataset not configured" diagnostic per ADR-0004 CC1.
+	// Evaluator (W3-P6c, extended to Wave-S sub-slice α). The
+	// evaluator dispatches on CheckSpec.Kind via the handler
+	// registry; New() registers set.row_count_positive (real
+	// handler) and record.schema_conformance (stub until Wave-S
+	// sub-slice β). Per ADR-0023 the rule's source descriptor
+	// carries the BigQuery target; the evaluator no longer pins
+	// a deployment-wide source.
 	evaluator, err := eval.New(eval.Config{
-		Client:        bqClient,
-		SourceProject: cfg.SourceProject,
-		SourceDataset: cfg.SourceDataset,
-		Logger:        logger,
+		Client: bqClient,
+		Logger: logger,
 	})
 	if err != nil {
 		logger.Error("new evaluator", "error", err.Error())
+		os.Exit(1)
+	}
+
+	// Dispatcher startup invariant per ADR-0022 §C-B0S2.3: every
+	// kind in the catalog must have a registered handler. The
+	// catalog ships in the rules workspace at
+	// rules/_schema/catalog.v1.yaml; the engine reads its
+	// engine-side mirror at engine/internal/dsl/catalog/v1.yaml
+	// at boot. Fail-fast if the registry diverges from the
+	// catalog (extra registered kinds are fine; missing kinds
+	// fail the boot).
+	if err := verifyHandlerRegistryAgainstCatalog(evaluator, logger); err != nil {
+		logger.Error("dispatcher startup invariant failed (ADR-0022 §C-B0S2.3)", "error", err.Error())
 		os.Exit(1)
 	}
 
@@ -421,6 +434,42 @@ func loaderRefreshLoop(ctx context.Context, wg *sync.WaitGroup, logger *slog.Log
 			}
 		}
 	}
+}
+
+// verifyHandlerRegistryAgainstCatalog enforces ADR-0022 §C-B0S2.3:
+// every kind in the engine-embedded catalog must have a registered
+// handler. Extra registered kinds are fine (handlers may exist
+// ahead of catalog adoption); missing kinds fail the boot.
+//
+// Sub-slice α posture: the catalog declares
+// set.row_count_positive and record.schema_conformance; the
+// evaluator registers both — the latter as a stub returning
+// ResultError until Wave-S sub-slice β wires the real runtime.
+func verifyHandlerRegistryAgainstCatalog(evaluator *eval.Evaluator, logger *slog.Logger) error {
+	cat, err := catalog.Load()
+	if err != nil {
+		return fmt.Errorf("load embedded catalog: %w", err)
+	}
+	registered := make(map[string]struct{}, len(evaluator.RegisteredKinds()))
+	for _, k := range evaluator.RegisteredKinds() {
+		registered[k] = struct{}{}
+	}
+	var missing []string
+	for _, k := range cat.Kinds {
+		if _, ok := registered[k.Name]; !ok {
+			missing = append(missing, k.Name)
+		}
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("catalog declares %d kind(s) with no registered handler: %v", len(missing), missing)
+	}
+	logger.Info("dispatcher startup invariant passed",
+		"catalog_version", cat.Version,
+		"catalog_kinds", len(cat.Kinds),
+		"registered_kinds", len(evaluator.RegisteredKinds()),
+		"adr_reference", "ADR-0022 §C-B0S2.3",
+	)
+	return nil
 }
 
 // orphanScanLoop ticks on the configured interval and calls

@@ -238,17 +238,18 @@ func (d *Detector) buildFollowupRow(candidate results.ExecutionRow) results.Exec
 	now := d.now().UTC()
 	summary := AbandonmentSummary
 	return results.ExecutionRow{
-		ExecutionID:    candidate.ExecutionID,
-		AttemptID:      candidate.AttemptID,
-		RecordedAt:     now,
-		Status:         results.StatusAborted,
-		EngineVersion:  d.engineVersion,
-		RulesetVersion: candidate.RulesetVersion,
-		Entity:         candidate.Entity,
-		TriggerSource:  candidate.TriggerSource,
-		StartedAt:      candidate.StartedAt,
-		CompletedAt:    &now,
-		ErrorSummary:   &summary,
+		ExecutionID:           candidate.ExecutionID,
+		AttemptID:             candidate.AttemptID,
+		RecordedAt:            now,
+		Status:                results.StatusAborted,
+		Mode:                  candidate.Mode, // preserve the abandoned execution's mode (ADR-0021)
+		EngineVersion:         d.engineVersion,
+		RulesetVersion:        candidate.RulesetVersion,
+		Entity:                candidate.Entity,
+		TriggerSource:         candidate.TriggerSource,
+		StartedAt:             candidate.StartedAt,
+		CompletedAt:           &now,
+		ErrorSummary:          &summary,
 		SupersedesExecutionID: candidate.SupersedesExecutionID,
 	}
 }

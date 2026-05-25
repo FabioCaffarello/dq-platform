@@ -2,10 +2,10 @@
 
 # ADR-0010 — Substrate Posture (Local Compose Scope)
 
-- **Status:** accepted; **amended in part by ADR-0017** (object-store CAS row revised from **Yes** to **Partial**; substrate-selection checkpoint gains a CAS-fidelity sub-criterion)
+- **Status:** accepted; **amended in part by ADR-0017** (object-store CAS row revised from **Yes** to **Partial**; substrate-selection checkpoint gains a CAS-fidelity sub-criterion); **amended in part by [ADR-0028](./0028-kafka-substrate-row.md)** (capability matrix extended with three event-stream rows for record-mode runtime per ADR-0024; substrate-selection checkpoint extended to Kafka)
 - **Date:** 2026-05-21
 
-**Scope note (added 2026-05-23):** This ADR currently applies to set-oriented capability (realized over BigQuery). Record-oriented capability is addressed separately in Wave-S (see ADR-0020 forthcoming).
+**Scope note (added 2026-05-23):** This ADR's set-oriented capability rows apply to BigQuery-backed evaluation. Record-oriented event-stream capability is committed in [ADR-0028](./0028-kafka-substrate-row.md).
 
 ---
 

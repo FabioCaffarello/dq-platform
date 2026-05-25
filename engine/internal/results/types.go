@@ -32,6 +32,7 @@ type ExecutionRow struct {
 	AttemptID      string          // UUID per ADR-0003 CC4
 	RecordedAt     time.Time       // µs precision UTC per ADR-0003 CC3
 	Status         ExecutionStatus // ADR-0003 CC6
+	Mode           Mode            // ADR-0021: set | record (Wave-S)
 	EngineVersion  string
 	RulesetVersion string
 	Entity         string
@@ -42,6 +43,17 @@ type ExecutionRow struct {
 	ErrorSummary          *string
 	SupersedesExecutionID *string
 }
+
+// Mode is the closed-enum execution mode committed by ADR-0021.
+// The column on dq_executions records the mode the rule declared
+// at evaluation time; the orphan detector preserves the mode of
+// the running row it finalizes.
+type Mode string
+
+const (
+	ModeSet    Mode = "set"
+	ModeRecord Mode = "record"
+)
 
 // CheckResultRow is one row in dq_check_results. Field set mirrors
 // ADR-0003 CC7. The table is append-only per ADR-0003 CC1; the

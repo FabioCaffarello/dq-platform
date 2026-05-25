@@ -53,26 +53,57 @@ func (l LogLevel) Slog() (slog.Level, error) {
 }
 
 // EnvConfig is the typed configuration for one environment.
-// Fields mirror the 13 application-config env vars the engine
-// previously read at startup. Every field must be populated in
-// every per-env declaration (local.go, qa.go, prod.go) per B1-4
-// MD-4; the reflect-based test in env_test.go enforces this
-// at CI time.
+// Every field must be populated in every per-env declaration
+// (local.go, qa.go, prod.go) per B1-4 MD-4; the reflect-based
+// test in env_test.go enforces this at CI time.
+//
+// Per ADR-0023, the rule's `source` descriptor carries the
+// per-rule BigQuery / Kafka address; the engine no longer pins
+// a deployment-wide SourceProject / SourceDataset. Per ADR-0028
+// the engine reads its Kafka bootstrap address from KafkaBootstrap
+// when wiring the record-mode runner. Per ADR-0027 the record-mode
+// cost guardrails live in RecordModeCost.
 type EnvConfig struct {
-	Name                  Name          // local / qa / prod
-	EngineVersion         string        // semver per ADR-0001
-	GCSBucket             string        // object store bucket (ADR-0005)
-	BigQueryProject       string        // results project (ADR-0003)
-	BigQueryDataset       string        // results dataset
-	PubSubProject         string        // alerting project (ADR-0006)
-	PubSubTopic           string        // alerting topic; the binary maps an absent topic to NoopPublisher at construction time
-	SourceProject         string        // data-plane source project (W3-P6c)
-	SourceDataset         string        // data-plane source dataset
-	HTTPAddr              string        // listener address (ADR-0014)
-	LogLevel              LogLevel      // debug | info | warn | error
-	LoaderRefreshInterval time.Duration // ADR-0007 §4 cadence
-	OrphanThreshold       time.Duration // ADR-0007 CC11 cutoff
-	OrphanScanInterval    time.Duration // orphan ticker cadence
+	Name                  Name           // local / qa / prod
+	EngineVersion         string         // semver per ADR-0001
+	GCSBucket             string         // object store bucket (ADR-0005)
+	BigQueryProject       string         // results project (ADR-0003)
+	BigQueryDataset       string         // results dataset
+	PubSubProject         string         // alerting project (ADR-0006)
+	PubSubTopic           string         // alerting topic; the binary maps an absent topic to NoopPublisher at construction time
+	KafkaBootstrap        string         // event-stream bootstrap address per ADR-0028 (host:port; empty disables the record runner)
+	HTTPAddr              string         // listener address (ADR-0014)
+	LogLevel              LogLevel       // debug | info | warn | error
+	LoaderRefreshInterval time.Duration  // ADR-0007 §4 cadence
+	OrphanThreshold       time.Duration  // ADR-0007 CC11 cutoff
+	OrphanScanInterval    time.Duration  // orphan ticker cadence
+	RecordModeCost        RecordModeCost // per ADR-0027 record-mode cost guardrails
+}
+
+// RecordModeCost groups the four cost-guardrail dimensions
+// committed by ADR-0027. Each field is an upper bound the engine
+// enforces at the matching surface:
+//
+//   - MaxEvidenceSampleSize bounds the per-rule
+//     params.aggregation.evidence_sample_size override per
+//     ADR-0026; the loader rejects rules that exceed this.
+//   - MaxConsumerLag bounds the record-runner's consumer-lag
+//     budget; exceeded ⇒ consumer-level back-off per ADR-0027.
+//   - MaxLatenessTolerance bounds the rule's
+//     source.kafka.window.lateness_tolerance per ADR-0024.
+//   - SampleStorageCapMB caps the per-entity evidence storage
+//     in megabytes per month; exceeded ⇒ evidence is truncated.
+//
+// Every field is required (non-zero) in every per-env file —
+// the reflect-based exhaustiveness test in env_test.go treats a
+// struct field as populated when at least one of its members is
+// non-zero, so RecordModeCost participates in the same posture
+// as the rest of EnvConfig.
+type RecordModeCost struct {
+	MaxEvidenceSampleSize int
+	MaxConsumerLag        time.Duration
+	MaxLatenessTolerance  time.Duration
+	SampleStorageCapMB    int
 }
 
 // ErrUnknownEnv is returned by Select for any input outside the

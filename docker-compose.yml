@@ -106,6 +106,51 @@ services:
     # scripts/smoke/tabular-store-smoke.sh, which polls the
     # emulator's API surface from the host.
 
+  # ADR-0028 capabilities (event-stream substrate row for record-
+  # oriented evaluation per Wave-S ADR-0024):
+  #   - "Event stream: publish + subscribe with consumer groups"
+  #     (Yes).
+  #   - "Event stream: per-partition offset tracking with seek"
+  #     (Yes).
+  #   - "Event stream: watermark / lateness semantics" (Partial —
+  #     the engine-side watermark math is portable across the
+  #     local emulator; full broker-set-timestamp-authority
+  #     semantics are validated in the sandbox-required CI lane).
+  #
+  # Selected image: redpandadata/redpanda (single-broker KRaft
+  # mode; no separate ZooKeeper). Image choice is a scaffolding
+  # detail per ADR-0028 §"Wave-3 scaffolding contract"; can be
+  # swapped without re-opening the ADR so long as the three rows
+  # above are preserved. Port 9092 is the Kafka-wire bootstrap
+  # address; port 9644 exposes the admin API for local
+  # inspection.
+  event-stream:
+    image: redpandadata/redpanda:latest
+    container_name: dq-event-stream
+    command:
+      - redpanda
+      - start
+      - --overprovisioned
+      - --smp=1
+      - --memory=512M
+      - --reserve-memory=0M
+      - --node-id=0
+      - --check=false
+      - --kafka-addr=PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr=PLAINTEXT://localhost:9092
+      - --rpc-addr=0.0.0.0:33145
+      - --advertise-rpc-addr=localhost:33145
+      - --pandaproxy-addr=0.0.0.0:8082
+      - --schema-registry-addr=0.0.0.0:8081
+    ports:
+      - "9092:9092"
+      - "9644:9644"
+    healthcheck:
+      test: ["CMD", "rpk", "cluster", "info", "--brokers", "localhost:9092"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
 # Notes on capability-matrix coverage:
 #
 # - Pub/Sub publish/subscribe (Yes) ............ pubsub
@@ -117,6 +162,9 @@ services:
 # - Object store: by-hash sha256 immutability .. object-store
 # - Tabular store: append-only writes .......... tabular-store
 # - Tabular store: lazy view (Partial) ......... tabular-store (best effort; sandbox for full fidelity)
+# - Event stream: publish + subscribe + groups . event-stream (ADR-0028)
+# - Event stream: per-partition offset tracking. event-stream (ADR-0028)
+# - Event stream: watermark / lateness (Partial) event-stream (engine-side math; sandbox for broker-set-timestamp authority)
 # - OIDC / service identity (No) ............... not stood up locally; sandbox required.
 # - Unforgeable linter image pin (Partial) ..... tag-based here; production pin lives in the host registry per ADR-0008.
 # - Structured logs / metrics endpoint (Yes) ... engine-side; lands in Phase 4 (engine runtime).

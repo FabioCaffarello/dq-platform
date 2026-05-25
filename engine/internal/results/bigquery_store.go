@@ -256,14 +256,15 @@ func isAlreadyExists(err error) bool {
 // ExecutionRow remains tag-free (other Store impls may use
 // different tag conventions).
 type executionRecord struct {
-	ExecutionID           string             `bigquery:"execution_id"`
-	AttemptID             string             `bigquery:"attempt_id"`
-	RecordedAt            time.Time          `bigquery:"recorded_at"`
-	Status                string             `bigquery:"status"`
-	EngineVersion         string             `bigquery:"engine_version"`
-	RulesetVersion        string             `bigquery:"ruleset_version"`
-	Entity                string             `bigquery:"entity"`
-	TriggerSource         string             `bigquery:"trigger_source"`
+	ExecutionID           string                 `bigquery:"execution_id"`
+	AttemptID             string                 `bigquery:"attempt_id"`
+	RecordedAt            time.Time              `bigquery:"recorded_at"`
+	Status                string                 `bigquery:"status"`
+	Mode                  string                 `bigquery:"mode"`
+	EngineVersion         string                 `bigquery:"engine_version"`
+	RulesetVersion        string                 `bigquery:"ruleset_version"`
+	Entity                string                 `bigquery:"entity"`
+	TriggerSource         string                 `bigquery:"trigger_source"`
 	StartedAt             bigquery.NullTimestamp `bigquery:"started_at"`
 	CompletedAt           bigquery.NullTimestamp `bigquery:"completed_at"`
 	ErrorSummary          bigquery.NullString    `bigquery:"error_summary"`
@@ -271,11 +272,20 @@ type executionRecord struct {
 }
 
 func toExecutionRecord(r ExecutionRow) executionRecord {
+	// Backfill default: rows that arrive without a mode value
+	// default to set per the ADR-0021 backfill contract. The
+	// runner always populates Mode for new rows, so this default
+	// only fires for direct-callers / tests that omit the field.
+	mode := string(r.Mode)
+	if mode == "" {
+		mode = string(ModeSet)
+	}
 	rec := executionRecord{
 		ExecutionID:    r.ExecutionID,
 		AttemptID:      r.AttemptID,
 		RecordedAt:     r.RecordedAt,
 		Status:         string(r.Status),
+		Mode:           mode,
 		EngineVersion:  r.EngineVersion,
 		RulesetVersion: r.RulesetVersion,
 		Entity:         r.Entity,
@@ -297,11 +307,16 @@ func toExecutionRecord(r ExecutionRow) executionRecord {
 }
 
 func fromExecutionRecord(rec executionRecord) *ExecutionRow {
+	mode := Mode(rec.Mode)
+	if mode == "" {
+		mode = ModeSet
+	}
 	row := &ExecutionRow{
 		ExecutionID:    rec.ExecutionID,
 		AttemptID:      rec.AttemptID,
 		RecordedAt:     rec.RecordedAt,
 		Status:         ExecutionStatus(rec.Status),
+		Mode:           mode,
 		EngineVersion:  rec.EngineVersion,
 		RulesetVersion: rec.RulesetVersion,
 		Entity:         rec.Entity,

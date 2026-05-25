@@ -14,9 +14,17 @@ const (
 	viewExecutionsView = "dq_executions_current"
 )
 
-// executionsSchema mirrors ADR-0003 CC3. Nullable columns
-// (started_at, completed_at, error_summary, supersedes_execution_id)
-// are explicitly marked Required=false.
+// executionsSchema mirrors ADR-0003 CC3 plus the Wave-S mode
+// column (ADR-0021). Nullable columns (started_at, completed_at,
+// error_summary, supersedes_execution_id) are explicitly marked
+// Required=false. The mode column is required at the schema
+// level; existing rows (pre-Wave-S) are not migrated by this
+// commit, so production deployments running EnsureSchema against
+// a pre-Wave-S dataset must run the ALTER TABLE migration
+// described in the package doc to backfill mode = 'set' on
+// existing rows before flipping the column to Required=true.
+// The engine writer always populates the column, so new rows are
+// always tagged.
 func executionsSchema() bigquery.Schema {
 	return bigquery.Schema{
 		{Name: "execution_id", Type: bigquery.StringFieldType, Required: true,
@@ -27,6 +35,8 @@ func executionsSchema() bigquery.Schema {
 			Description: "µs precision UTC per ADR-0003 CC3"},
 		{Name: "status", Type: bigquery.StringFieldType, Required: true,
 			Description: "ADR-0003 CC6: running|success|failed|error|aborted"},
+		{Name: "mode", Type: bigquery.StringFieldType, Required: true,
+			Description: "ADR-0021: set|record (Wave-S; existing rows backfilled to 'set')"},
 		{Name: "engine_version", Type: bigquery.StringFieldType, Required: true,
 			Description: "engine that wrote this row; visibility per ADR-0002 CC14"},
 		{Name: "ruleset_version", Type: bigquery.StringFieldType, Required: true,
@@ -109,7 +119,7 @@ WHERE rn = 1
 // The {{dataset}} placeholder is replaced with the configured
 // project + dataset identifier; @before is bound at query time.
 const runningOlderThanSQL = `
-SELECT execution_id, attempt_id, recorded_at, status,
+SELECT execution_id, attempt_id, recorded_at, status, mode,
        engine_version, ruleset_version, entity, trigger_source,
        started_at, completed_at, error_summary,
        supersedes_execution_id
@@ -135,7 +145,7 @@ WHERE rn = 1
 // project + dataset identifier; the @execution_id parameter is
 // bound at query time.
 const currentExecutionsInlineSQL = `
-SELECT execution_id, attempt_id, recorded_at, status,
+SELECT execution_id, attempt_id, recorded_at, status, mode,
        engine_version, ruleset_version, entity, trigger_source,
        started_at, completed_at, error_summary,
        supersedes_execution_id

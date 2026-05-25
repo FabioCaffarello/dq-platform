@@ -3,7 +3,12 @@
 # QA ConfigMap patch. DQ_ENV is the only env var the engine
 # binary reads at qa runtime (per B1-4 MD-4 + W3-P7a); the rest
 # of the configuration comes from engine/internal/env/qa.go via
-# the selector.
+# the selector — including the Wave-S ADR-0027 RecordModeCost
+# guardrails (max evidence sample size, max consumer lag, max
+# lateness tolerance, sample storage cap) and the ADR-0028
+# KafkaBootstrap address. Per-env divergence of those values
+# lives in the Go file alongside the existing per-env constants;
+# this overlay does not duplicate them.
 ---
 apiVersion: v1
 kind: ConfigMap
