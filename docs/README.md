@@ -25,8 +25,13 @@ is part of the published repository product (per
   the four common incident classes: manifest rollback,
   orphan-run remediation, alert-dedup debugging, refresh-
   failure escalation (lands in W3-P8d).
+- **[`security/`](security/)** — operator-facing security
+  notes carrying threat models, posture commitments, and
+  trigger conditions for revisiting cryptographic/posture
+  decisions. First entry lands with ADR-0030
+  (manifest cryptographic posture).
 
-## Current state (Phase 8)
+## Current state (post-Wave-3)
 
 This directory holds:
 
@@ -34,11 +39,20 @@ This directory holds:
 - `adr/0008–0012` — Wave 2 commitments (W2).
 - `adr/0013` — the Wave 3 phase-sequencing ADR.
 - `adr/0014` — the HTTP trigger handler contract (W3-P4e).
+- `adr/0015–0019` — Wave 3 sub-decisions promoted at gate
+  closure (CODEOWNERS, workspace tooling, substrate-posture
+  amendment, env config, infrastructure tooling).
+- `adr/0020–0028` — Wave-S commitments
+  (record-oriented capability).
+- `adr/0029` — set-mode BigQuery cost ceilings (resolves B1-2).
+- `adr/0030` — manifest cryptographic posture (resolves B1-8;
+  deferral with auditable trigger conditions).
 - `glossary.md` — codebase-specific terminology (W3-P8a).
 - `governance.md` — review model and contribution-time
   flows (W3-P8b).
 - `runbooks/` — operator-facing playbooks (W3-P8d).
-  Closes **Wave 3 — Phase 8** in full.
+- `security/` — operator-facing security notes
+  (introduced 2026-05-25 with ADR-0030).
 
 The contributor-facing guide lives at the repository root as
 [`../CONTRIBUTING.md`](../CONTRIBUTING.md) per GitHub convention
