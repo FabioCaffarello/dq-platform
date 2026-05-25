@@ -207,10 +207,22 @@ func main() {
 		os.Exit(1)
 	}
 
+	// CostGuardrails translates the deployment's ADR-0027
+	// record-mode ceilings into the typed shape dsl/spec
+	// consumes. resolveChecks below applies these per-rule at
+	// trigger time; the record-mode rule loader below also
+	// applies them at manifest-load time.
+	costGuardrails := spec.CostGuardrails{
+		MaxEvidenceSampleSize: cfg.RecordModeCost.MaxEvidenceSampleSize,
+		MaxLatenessTolerance:  cfg.RecordModeCost.MaxLatenessTolerance,
+	}
+
 	// Resolve a trigger entity into the runner's []CheckSpec
 	// (W3-P6d). Reads the entity's YAML body from the same
 	// object store the loader uses, then parses it via the
-	// dsl/spec strict parser.
+	// dsl/spec strict parser. Per ADR-0027 the record-mode cost
+	// guardrails are enforced here for set-mode rules too (the
+	// cost function no-ops on set-mode; the check is uniform).
 	//
 	// ADR ties:
 	//
@@ -224,6 +236,7 @@ func main() {
 	//     manifest active at plan creation; the closure captures
 	//     the manifest reference via current.get() once per
 	//     accepted trigger.
+	//   - ADR-0027 — record-mode cost ceilings rejected here.
 	//
 	// Per the W3-P6d AskUserQuestion answer this is a per-trigger
 	// read; caching at refresh time is deferred to a future
@@ -251,6 +264,9 @@ func main() {
 		if err != nil {
 			return nil, fmt.Errorf("parse yaml %q: %w", rule.YamlPath, err)
 		}
+		if err := spec.EvaluateCost(parsed, costGuardrails); err != nil {
+			return nil, err
+		}
 		return parsed.ToCheckSpecs(), nil
 	}
 
@@ -271,8 +287,28 @@ func main() {
 	}
 	httpServer := api.NewServer(cfg.HTTPAddr, apiHandler, logger)
 
+	// Record-mode runners per ADR-0024. For each record-mode
+	// rule in the manifest, the engine starts a FranzConsumer-
+	// backed RecordRunner. Each runner consumes its rule's
+	// topic + consumer_group, accumulates per-window records,
+	// and dispatches to the same Runner the HTTP handler uses
+	// once a window closes.
+	//
+	// Per the β scope, manifest refresh does not yet restart
+	// record runners — the set of record-mode rules is fixed
+	// at boot. A future slice adds the per-rule lifecycle.
+	recordRunners, err := buildRecordRunners(ctx, initial, gcsStore, r, cfg, costGuardrails, logger)
+	if err != nil {
+		logger.Error("build record runners", "error", err.Error())
+		os.Exit(1)
+	}
+	logger.Info("record-mode runners constructed",
+		"count", len(recordRunners),
+		"adr_reference", "ADR-0024",
+	)
+
 	var wg sync.WaitGroup
-	wg.Add(3)
+	wg.Add(3 + len(recordRunners))
 	go loaderRefreshLoop(ctx, &wg, logger, ldr, current, cfg.LoaderRefreshInterval)
 	go orphanScanLoop(ctx, &wg, logger, detector, cfg.OrphanScanInterval)
 	go func() {
@@ -281,6 +317,15 @@ func main() {
 			logger.Error("http server exited with error", "error", err.Error())
 		}
 	}()
+	for i := range recordRunners {
+		rr := recordRunners[i]
+		go func() {
+			defer wg.Done()
+			if err := rr.Start(ctx); err != nil {
+				logger.Error("record runner exited with error", "error", err.Error())
+			}
+		}()
+	}
 
 	// Wait for signal.
 	<-ctx.Done()
@@ -434,6 +479,87 @@ func loaderRefreshLoop(ctx context.Context, wg *sync.WaitGroup, logger *slog.Log
 			}
 		}
 	}
+}
+
+// buildRecordRunners scans the active manifest for record-mode
+// rules per ADR-0021, parses each rule's YAML body, enforces
+// the ADR-0027 cost guardrails, and constructs a FranzConsumer-
+// backed RecordRunner for each. Returns an empty slice when no
+// record-mode rules are present — set-mode-only manifests do
+// not require the event-stream substrate.
+func buildRecordRunners(
+	ctx context.Context,
+	manifest *loader.Manifest,
+	gcsStore *loader.GCSStore,
+	dispatcher runner.TriggerDispatcher,
+	cfg startupConfig,
+	guardrails spec.CostGuardrails,
+	logger *slog.Logger,
+) ([]*runner.RecordRunner, error) {
+	var out []*runner.RecordRunner
+	for i := range manifest.Rules {
+		mr := manifest.Rules[i]
+		body, err := gcsStore.ReadObject(ctx, mr.YamlPath)
+		if err != nil {
+			return nil, fmt.Errorf("read rule %q yaml body: %w", mr.Entity, err)
+		}
+		parsed, err := spec.Parse(body)
+		if err != nil {
+			return nil, fmt.Errorf("parse rule %q: %w", mr.Entity, err)
+		}
+		if parsed.Mode != spec.ModeRecord {
+			continue
+		}
+		if err := spec.EvaluateCost(parsed, guardrails); err != nil {
+			return nil, fmt.Errorf("rule %q rejected by cost guardrails: %w", mr.Entity, err)
+		}
+		if parsed.Source == nil || parsed.Source.Window == nil {
+			return nil, fmt.Errorf("rule %q: record-mode requires source.kafka.window", mr.Entity)
+		}
+		windowDur, err := runner.ParseDuration(parsed.Source.Window.Duration)
+		if err != nil {
+			return nil, fmt.Errorf("rule %q: parse window.duration: %w", mr.Entity, err)
+		}
+		lateness, err := runner.ParseDuration(parsed.Source.Window.LatenessTolerance)
+		if err != nil {
+			return nil, fmt.Errorf("rule %q: parse window.lateness_tolerance: %w", mr.Entity, err)
+		}
+		consumer, err := runner.NewFranzConsumer(runner.FranzConsumerConfig{
+			Brokers:       []string{cfg.KafkaBootstrap},
+			ConsumerGroup: parsed.Source.ConsumerGroup,
+			Topics:        []string{parsed.Source.Topic},
+		})
+		if err != nil {
+			return nil, fmt.Errorf("rule %q: create kafka consumer: %w", mr.Entity, err)
+		}
+		rr, err := runner.NewRecordRunner(runner.RecordRunnerConfig{
+			Consumer:       consumer,
+			Dispatcher:     dispatcher,
+			RulesetVersion: manifest.RulesetVersion,
+			Logger:         logger,
+			Sources: []runner.RecordSource{{
+				Entity:            parsed.Entity,
+				Topic:             parsed.Source.Topic,
+				ConsumerGroup:     parsed.Source.ConsumerGroup,
+				WindowDuration:    windowDur,
+				LatenessTolerance: lateness,
+				Checks:            parsed.ToCheckSpecs(),
+			}},
+		})
+		if err != nil {
+			return nil, fmt.Errorf("rule %q: new record runner: %w", mr.Entity, err)
+		}
+		logger.Info("record runner wired",
+			"entity", parsed.Entity,
+			"topic", parsed.Source.Topic,
+			"consumer_group", parsed.Source.ConsumerGroup,
+			"window_duration", windowDur,
+			"lateness_tolerance", lateness,
+			"adr_reference", "ADR-0024",
+		)
+		out = append(out, rr)
+	}
+	return out, nil
 }
 
 // verifyHandlerRegistryAgainstCatalog enforces ADR-0022 §C-B0S2.3:

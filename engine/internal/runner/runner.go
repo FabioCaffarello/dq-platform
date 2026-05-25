@@ -79,6 +79,38 @@ type TriggerRequest struct {
 	// same identifier. Nil falls back to the runner's
 	// configured AttemptIDFunc.
 	AttemptID *string
+
+	// Records is the per-window batch of records the
+	// record-mode runner accumulated before the window closed
+	// (per ADR-0024). The record handler reads this slice;
+	// set-mode triggers leave it nil. Per ADR-0025 aggregation
+	// happens inside the handler — the runner does not
+	// inspect Records.
+	Records []Record
+
+	// LateDroppedCount is the count of records that arrived
+	// after the watermark closed the window per ADR-0024. The
+	// record handler surfaces this in evidence per ADR-0026 and
+	// uses it to disambiguate the vacuous-case status (zero
+	// records evaluated + zero late drops ⇒ pass; zero records
+	// evaluated + positive late drops ⇒ degraded). Set-mode
+	// triggers leave it zero.
+	LateDroppedCount int
+}
+
+// Record is one Kafka message presented to a record-mode handler.
+// The runner does not interpret Body; the handler decodes per its
+// per-kind contract (e.g., record.schema_conformance treats Body
+// as a JSON object).
+//
+// Offset / Partition are surfaced for evidence: the handler uses
+// them as forensic linkage in sample_violations descriptors per
+// ADR-0026's evidence shape.
+type Record struct {
+	Partition int32
+	Offset    int64
+	Timestamp time.Time
+	Body      []byte
 }
 
 // CheckSpec is the per-check descriptor passed to the
