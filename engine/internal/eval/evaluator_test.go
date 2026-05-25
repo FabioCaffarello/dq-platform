@@ -106,7 +106,11 @@ func TestEvaluate_SetRowCountPositive_MissingSource_ReturnsResultError(t *testin
 	}
 }
 
-func TestEvaluate_RecordSchemaConformance_StubReturnsResultError(t *testing.T) {
+func TestEvaluate_RecordSchemaConformance_RequiresParams(t *testing.T) {
+	// The real β handler rejects missing params with a clear
+	// invalid_params diagnostic. The full happy-path coverage
+	// for record.schema_conformance lives in
+	// record_schema_conformance_test.go.
 	cli := stubClient(t)
 	e, err := New(Config{Client: cli})
 	if err != nil {
@@ -116,14 +120,14 @@ func TestEvaluate_RecordSchemaConformance_StubReturnsResultError(t *testing.T) {
 		runner.CheckSpec{CheckID: "c1", Kind: KindRecordSchemaConformance},
 		runner.TriggerRequest{Entity: "orders_stream"})
 	if err == nil {
-		t.Errorf("expected stub handler to return an error")
+		t.Errorf("expected handler to reject empty params")
 	}
 	if eval.Result != results.ResultError {
 		t.Errorf("Result = %q; want %q", eval.Result, results.ResultError)
 	}
 	reason, _ := eval.EvidenceSummary["reason"].(string)
-	if !strings.Contains(reason, "record_mode_runtime_not_wired") {
-		t.Errorf("EvidenceSummary[reason] = %q; want runtime-not-wired diagnostic", reason)
+	if reason != "invalid_params" {
+		t.Errorf("EvidenceSummary[reason] = %q; want invalid_params", reason)
 	}
 }
 

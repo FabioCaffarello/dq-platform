@@ -1,17 +1,28 @@
 # path: rules/_owners.yaml
 #
-# First production _owners.yaml entry (W3-P6d). Schema committed by
-# rules/_schema/_owners.v1.schema.json (W3-P5 / ADR-0006 CC1). The
-# linter (`dq-lint`) rejects any rule whose entity has no entry
-# here per ADR-0006 CC9.
+# Production _owners.yaml. Schema v2 (rules/_schema/_owners.v2.schema.json)
+# adds the required per-entity `mode` field committed by ADR-0021.
+# The linter (`dq-lint`) cross-checks every rule's entity has an
+# entry here per ADR-0006 CC9 and that the rule's mode matches
+# the entry's mode per ADR-0021.
 
-schema_version: 1
+schema_version: 2
 entities:
   customer:
     owner: "@PLACEHOLDER-org/rules-authors"
+    mode: set
     description: First onboarded entity end-to-end (W3-P6d).
     channels:
       data_quality:
         - slack:#dq-customer
+      operational:
+        - email:oncall@example.com
+  orders_stream:
+    owner: "@PLACEHOLDER-org/rules-authors"
+    mode: record
+    description: First record-mode entity (Wave-S sub-slice β).
+    channels:
+      data_quality:
+        - slack:#dq-orders
       operational:
         - email:oncall@example.com

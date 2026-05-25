@@ -93,10 +93,11 @@ up: ## Start the local docker-compose substrate (per ADR-0010 Yes capabilities).
 down: ## Stop the local docker-compose substrate.
 	@$(COMPOSE) down --remove-orphans
 
-smoke-substrate: ## Run the three substrate smoke tests against the running local Compose stack.
+smoke-substrate: ## Run the four substrate smoke tests against the running local Compose stack.
 	@bash scripts/smoke/pubsub-smoke.sh
 	@bash scripts/smoke/object-store-smoke.sh
 	@bash scripts/smoke/tabular-store-smoke.sh
+	@bash scripts/smoke/event-stream-smoke.sh
 
 demo-p6: ## End-to-end Phase 6 demo (W3-P6d). Closes the W2-3 C-W2-3.4 invariant locally. Requires `make up` first.
 	@bash scripts/smoke/demo-p6.sh

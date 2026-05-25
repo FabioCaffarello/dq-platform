@@ -91,7 +91,7 @@ func New(cfg Config) (*Evaluator, error) {
 		handlers: map[string]Handler{},
 	}
 	e.Register(KindSetRowCountPositive, setRowCountPositiveHandler)
-	e.Register(KindRecordSchemaConformance, recordSchemaConformanceStubHandler)
+	e.Register(KindRecordSchemaConformance, recordSchemaConformanceHandler)
 	return e, nil
 }
 
@@ -151,28 +151,8 @@ func setRowCountPositiveHandler(ctx context.Context, e *Evaluator, spec runner.C
 	return e.evaluateRowCountPositive(ctx, spec, trigger)
 }
 
-// recordSchemaConformanceStubHandler is the registry entry for
-// record.schema_conformance at sub-slice α. Wave-S sub-slice β
-// replaces this stub with the real handler that consumes
-// per-record outcomes from the record-mode runner and applies
-// the threshold aggregation per ADR-0026.
-//
-// The stub returns ResultError so any rule that lands on it
-// surfaces a clear "runtime not yet wired" diagnostic. The
-// stub's existence satisfies the dispatcher startup invariant
-// (catalog declares the kind; the engine has a registered
-// handler for it) without shipping the runtime.
-func recordSchemaConformanceStubHandler(_ context.Context, e *Evaluator, spec runner.CheckSpec, trigger runner.TriggerRequest) (runner.Evaluation, error) {
-	e.logger.Warn("record.schema_conformance handler is a stub at Wave-S sub-slice α",
-		"check_id", spec.CheckID,
-		"entity", trigger.Entity,
-		"adr_reference", "ADR-0026",
-	)
-	return runner.Evaluation{
-		Result: results.ResultError,
-		EvidenceSummary: map[string]any{
-			"kind":   spec.Kind,
-			"reason": "record_mode_runtime_not_wired_until_sub_slice_beta",
-		},
-	}, fmt.Errorf("record.schema_conformance: runtime lands in Wave-S sub-slice β; sub-slice α ships the catalog + handler-registry surface only")
-}
+// recordSchemaConformanceHandler is registered above and
+// implemented in record_schema_conformance.go. Wave-S sub-slice
+// β wires the real handler that consumes per-window records
+// from the record-mode runner via TriggerRequest.Records and
+// applies the threshold aggregation per ADR-0026.

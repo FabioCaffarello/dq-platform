@@ -1,0 +1,34 @@
+# path: rules/orders_stream.yaml
+#
+# Inaugural record-mode rule (Wave-S sub-slice β). Validates each
+# Kafka event against a JSON Schema fragment; per-record outcomes
+# aggregate per ADR-0026's threshold function with the catalog
+# defaults (fail_if_violation_rate=0.0, no warn rate,
+# evidence_sample_size=10).
+version: 2
+entity: orders_stream
+mode: record
+description: Inaugural record-mode entity; validates orders events against the contract schema.
+source:
+  type: kafka
+  topic: orders.events.v1
+  consumer_group: dq-orders-stream
+  window:
+    type: tumbling
+    duration: 1m
+    lateness_tolerance: 30s
+checks:
+  - check_id: schema_present
+    kind: record.schema_conformance
+    description: Validates each orders event against the contract schema.
+    params:
+      schema:
+        type: object
+        required:
+          - order_id
+          - event_type
+        properties:
+          order_id:
+            type: string
+          event_type:
+            type: string
