@@ -82,11 +82,52 @@ type TriggerRequest struct {
 }
 
 // CheckSpec is the per-check descriptor passed to the
-// CheckEvaluator. Kind is the discriminator for the DSL grammar;
-// Phase 4c does not interpret it.
+// CheckEvaluator. The runner does not interpret Mode / Source /
+// Params; the evaluator dispatches on Kind and reads the rule's
+// substrate descriptor and per-check params from this struct.
+//
+// v1 rules surface here with Mode = "set" and Source = nil
+// (legacy callers configured the substrate via evaluator-level
+// fields). v2 rules carry both per ADRs 0021 / 0023.
 type CheckSpec struct {
 	CheckID string
 	Kind    string
+	Mode    string         // "set" | "record" per ADR-0021; empty for legacy callers
+	Source  *RuleSource    // per-rule substrate descriptor per ADR-0023
+	Params  map[string]any // per-check params per ADR-0022; nil when absent
+}
+
+// RuleSource is the runner-package mirror of the parsed rule's
+// source descriptor. Field set tracks dsl/spec.Source; the
+// runner does not parse YAML, so this duplicates the shape to
+// keep the runner package free of dsl/spec dependencies (per
+// foundation 04's package-coupling discipline).
+//
+// Exactly one substrate-specific field group is populated;
+// validation lives upstream (linter + parser).
+type RuleSource struct {
+	Type string // "bigquery" | "kafka"
+
+	// BigQuery fields (mode=set).
+	ProjectID       string
+	DatasetID       string
+	TableID         string
+	PartitionColumn string
+
+	// Kafka fields (mode=record).
+	Topic         string
+	ConsumerGroup string
+	Window        *RuleWindow
+}
+
+// RuleWindow mirrors dsl/spec.Window. Duration / LatenessTolerance
+// are lexical strings validated by the parser; the runner parses
+// them into time.Duration when the record-mode runner consumes
+// the rule.
+type RuleWindow struct {
+	Type              string
+	Duration          string
+	LatenessTolerance string
 }
 
 // Config configures a Runner. Required fields: Store,
@@ -402,6 +443,7 @@ func (r *Runner) buildRunningRow(executionID, attemptID string, startedAt time.T
 		AttemptID:             attemptID,
 		RecordedAt:            startedAt,
 		Status:                results.StatusRunning,
+		Mode:                  triggerMode(trigger),
 		EngineVersion:         r.engineVersion,
 		RulesetVersion:        trigger.RulesetVersion,
 		Entity:                trigger.Entity,
@@ -411,6 +453,26 @@ func (r *Runner) buildRunningRow(executionID, attemptID string, startedAt time.T
 		ErrorSummary:          nil,
 		SupersedesExecutionID: trigger.SupersedesExecutionID,
 	}
+}
+
+// triggerMode resolves the execution's mode from the trigger's
+// checks. v2 rules carry mode per check (post-ADR-0021); the
+// runner promotes the first check's mode to the execution row's
+// mode column. Per ADR-0022 cross-check #4 (kind prefix matches
+// rule mode) all checks in one rule share a mode, so the first
+// check is authoritative.
+//
+// Backfill default: an empty per-check Mode falls through to
+// "set" — matches the ADR-0021 backfill contract for pre-Wave-S
+// rows. The dsl/spec parser populates Mode for v1 rules at
+// ToCheckSpecs translation time, so this default is defensive.
+func triggerMode(trigger TriggerRequest) results.Mode {
+	for _, c := range trigger.Checks {
+		if c.Mode != "" {
+			return results.Mode(c.Mode)
+		}
+	}
+	return results.ModeSet
 }
 
 // writePreCheckErrorRow writes the single terminal `error` row
@@ -424,6 +486,7 @@ func (r *Runner) writePreCheckErrorRow(ctx context.Context, dedup *alerts.Attemp
 		AttemptID:             attemptID,
 		RecordedAt:            now,
 		Status:                results.StatusError,
+		Mode:                  triggerMode(trigger),
 		EngineVersion:         r.engineVersion,
 		RulesetVersion:        trigger.RulesetVersion,
 		Entity:                trigger.Entity,
@@ -459,6 +522,7 @@ func (r *Runner) writeTerminalRow(ctx context.Context, dedup *alerts.AttemptDedu
 		AttemptID:             attemptID,
 		RecordedAt:            now,
 		Status:                terminalStatus,
+		Mode:                  triggerMode(trigger),
 		EngineVersion:         r.engineVersion,
 		RulesetVersion:        trigger.RulesetVersion,
 		Entity:                trigger.Entity,

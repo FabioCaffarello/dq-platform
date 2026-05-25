@@ -19,6 +19,40 @@ checks:
     description: Verifies the source table has at least one row.
 `
 
+const validV2SetBody = `
+version: 2
+entity: customer
+mode: set
+source:
+  type: bigquery
+  project_id: dq-local
+  dataset_id: dq_fixture
+  table_id: customer
+checks:
+  - check_id: row_count_positive
+    kind: set.row_count_positive
+`
+
+const validV2RecordBody = `
+version: 2
+entity: orders_stream
+mode: record
+source:
+  type: kafka
+  topic: orders.events.v1
+  consumer_group: dq-orders-stream
+  window:
+    type: tumbling
+    duration: 1m
+    lateness_tolerance: 30s
+checks:
+  - check_id: schema_present
+    kind: record.schema_conformance
+    params:
+      schema:
+        type: object
+`
+
 func TestParse_HappyPath(t *testing.T) {
 	r, err := Parse([]byte(validBody))
 	if err != nil {
@@ -67,14 +101,143 @@ checks:
 	}
 }
 
-func TestParse_WrongVersion(t *testing.T) {
-	body := strings.Replace(validBody, "version: 1", "version: 2", 1)
+func TestParse_UnsupportedVersion(t *testing.T) {
+	body := strings.Replace(validBody, "version: 1", "version: 7", 1)
 	_, err := Parse([]byte(body))
 	if err == nil {
-		t.Fatal("expected error for version != 1")
+		t.Fatal("expected error for unsupported version")
 	}
 	if !strings.Contains(err.Error(), "version") {
 		t.Errorf("error should name the version field; got %q", err.Error())
+	}
+}
+
+func TestParse_V2Set_HappyPath(t *testing.T) {
+	r, err := Parse([]byte(validV2SetBody))
+	if err != nil {
+		t.Fatalf("Parse v2 set: %v", err)
+	}
+	if r.Mode != "set" {
+		t.Errorf("Mode = %q; want set", r.Mode)
+	}
+	if r.Source == nil || r.Source.Type != "bigquery" || r.Source.ProjectID != "dq-local" {
+		t.Errorf("Source = %+v; want bigquery dq-local", r.Source)
+	}
+	specs := r.ToCheckSpecs()
+	if len(specs) != 1 {
+		t.Fatalf("ToCheckSpecs len = %d; want 1", len(specs))
+	}
+	if specs[0].Mode != "set" || specs[0].Source == nil || specs[0].Source.TableID != "customer" {
+		t.Errorf("CheckSpec[0] = %+v; want mode=set source.table_id=customer", specs[0])
+	}
+}
+
+func TestParse_V2Record_HappyPath(t *testing.T) {
+	r, err := Parse([]byte(validV2RecordBody))
+	if err != nil {
+		t.Fatalf("Parse v2 record: %v", err)
+	}
+	if r.Mode != "record" {
+		t.Errorf("Mode = %q; want record", r.Mode)
+	}
+	if r.Source == nil || r.Source.Type != "kafka" || r.Source.Topic != "orders.events.v1" {
+		t.Errorf("Source = %+v; want kafka orders.events.v1", r.Source)
+	}
+	if r.Source.Window == nil || r.Source.Window.Type != "tumbling" || r.Source.Window.Duration != "1m" {
+		t.Errorf("Window = %+v; want tumbling 1m", r.Source.Window)
+	}
+	specs := r.ToCheckSpecs()
+	if specs[0].Mode != "record" {
+		t.Errorf("CheckSpec mode = %q; want record", specs[0].Mode)
+	}
+	if specs[0].Params == nil {
+		t.Errorf("CheckSpec.Params is nil; want non-nil")
+	}
+}
+
+func TestParse_V2_RequiresMode(t *testing.T) {
+	body := `
+version: 2
+entity: customer
+source:
+  type: bigquery
+  project_id: p
+  dataset_id: d
+  table_id: t
+checks:
+  - check_id: c
+    kind: set.row_count_positive
+`
+	_, err := Parse([]byte(body))
+	if err == nil {
+		t.Fatal("expected v2 to require mode")
+	}
+	if !strings.Contains(err.Error(), "mode") {
+		t.Errorf("error should mention mode; got %q", err.Error())
+	}
+}
+
+func TestParse_V2_KindPrefixMismatch(t *testing.T) {
+	body := `
+version: 2
+entity: customer
+mode: set
+source:
+  type: bigquery
+  project_id: p
+  dataset_id: d
+  table_id: t
+checks:
+  - check_id: c
+    kind: record.schema_conformance
+`
+	_, err := Parse([]byte(body))
+	if err == nil {
+		t.Fatal("expected kind prefix mismatch")
+	}
+	if !strings.Contains(err.Error(), "cross-check #4") {
+		t.Errorf("error should cite cross-check #4; got %q", err.Error())
+	}
+}
+
+func TestParse_V2_SourceTypeMismatch(t *testing.T) {
+	body := `
+version: 2
+entity: customer
+mode: set
+source:
+  type: kafka
+  topic: t
+  consumer_group: g
+  window:
+    type: tumbling
+    duration: 1m
+    lateness_tolerance: 30s
+checks:
+  - check_id: c
+    kind: set.row_count_positive
+`
+	_, err := Parse([]byte(body))
+	if err == nil {
+		t.Fatal("expected source.type mismatch")
+	}
+	if !strings.Contains(err.Error(), "cross-check #7") {
+		t.Errorf("error should cite cross-check #7; got %q", err.Error())
+	}
+}
+
+func TestParse_V1_RejectsV2Fields(t *testing.T) {
+	body := `
+version: 1
+entity: customer
+mode: set
+checks:
+  - check_id: c
+    kind: row_count_positive
+`
+	_, err := Parse([]byte(body))
+	if err == nil {
+		t.Fatal("expected v1 to reject v2-only mode field")
 	}
 }
 

@@ -21,11 +21,16 @@ var Local = EnvConfig{
 	BigQueryDataset:       "dq_results_local",
 	PubSubProject:         "dq-local",
 	PubSubTopic:           "dq-alerts-local",
-	SourceProject:         "dq-local",
-	SourceDataset:         "dq_fixture",
+	KafkaBootstrap:        "localhost:9092",
 	HTTPAddr:              ":8080",
 	LogLevel:              LogLevelInfo,
 	LoaderRefreshInterval: 2 * time.Second,
 	OrphanThreshold:       5 * time.Minute,
 	OrphanScanInterval:    1 * time.Minute,
+	RecordModeCost: RecordModeCost{
+		MaxEvidenceSampleSize: 100,
+		MaxConsumerLag:        5 * time.Minute,
+		MaxLatenessTolerance:  5 * time.Minute,
+		SampleStorageCapMB:    100,
+	},
 }

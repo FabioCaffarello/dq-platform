@@ -4,7 +4,6 @@ package eval
 
 import (
 	"context"
-	"errors"
 	"strings"
 	"testing"
 
@@ -42,20 +41,31 @@ func TestNew_RequiresClient(t *testing.T) {
 	}
 }
 
-func TestNew_SourceProjectDefaultsToClientProject(t *testing.T) {
+func TestNew_RegistersInaugurralKinds(t *testing.T) {
 	cli := stubClient(t)
 	e, err := New(Config{Client: cli})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	if e.sourceProject != "stub-project" {
-		t.Errorf("sourceProject = %q; want client default %q", e.sourceProject, "stub-project")
+	kinds := e.RegisteredKinds()
+	want := map[string]bool{
+		KindSetRowCountPositive:     true,
+		KindRecordSchemaConformance: true,
+	}
+	for _, k := range kinds {
+		if !want[k] {
+			t.Errorf("unexpected kind %q registered", k)
+		}
+		delete(want, k)
+	}
+	if len(want) != 0 {
+		t.Errorf("kinds missing from registry: %v", want)
 	}
 }
 
 func TestEvaluate_UnsupportedKind_ReturnsResultError(t *testing.T) {
 	cli := stubClient(t)
-	e, err := New(Config{Client: cli, SourceDataset: "ds"})
+	e, err := New(Config{Client: cli})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -76,26 +86,44 @@ func TestEvaluate_UnsupportedKind_ReturnsResultError(t *testing.T) {
 	}
 }
 
-func TestEvaluate_RowCountPositive_MissingSourceDataset_ReturnsResultError(t *testing.T) {
+func TestEvaluate_SetRowCountPositive_MissingSource_ReturnsResultError(t *testing.T) {
 	cli := stubClient(t)
-	e, err := New(Config{Client: cli}) // SourceDataset deliberately empty
+	e, err := New(Config{Client: cli})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
 	eval, err := e.Evaluate(context.Background(),
-		runner.CheckSpec{CheckID: "c1", Kind: KindRowCountPositive},
+		runner.CheckSpec{CheckID: "c1", Kind: KindSetRowCountPositive},
 		runner.TriggerRequest{Entity: "customer"})
-	if !errors.Is(err, errSourceDatasetMissing) {
-		t.Errorf("err = %v; want errSourceDatasetMissing", err)
+	if err == nil {
+		t.Errorf("expected non-nil error when source is missing")
 	}
 	if eval.Result != results.ResultError {
 		t.Errorf("Result = %q; want %q", eval.Result, results.ResultError)
 	}
-	if eval.EvidenceSummary["reason"] != "source_dataset_not_configured" {
-		t.Errorf("EvidenceSummary[reason] = %v; want source_dataset_not_configured", eval.EvidenceSummary["reason"])
+	if eval.EvidenceSummary["reason"] != "missing_or_non_bigquery_source" {
+		t.Errorf("EvidenceSummary[reason] = %v; want missing_or_non_bigquery_source", eval.EvidenceSummary["reason"])
 	}
-	if eval.EvidenceSummary["kind"] != KindRowCountPositive {
-		t.Errorf("EvidenceSummary[kind] = %v; want %q", eval.EvidenceSummary["kind"], KindRowCountPositive)
+}
+
+func TestEvaluate_RecordSchemaConformance_StubReturnsResultError(t *testing.T) {
+	cli := stubClient(t)
+	e, err := New(Config{Client: cli})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	eval, err := e.Evaluate(context.Background(),
+		runner.CheckSpec{CheckID: "c1", Kind: KindRecordSchemaConformance},
+		runner.TriggerRequest{Entity: "orders_stream"})
+	if err == nil {
+		t.Errorf("expected stub handler to return an error")
+	}
+	if eval.Result != results.ResultError {
+		t.Errorf("Result = %q; want %q", eval.Result, results.ResultError)
+	}
+	reason, _ := eval.EvidenceSummary["reason"].(string)
+	if !strings.Contains(reason, "record_mode_runtime_not_wired") {
+		t.Errorf("EvidenceSummary[reason] = %q; want runtime-not-wired diagnostic", reason)
 	}
 }
 
@@ -107,9 +135,9 @@ func TestEvaluator_SatisfiesRunnerInterface(t *testing.T) {
 	var _ runner.CheckEvaluator = (*Evaluator)(nil)
 }
 
-func TestEvaluate_UnsupportedKindIncludesExpectedKindInError(t *testing.T) {
+func TestEvaluate_UnsupportedKindNamesRegisteredKinds(t *testing.T) {
 	cli := stubClient(t)
-	e, err := New(Config{Client: cli, SourceDataset: "ds"})
+	e, err := New(Config{Client: cli})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -119,7 +147,32 @@ func TestEvaluate_UnsupportedKindIncludesExpectedKindInError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	if !strings.Contains(err.Error(), KindRowCountPositive) {
-		t.Errorf("error message should name the supported kind for forward compatibility; got %q", err.Error())
+	if !strings.Contains(err.Error(), KindSetRowCountPositive) {
+		t.Errorf("error should name the registered kinds for forward compatibility; got %q", err.Error())
+	}
+}
+
+func TestRegister_OverridesExistingHandler(t *testing.T) {
+	cli := stubClient(t)
+	e, err := New(Config{Client: cli})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	called := false
+	e.Register(KindSetRowCountPositive, func(ctx context.Context, _ *Evaluator, _ runner.CheckSpec, _ runner.TriggerRequest) (runner.Evaluation, error) {
+		called = true
+		return runner.Evaluation{Result: results.ResultPass}, nil
+	})
+	eval, err := e.Evaluate(context.Background(),
+		runner.CheckSpec{CheckID: "c1", Kind: KindSetRowCountPositive},
+		runner.TriggerRequest{Entity: "customer"})
+	if err != nil {
+		t.Fatalf("Evaluate: %v", err)
+	}
+	if !called {
+		t.Error("Register did not install the new handler")
+	}
+	if eval.Result != results.ResultPass {
+		t.Errorf("Result = %q; want %q", eval.Result, results.ResultPass)
 	}
 }
