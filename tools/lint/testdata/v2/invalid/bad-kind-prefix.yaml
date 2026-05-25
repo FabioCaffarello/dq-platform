@@ -1,0 +1,13 @@
+# path: tools/lint/testdata/v2/invalid/bad-kind-prefix.yaml
+# Cross-check #4: kind prefix "record" does not match rule mode "set".
+version: 2
+entity: customer
+mode: set
+source:
+  type: bigquery
+  project_id: dq-local
+  dataset_id: dq_fixture
+  table_id: customer
+checks:
+  - check_id: wrong_prefix
+    kind: record.schema_conformance

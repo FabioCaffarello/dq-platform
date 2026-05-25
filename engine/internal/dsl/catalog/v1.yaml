@@ -1,0 +1,79 @@
+# Canonical kind catalog v1 per ADR-0022. The byte-identical mirror at
+# rules/_schema/catalog.v1.yaml is enforced by the schema-mirror CI gate.
+# The mirror is never edited by hand; use `make sync-schema` to update it.
+#
+# Each entry declares one kind's mode, source_mode, params_schema (the
+# per-kind shape for the optional `params` block on a check), and
+# aggregation block per ADR-0026.
+#
+# Adding a new kind is additive within v1 per ADR-0001. Renaming or
+# removing a kind, or changing a kind's mode or source_mode, requires a
+# new catalog version file (catalog.v2.yaml).
+
+catalog_version: 1
+
+kinds:
+  - name: set.row_count_positive
+    description: >-
+      Set-mode check that asserts a BigQuery table has at least one row
+      within the closed window. Produces one CheckResult per window with
+      no per-record aggregation.
+    mode: set
+    source_mode: set
+    params_schema:
+      type: object
+      additionalProperties: false
+      properties: {}
+    aggregation:
+      type: none
+
+  - name: record.schema_conformance
+    description: >-
+      Record-mode check that validates each Kafka record against a
+      JSON Schema fragment carried in params.schema. Per-record
+      pass/fail outcomes aggregate into one CheckResult per window via
+      the threshold function (per ADR-0026), with the catalog defaults
+      below applied unless overridden by the rule's
+      params.aggregation block.
+    mode: record
+    source_mode: record
+    params_schema:
+      type: object
+      additionalProperties: false
+      required:
+        - schema
+      properties:
+        schema:
+          description: >-
+            JSON Schema fragment to validate each record against. The
+            handler treats the record body as a JSON object and applies
+            this fragment per-record.
+          type: object
+        aggregation:
+          description: >-
+            Optional per-rule overrides for the catalog
+            aggregation.defaults block. Any subset of the three
+            override fields may be set; absent fields fall through to
+            the catalog defaults.
+          type: object
+          additionalProperties: false
+          properties:
+            fail_if_violation_rate:
+              type: number
+              minimum: 0.0
+              maximum: 1.0
+            warn_if_violation_rate:
+              type:
+                - number
+                - "null"
+              minimum: 0.0
+              maximum: 1.0
+            evidence_sample_size:
+              type: integer
+              minimum: 0
+    aggregation:
+      type: threshold
+      defaults:
+        fail_if_violation_rate: 0.0
+        warn_if_violation_rate: null
+        evidence_sample_size: 10

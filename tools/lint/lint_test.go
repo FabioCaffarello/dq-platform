@@ -22,6 +22,50 @@ func schemaPath(t *testing.T) string {
 	return p
 }
 
+// schemaV2Path returns the absolute path to the v2 schema mirror.
+func schemaV2Path(t *testing.T) string {
+	t.Helper()
+	p, err := filepath.Abs("../../rules/_schema/v2.schema.json")
+	if err != nil {
+		t.Fatalf("schemaV2Path: %v", err)
+	}
+	return p
+}
+
+// schemaSet builds a SchemaSet with both v1 and v2 schemas loaded
+// from the canonical mirror paths.
+func schemaSet(t *testing.T) *SchemaSet {
+	t.Helper()
+	set, err := LoadSchemaSet(schemaPath(t), schemaV2Path(t))
+	if err != nil {
+		t.Fatalf("LoadSchemaSet: %v", err)
+	}
+	return set
+}
+
+// catalogPath returns the absolute path to the v1 catalog mirror.
+func catalogPath(t *testing.T) string {
+	t.Helper()
+	p, err := filepath.Abs("../../rules/_schema/catalog.v1.yaml")
+	if err != nil {
+		t.Fatalf("catalogPath: %v", err)
+	}
+	return p
+}
+
+// loadCatalog loads the canonical catalog mirror for tests.
+func loadCatalog(t *testing.T) *Catalog {
+	t.Helper()
+	cat, err := LoadCatalog(catalogPath(t))
+	if err != nil {
+		t.Fatalf("LoadCatalog: %v", err)
+	}
+	if cat == nil {
+		t.Fatalf("LoadCatalog returned nil; catalog mirror missing at %s", catalogPath(t))
+	}
+	return cat
+}
+
 func TestLoadSchema_OK(t *testing.T) {
 	if _, err := LoadSchema(schemaPath(t)); err != nil {
 		t.Fatalf("LoadSchema returned %v; want nil", err)
@@ -99,11 +143,8 @@ func TestValidateRule_BadYAML(t *testing.T) {
 }
 
 func TestValidateRulesDir_OnlyValid(t *testing.T) {
-	schema, err := LoadSchema(schemaPath(t))
-	if err != nil {
-		t.Fatalf("LoadSchema: %v", err)
-	}
-	results, processed, err := ValidateRulesDir(schema, "testdata/valid", false)
+	set := schemaSet(t)
+	results, processed, err := ValidateRulesDir(set, nil, nil, "testdata/valid", false)
 	if err != nil {
 		t.Fatalf("ValidateRulesDir(valid) operational error: %v", err)
 	}
@@ -116,11 +157,8 @@ func TestValidateRulesDir_OnlyValid(t *testing.T) {
 }
 
 func TestValidateRulesDir_AllInvalid(t *testing.T) {
-	schema, err := LoadSchema(schemaPath(t))
-	if err != nil {
-		t.Fatalf("LoadSchema: %v", err)
-	}
-	results, processed, err := ValidateRulesDir(schema, "testdata/invalid", false)
+	set := schemaSet(t)
+	results, processed, err := ValidateRulesDir(set, nil, nil, "testdata/invalid", false)
 	if err != nil {
 		t.Fatalf("ValidateRulesDir(invalid) operational error: %v", err)
 	}
@@ -154,11 +192,8 @@ func TestValidateRulesDir_SkipsSchemaSubdir(t *testing.T) {
 	mustWriteFile(t, filepath.Join(tmp, "_schema", "v1.schema.json"), []byte(`{"$id":"x"}`))
 	mustWriteFile(t, filepath.Join(tmp, "should-not-lint.yaml"), []byte("not a rule"))
 
-	schema, err := LoadSchema(schemaPath(t))
-	if err != nil {
-		t.Fatalf("LoadSchema: %v", err)
-	}
-	results, _, err := ValidateRulesDir(schema, tmp, false)
+	set := schemaSet(t)
+	results, _, err := ValidateRulesDir(set, nil, nil, tmp, false)
 	if err != nil {
 		t.Fatalf("ValidateRulesDir: %v", err)
 	}
@@ -174,11 +209,8 @@ func TestValidateRulesDir_MissingDir(t *testing.T) {
 	// error — the linter exits 0 with nothing to lint. This
 	// lets `make lint-rules` succeed before Phase 6 lands the
 	// first rule YAML.
-	schema, err := LoadSchema(schemaPath(t))
-	if err != nil {
-		t.Fatalf("LoadSchema: %v", err)
-	}
-	results, processed, err := ValidateRulesDir(schema, "no-such-dir", false)
+	set := schemaSet(t)
+	results, processed, err := ValidateRulesDir(set, nil, nil, "no-such-dir", false)
 	if err != nil {
 		t.Fatalf("ValidateRulesDir(missing) returned error: %v", err)
 	}

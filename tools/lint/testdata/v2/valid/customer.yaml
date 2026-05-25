@@ -1,0 +1,16 @@
+# path: tools/lint/testdata/v2/valid/customer.yaml
+# Valid v2 set-mode rule. Exercises mode-as-primitive (ADR-0021),
+# kind catalog (ADR-0022), and BigQuery source descriptor (ADR-0023).
+version: 2
+entity: customer
+mode: set
+source:
+  type: bigquery
+  project_id: dq-local
+  dataset_id: dq_fixture
+  table_id: customer
+description: Set-mode rule fixture for the linter v2 cross-check pass.
+checks:
+  - check_id: row_count_positive
+    kind: set.row_count_positive
+    description: Asserts the customer table has at least one row in window.

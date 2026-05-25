@@ -1,0 +1,18 @@
+# path: tools/lint/testdata/v2/invalid/params-missing-required.yaml
+# Cross-check #6: record.schema_conformance requires params.schema;
+# omitting it fails the catalog's params_schema validation.
+version: 2
+entity: orders_stream
+mode: record
+source:
+  type: kafka
+  topic: orders.events.v1
+  consumer_group: dq-orders-stream
+  window:
+    type: tumbling
+    duration: 1m
+    lateness_tolerance: 30s
+checks:
+  - check_id: schema_present
+    kind: record.schema_conformance
+    # params block omitted on purpose; catalog requires params.schema.

@@ -1,0 +1,13 @@
+# path: tools/lint/testdata/v2/invalid/unknown-kind.yaml
+# Cross-check #5: kind not declared in the catalog.
+version: 2
+entity: customer
+mode: set
+source:
+  type: bigquery
+  project_id: dq-local
+  dataset_id: dq_fixture
+  table_id: customer
+checks:
+  - check_id: unknown
+    kind: set.no_such_kind

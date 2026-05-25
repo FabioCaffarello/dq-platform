@@ -1,0 +1,166 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "engine/internal/dsl/schema/v2.schema.json",
+  "title": "DQ Platform Rule Schema v2",
+  "description": "Canonical JSON Schema for rule YAMLs at schema version 2. v2 extends v1 with mode-as-primitive (per ADR-0021), explicit source descriptor (per ADR-0023), per-source-type substrate parameters including the kafka window sub-object (per ADR-0024), and per-check kind discipline with optional params (per ADR-0022). The byte-identical mirror at rules/_schema/v2.schema.json is enforced by the schema-mirror CI gate. The mirror is never edited by hand; use `make sync-schema` to update it.",
+  "type": "object",
+  "required": ["version", "entity", "mode", "source", "checks"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "description": "Schema version this rule was written against. Mandatory per ADR-0001 C4. Engine and linter reject rules without it.",
+      "const": 2
+    },
+    "entity": {
+      "description": "Entity identifier. ASCII alphanumeric plus underscore, dot, hyphen. The pipe character is explicitly forbidden per ADR-0002 input-safety (entity is one of the five inputs to the execution_id hash; the formula is pipe-separated with no escaping).",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^[A-Za-z0-9_.-]+$"
+    },
+    "mode": {
+      "description": "Evaluation mode for the entity. set evaluates a bounded set of rows over a closed window per ADR-0021; record evaluates each incoming record independently. Per ADR-0021 §C-B0S1.3 mode is the primitive: source.type, runner, and the catalog kind prefix must all agree with the value here. The linter enforces the agreement; the engine loader rejects mode values it does not yet support.",
+      "type": "string",
+      "enum": ["set", "record"]
+    },
+    "source": {
+      "description": "Source descriptor for the entity. The type field discriminates the substrate; per-substrate fields are validated by the matching oneOf branch. Per ADR-0023 source.type must align with mode (bigquery → set, kafka → record); the linter enforces this cross-check.",
+      "oneOf": [
+        { "$ref": "#/$defs/sourceBigQuery" },
+        { "$ref": "#/$defs/sourceKafka" }
+      ]
+    },
+    "checks": {
+      "description": "Non-empty array of check definitions. Each check is evaluated independently per ADR-0004 always-continue.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/check"
+      }
+    },
+    "description": {
+      "description": "Optional human-readable description of the rule.",
+      "type": "string"
+    }
+  },
+  "$defs": {
+    "sourceBigQuery": {
+      "description": "BigQuery source descriptor for set-mode entities. project_id, dataset_id, table_id are mandatory; partition_column is optional and signals partition-pruning intent to the engine query planner per P4 cost discipline.",
+      "type": "object",
+      "required": ["type", "project_id", "dataset_id", "table_id"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "bigquery"
+        },
+        "project_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "^[a-z0-9-]+$"
+        },
+        "dataset_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "^[A-Za-z0-9_]+$"
+        },
+        "table_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "^[A-Za-z0-9_]+$"
+        },
+        "partition_column": {
+          "description": "Optional partition column name. When set, the engine applies partition-pruning predicates to set-mode queries per P4 cost discipline.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "^[A-Za-z0-9_]+$"
+        }
+      }
+    },
+    "sourceKafka": {
+      "description": "Kafka source descriptor for record-mode entities per ADR-0024. topic, consumer_group, and window are mandatory. window carries the watermark-bounded tumbling boundary that closes a record-mode execution.",
+      "type": "object",
+      "required": ["type", "topic", "consumer_group", "window"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "kafka"
+        },
+        "topic": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 249,
+          "pattern": "^[A-Za-z0-9._-]+$"
+        },
+        "consumer_group": {
+          "description": "Consumer group identifier per ADR-0024. The engine binds one consumer per (entity, consumer_group) and tracks per-partition offsets under it.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 249,
+          "pattern": "^[A-Za-z0-9._-]+$"
+        },
+        "window": {
+          "$ref": "#/$defs/kafkaWindow"
+        }
+      }
+    },
+    "kafkaWindow": {
+      "description": "Tumbling watermark-bounded window per ADR-0024. type is the boundary kind; duration is the window length; lateness_tolerance is the watermark grace period before the window closes and emits an execution. Durations follow the duration grammar enforced by the linter.",
+      "type": "object",
+      "required": ["type", "duration", "lateness_tolerance"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "description": "Window boundary kind. v2 supports tumbling only; non-tumbling boundaries are deferred to a future schema version per ADR-0024.",
+          "const": "tumbling"
+        },
+        "duration": {
+          "description": "Window duration as a duration literal (e.g., 1m, 5m, 1h). The linter validates the grammar.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32,
+          "pattern": "^[0-9]+(ms|s|m|h)$"
+        },
+        "lateness_tolerance": {
+          "description": "Watermark grace period after window-end before the engine closes the window and emits an execution. Same duration grammar as duration.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32,
+          "pattern": "^[0-9]+(ms|s|m|h)$"
+        }
+      }
+    },
+    "check": {
+      "type": "object",
+      "required": ["check_id", "kind"],
+      "additionalProperties": false,
+      "properties": {
+        "check_id": {
+          "description": "Check identifier; component of the dq_check_results composite key per ADR-0003 CC7. ASCII alphanumeric plus underscore, dot, hyphen; pipe forbidden.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "^[A-Za-z0-9_.-]+$"
+        },
+        "kind": {
+          "description": "Discriminator for the check's evaluation strategy. Per ADR-0022 v2 requires a mode-prefixed kind: `set.<name>` for set-mode checks, `record.<name>` for record-mode checks. The linter cross-checks the prefix against the rule's mode and against the catalog's per-kind source_mode entry.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "^(set|record)\\.[A-Za-z0-9_]+$"
+        },
+        "params": {
+          "description": "Optional per-kind parameter block. The schema does not enumerate shapes here; the catalog (engine/internal/dsl/catalog/v1.yaml) declares each kind's params_schema, and the linter validates params against the matching catalog entry per ADR-0022.",
+          "type": "object"
+        },
+        "description": {
+          "description": "Optional human-readable description of the check.",
+          "type": "string"
+        }
+      }
+    }
+  }
+}

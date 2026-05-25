@@ -1,0 +1,29 @@
+# path: tools/lint/testdata/v2/valid/orders_stream.yaml
+# Valid v2 record-mode rule. Exercises Kafka source descriptor
+# (ADR-0024) and the record.schema_conformance kind with both
+# required params (schema) and the optional aggregation override.
+version: 2
+entity: orders_stream
+mode: record
+source:
+  type: kafka
+  topic: orders.events.v1
+  consumer_group: dq-orders-stream
+  window:
+    type: tumbling
+    duration: 1m
+    lateness_tolerance: 30s
+checks:
+  - check_id: schema_present
+    kind: record.schema_conformance
+    description: Validates each order event against the contract schema.
+    params:
+      schema:
+        type: object
+        required:
+          - order_id
+          - event_type
+      aggregation:
+        fail_if_violation_rate: 0.05
+        warn_if_violation_rate: 0.01
+        evidence_sample_size: 50

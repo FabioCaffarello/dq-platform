@@ -1,0 +1,14 @@
+# path: tools/lint/testdata/v2/invalid/schema-fails-no-mode.yaml
+# Schema-level failure: v2 requires `mode`. This fixture exercises the
+# v2 schema dispatch (the rule declares version 2, the dispatcher
+# selects the v2 schema, and the v2 schema rejects the missing mode).
+version: 2
+entity: customer
+source:
+  type: bigquery
+  project_id: dq-local
+  dataset_id: dq_fixture
+  table_id: customer
+checks:
+  - check_id: any
+    kind: set.row_count_positive

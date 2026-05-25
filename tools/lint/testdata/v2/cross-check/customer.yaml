@@ -1,0 +1,14 @@
+# path: tools/lint/testdata/v2/cross-check/customer.yaml
+# Cross-check #3: rule mode "set" but owners entry for "customer"
+# declares mode "record". The linter must reject the rule.
+version: 2
+entity: customer
+mode: set
+source:
+  type: bigquery
+  project_id: dq-local
+  dataset_id: dq_fixture
+  table_id: customer
+checks:
+  - check_id: row_count_positive
+    kind: set.row_count_positive
