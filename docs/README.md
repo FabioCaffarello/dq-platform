@@ -53,6 +53,10 @@ This directory holds:
 - `adr/0032` — baseline strategy (resolves B1-1;
   platform-history + static baselines design; design-only,
   implementation deferred to first baselined kind's slice).
+- `adr/0033` — scheduler catchup behavior (resolves B1-3;
+  external-scheduler contract + advisory `schedule` field
+  + per-env catchup horizon; design-only, implementation
+  deferred to first scheduler-consumer slice).
 - `glossary.md` — codebase-specific terminology (W3-P8a).
 - `governance.md` — review model and contribution-time
   flows (W3-P8b).
