@@ -79,6 +79,18 @@ type EnvConfig struct {
 	OrphanScanInterval    time.Duration  // orphan ticker cadence
 	RecordModeCost        RecordModeCost // per ADR-0027 record-mode cost guardrails
 	EvidenceRetention     EvidenceRetention // per ADR-0031 results-table retention
+
+	// SchedulerCatchupHorizon documents the maximum age of a
+	// scheduled trigger the external scheduler should emit per
+	// ADR-0033 §"Per-env SchedulerCatchupHorizon (advisory)".
+	// Triggers older than this are skipped by convention; the
+	// engine does NOT enforce the ceiling at any code path (the
+	// /v1/trigger handler accepts any trigger per ADR-0014). The
+	// field is exposed on EnvConfig so external schedulers (and
+	// their reference manifests under deploy/) can read a
+	// per-env value rather than hardcoding one. Per-env values:
+	// 1h / 6h / 24h for local / qa / prod.
+	SchedulerCatchupHorizon time.Duration
 }
 
 // EvidenceRetention carries the per-env results-table retention

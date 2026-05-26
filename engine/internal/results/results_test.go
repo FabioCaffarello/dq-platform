@@ -234,6 +234,54 @@ func (m *mockStore) ListRunningOlderThan(_ context.Context, before time.Time) ([
 	return out, nil
 }
 
+// LatestExecutionPerEntityCheck satisfies the extended Reader
+// contract. Mirrors the SQL semantic: per (entity, check_id),
+// take the row whose canonical execution has the latest
+// window_end and whose recorded_at is at or before asOf.
+//
+// The mock pairs every execution with one synthetic check row
+// per entry in m.checks that shares the same execution_id +
+// attempt_id; this matches the BigQuery query's JOIN behavior
+// without re-implementing the full SQL plan.
+func (m *mockStore) LatestExecutionPerEntityCheck(_ context.Context, asOf time.Time) ([]LatestExecutionRow, error) {
+	canonical := map[string]ExecutionRow{}
+	for _, r := range m.executions {
+		if r.RecordedAt.After(asOf) {
+			continue
+		}
+		cur, ok := canonical[r.ExecutionID]
+		if !ok || r.RecordedAt.After(cur.RecordedAt) {
+			canonical[r.ExecutionID] = r
+		}
+	}
+
+	type key struct{ entity, checkID string }
+	best := map[key]LatestExecutionRow{}
+	for _, cr := range m.checks {
+		ex, ok := canonical[cr.ExecutionID]
+		if !ok || ex.AttemptID != cr.AttemptID {
+			continue
+		}
+		k := key{ex.Entity, cr.CheckID}
+		candidate := LatestExecutionRow{
+			Entity:       ex.Entity,
+			CheckID:      cr.CheckID,
+			LatestEnd:    ex.WindowEnd,
+			LatestStatus: ex.Status,
+			Mode:         ex.Mode,
+		}
+		if cur, exists := best[k]; !exists || candidate.LatestEnd.After(cur.LatestEnd) {
+			best[k] = candidate
+		}
+	}
+
+	out := make([]LatestExecutionRow, 0, len(best))
+	for _, r := range best {
+		out = append(out, r)
+	}
+	return out, nil
+}
+
 func (m *mockStore) latestPerExecution(executionID string) *ExecutionRow {
 	var latest *ExecutionRow
 	for i := range m.executions {
@@ -287,6 +335,88 @@ func TestStoreInterface_MockShape(t *testing.T) {
 		t.Fatalf("QueryCurrentExecution(no-such): got nil error, want ErrExecutionNotFound")
 	} else if !strings.Contains(err.Error(), "not found") {
 		t.Errorf("error %q does not mention 'not found'", err)
+	}
+}
+
+func TestLatestExecutionPerEntityCheck_MockShape(t *testing.T) {
+	// Exercises the Store interface's new ADR-0033 §"Missed-window
+	// detection" surface. Two entities, two executions per entity
+	// (one earlier, one later), one check per execution. The
+	// method must return one row per (entity, check_id) keyed on
+	// the later execution's window_end.
+	ctx := context.Background()
+	s := &mockStore{}
+
+	t0 := time.Date(2026, 5, 26, 10, 0, 0, 0, time.UTC)
+	t1 := t0.Add(2 * time.Hour)
+
+	rows := []ExecutionRow{
+		{
+			ExecutionID: "exec-1a", AttemptID: "att-a",
+			RecordedAt: t0, Status: StatusSuccess, Mode: ModeSet,
+			EngineVersion: "0.1.0", RulesetVersion: "v1",
+			Entity: "customer", TriggerSource: TriggerScheduler,
+			WindowStart: t0.Add(-time.Hour), WindowEnd: t0,
+		},
+		{
+			ExecutionID: "exec-1b", AttemptID: "att-b",
+			RecordedAt: t1, Status: StatusFailed, Mode: ModeSet,
+			EngineVersion: "0.1.0", RulesetVersion: "v1",
+			Entity: "customer", TriggerSource: TriggerScheduler,
+			WindowStart: t1.Add(-time.Hour), WindowEnd: t1,
+		},
+		{
+			ExecutionID: "exec-2a", AttemptID: "att-c",
+			RecordedAt: t0, Status: StatusSuccess, Mode: ModeRecord,
+			EngineVersion: "0.1.0", RulesetVersion: "v1",
+			Entity: "orders_stream", TriggerSource: TriggerScheduler,
+			WindowStart: t0.Add(-time.Hour), WindowEnd: t0,
+		},
+	}
+	for _, r := range rows {
+		if err := s.WriteExecutionRow(ctx, r); err != nil {
+			t.Fatalf("WriteExecutionRow: %v", err)
+		}
+	}
+	for _, c := range []CheckResultRow{
+		{ExecutionID: "exec-1a", AttemptID: "att-a", CheckID: "row_count_positive", Result: ResultPass, ExecutedAt: t0, EngineVersion: "0.1.0"},
+		{ExecutionID: "exec-1b", AttemptID: "att-b", CheckID: "row_count_positive", Result: ResultFail, ExecutedAt: t1, EngineVersion: "0.1.0"},
+		{ExecutionID: "exec-2a", AttemptID: "att-c", CheckID: "schema_present", Result: ResultPass, ExecutedAt: t0, EngineVersion: "0.1.0"},
+	} {
+		if err := s.WriteCheckResultRow(ctx, c); err != nil {
+			t.Fatalf("WriteCheckResultRow: %v", err)
+		}
+	}
+
+	got, err := s.LatestExecutionPerEntityCheck(ctx, t1.Add(time.Hour))
+	if err != nil {
+		t.Fatalf("LatestExecutionPerEntityCheck: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("got %d rows; want 2 (one per entity+check)", len(got))
+	}
+
+	byKey := map[string]LatestExecutionRow{}
+	for _, r := range got {
+		byKey[r.Entity+"/"+r.CheckID] = r
+	}
+	if r := byKey["customer/row_count_positive"]; !r.LatestEnd.Equal(t1) || r.LatestStatus != StatusFailed || r.Mode != ModeSet {
+		t.Errorf("customer/row_count_positive = %+v; want LatestEnd=%v Status=failed Mode=set", r, t1)
+	}
+	if r := byKey["orders_stream/schema_present"]; !r.LatestEnd.Equal(t0) || r.LatestStatus != StatusSuccess || r.Mode != ModeRecord {
+		t.Errorf("orders_stream/schema_present = %+v; want LatestEnd=%v Status=success Mode=record", r, t0)
+	}
+
+	// asOf cutoff before the later execution: only the earlier
+	// (entity, check) pair survives for `customer`.
+	gotCutoff, err := s.LatestExecutionPerEntityCheck(ctx, t1.Add(-time.Minute))
+	if err != nil {
+		t.Fatalf("LatestExecutionPerEntityCheck (cutoff): %v", err)
+	}
+	for _, r := range gotCutoff {
+		if r.Entity == "customer" && !r.LatestEnd.Equal(t0) {
+			t.Errorf("cutoff: customer LatestEnd = %v; want %v (later execution excluded by asOf)", r.LatestEnd, t0)
+		}
 	}
 }
 

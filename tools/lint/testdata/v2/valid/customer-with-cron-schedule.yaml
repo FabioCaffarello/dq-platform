@@ -1,0 +1,18 @@
+# path: tools/lint/testdata/v2/valid/customer-with-cron-schedule.yaml
+# Valid v2 set-mode rule with the cron-form of ADR-0033's
+# `schedule` field. The two forms are disambiguated by whitespace:
+# this value contains internal whitespace so it parses as 5-field
+# cron; the sister duration-literal fixture has no whitespace.
+version: 2
+entity: customer-with-cron
+mode: set
+schedule: "0 */6 * * *"
+source:
+  type: bigquery
+  project_id: dq-local
+  dataset_id: dq_fixture
+  table_id: customer
+description: ADR-0033 schedule field with the 5-field cron form.
+checks:
+  - check_id: row_count_positive
+    kind: set.row_count_positive

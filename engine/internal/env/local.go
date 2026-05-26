@@ -39,4 +39,9 @@ var Local = EnvConfig{
 		// applied by EnsureSchema.
 		ResultsRetention: 30 * 24 * time.Hour,
 	},
+	// ADR-0033 §"Per-env SchedulerCatchupHorizon" — 1h keeps the
+	// dev feedback loop tight; missed windows older than an hour
+	// typically aren't worth catching up during single-developer
+	// iteration.
+	SchedulerCatchupHorizon: 1 * time.Hour,
 }

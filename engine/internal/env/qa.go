@@ -50,4 +50,9 @@ var QA = EnvConfig{
 		// ADR-0031 §"Single-tier retention" — qa keeps 90 days.
 		ResultsRetention: 90 * 24 * time.Hour,
 	},
+	// ADR-0033 §"Per-env SchedulerCatchupHorizon" — 6h matches
+	// the typical overnight integration-test window; an
+	// integration-run kicked off in the evening catches up
+	// cleanly the next morning.
+	SchedulerCatchupHorizon: 6 * time.Hour,
 }

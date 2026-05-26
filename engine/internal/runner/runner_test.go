@@ -184,6 +184,10 @@ func (s *inMemStore) ListRunningOlderThan(_ context.Context, _ time.Time) ([]res
 	return nil, nil
 }
 
+func (s *inMemStore) LatestExecutionPerEntityCheck(_ context.Context, _ time.Time) ([]results.LatestExecutionRow, error) {
+	return nil, nil
+}
+
 func newTestRunner(t *testing.T, store results.Store, evaluator CheckEvaluator) *Runner {
 	t.Helper()
 	r, err := New(Config{

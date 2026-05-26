@@ -1,0 +1,17 @@
+# path: tools/lint/testdata/v2/valid/customer-with-schedule.yaml
+# Valid v2 set-mode rule with an optional `schedule` field per
+# ADR-0033. Exercises both supported grammars: a duration
+# literal here, plus a cron-form fixture in this directory.
+version: 2
+entity: customer-with-schedule
+mode: set
+schedule: "1h"
+source:
+  type: bigquery
+  project_id: dq-local
+  dataset_id: dq_fixture
+  table_id: customer
+description: ADR-0033 schedule field with the duration-literal form.
+checks:
+  - check_id: row_count_positive
+    kind: set.row_count_positive

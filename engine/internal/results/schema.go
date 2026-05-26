@@ -167,3 +167,56 @@ FROM (
 WHERE rn = 1
 LIMIT 1
 `
+
+// latestExecutionPerEntityCheckSQL is the query the Go API uses
+// for LatestExecutionPerEntityCheck (missed-window detection per
+// ADR-0033 §"Missed-window detection — query surface"). It
+// returns, per (entity, check_id), the latest execution's
+// canonical row joined to the check-result row, filtered by
+// `recorded_at <= @as_of` so the partition pruner can bound the
+// scan per ADR-0031.
+//
+// Semantics:
+//   - Inner subquery applies the ADR-0003 CC2 canonical-view
+//     projection (latest recorded_at per execution_id) restricted
+//     to executions with recorded_at <= @as_of.
+//   - The CROSS JOIN with dq_check_results expands one canonical
+//     execution row into one row per (execution_id, check_id),
+//     keyed by attempt_id + execution_id.
+//   - The outer ROW_NUMBER() groups by (entity, check_id) and
+//     returns the row with the latest window_end — the "latest
+//     execution observed for this (entity, check_id) pair".
+const latestExecutionPerEntityCheckSQL = `
+SELECT entity, check_id, window_end AS latest_end, status AS latest_status, mode
+FROM (
+  SELECT
+    ex.entity,
+    cr.check_id,
+    ex.window_end,
+    ex.status,
+    ex.mode,
+    ROW_NUMBER() OVER (
+      PARTITION BY ex.entity, cr.check_id
+      ORDER BY ex.window_end DESC, ex.recorded_at DESC
+    ) AS rn
+  FROM (
+    SELECT execution_id, attempt_id, recorded_at, status, mode,
+           entity, window_end
+    FROM (
+      SELECT *,
+             ROW_NUMBER() OVER (
+               PARTITION BY execution_id
+               ORDER BY recorded_at DESC
+             ) AS exec_rn
+      FROM ` + "`{{dataset}}." + tableExecutions + "`" + `
+      WHERE recorded_at <= @as_of
+    )
+    WHERE exec_rn = 1
+  ) ex
+  JOIN ` + "`{{dataset}}." + tableCheckResults + "`" + ` cr
+    ON cr.execution_id = ex.execution_id
+   AND cr.attempt_id   = ex.attempt_id
+)
+WHERE rn = 1
+ORDER BY entity, check_id
+`

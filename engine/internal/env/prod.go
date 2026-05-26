@@ -49,4 +49,10 @@ var Prod = EnvConfig{
 		// ADR-0031 §"Single-tier retention" — prod keeps 365 days.
 		ResultsRetention: 365 * 24 * time.Hour,
 	},
+	// ADR-0033 §"Per-env SchedulerCatchupHorizon" — 24h tolerates
+	// a full day of scheduler downtime without losing forensic
+	// fidelity; longer horizons amplify the cost spike at
+	// recovery and would benefit from an explicit backfill
+	// posture instead.
+	SchedulerCatchupHorizon: 24 * time.Hour,
 }

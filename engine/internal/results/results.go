@@ -69,6 +69,28 @@ type Reader interface {
 	// initial `running` row's started_at is old — the canonical
 	// view's latest-by-recorded_at projection filters it out.
 	ListRunningOlderThan(ctx context.Context, before time.Time) ([]ExecutionRow, error)
+
+	// LatestExecutionPerEntityCheck returns the latest execution
+	// per `(entity, check_id)` whose recorded_at is at or before
+	// asOf, per ADR-0033 §"Missed-window detection — query
+	// surface". External monitors call this to detect "no
+	// execution seen for (entity X, check Y) in the last hour"
+	// gaps; retrospective investigations pass an earlier asOf
+	// to reconstruct the state of the world at that moment.
+	//
+	// The result set is the partition-pruned join of
+	// dq_executions and dq_check_results aggregated by
+	// (entity, check_id) — one row per pair. Returns an empty
+	// slice (not nil) when no rows match.
+	//
+	// The query is partition-pruned by `recorded_at <= asOf`
+	// per ADR-0031; scan cost is bounded by ResultsRetention.
+	// Frequent callers should cache the result for at least
+	// one refresh cadence — ADR-0033 §Notes reserves a
+	// materialised "latest execution per (entity, check_id)"
+	// view as a future enhancement if call frequency becomes
+	// a cost concern.
+	LatestExecutionPerEntityCheck(ctx context.Context, asOf time.Time) ([]LatestExecutionRow, error)
 }
 
 // Store is the full result-write surface: Writer + Reader +
