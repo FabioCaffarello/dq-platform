@@ -1,13 +1,29 @@
 # path: rules/customer.yaml
 #
 # First onboarded entity end-to-end (W3-P6d, ADR-0013 §"Phase 6").
-# Verifies the source table behind the `customer` entity has at
-# least one row via the W3-P6c `row_count_positive` evaluator.
+# Migrated v1 → v2 by B2-19 per ADR-0035 §"Current state and v1
+# retirement sequencing". The v2 schema adds:
+#
+#   - `mode: set` per ADR-0021 §C-B0S1.3
+#   - `source: {type: bigquery, …}` per ADR-0023
+#   - kind prefix `set.row_count_positive` per ADR-0022
+#
+# The source descriptor's project_id / dataset_id / table_id match
+# the local demo substrate seeded by scripts/smoke/demo-p6.sh
+# (PROJECT=dq-local, SOURCE_DATASET=dq_fixture, TABLE=customer).
+# Operators deploying against qa / prod overlay the source via
+# manifest republish with the env-specific identifiers.
 
-version: 1
+version: 2
 entity: customer
+mode: set
 description: First onboarded entity end-to-end (W3-P6d).
+source:
+  type: bigquery
+  project_id: dq-local
+  dataset_id: dq_fixture
+  table_id: customer
 checks:
   - check_id: row_count_positive
-    kind: row_count_positive
+    kind: set.row_count_positive
     description: Verifies the source table has at least one row.
