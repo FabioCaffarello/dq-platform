@@ -80,6 +80,14 @@ This directory holds:
   code with a group-membership check; closes the timing
   gap where a stale or typo'd `owner:` previously only
   failed at PR-review time).
+- `adr/0038` — documentation site generator deferred
+  (resolves B2-7; raw markdown stays the deliverable;
+  four auditable trigger conditions committed —
+  external-audience commitment, navigation-density
+  threshold on `docs/README.md`, retrospective-surfaced
+  search-quality friction, external link-out demand;
+  source conventions already migration-friendly if a
+  trigger fires).
 - `glossary.md` — codebase-specific terminology (W3-P8a).
 - `governance.md` — review model and contribution-time
   flows (W3-P8b).
