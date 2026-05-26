@@ -60,7 +60,7 @@
 
 | # | Topic | Status | Key Question | Why It Matters | Expected Output |
 |---|---|---|---|---|---|
-| B1-1 | Baseline strategy | open | Where do moving averages and historical references come from, and what happens with sparse history? | Volume and freshness checks depend on consistent history semantics. | Check design note |
+| B1-1 | Baseline strategy | [resolved-study](../decisions/2026-05-25-b1-1-baseline-strategy.md) → [resolved-adr](../../docs/adr/0032-baseline-strategy.md) | Where do moving averages and historical references come from, and what happens with sparse history? | Volume and freshness checks depend on consistent history semantics. | Check design note |
 | B1-2 | BigQuery cost ceilings | [resolved-study](../decisions/2026-05-25-b1-2-bigquery-cost-ceilings.md) → [resolved-adr](../../docs/adr/0029-bigquery-cost-ceilings.md) | What are the per-environment limits for window size, concurrency, failed samples, and dry-run enforcement? | Cost drift is predictable; designing around it is cheap. | Operations doc + defaults policy |
 | B1-3 | Scheduler catchup behavior | open | How are catchup, missed windows, and manual triggers represented? | A scheduler without precise semantics causes duplicate or missing evaluations. | Scheduling design note |
 | B1-4 | Environment configuration model | [resolved-study](../decisions/2026-05-22-b1-4-environment-configuration-model.md) → [resolved-adr](../../docs/adr/0018-environment-configuration-model.md) | Which configuration lives in code, deployment, or data, and how are `local`, `qa`, and `prod` isolated? | Prevents configuration sprawl and implicit behavior drift. | Env strategy ADR |
@@ -244,16 +244,21 @@ demand-driven follow-ups, not Wave 3 blockers.
 
 **Post-Wave-3 follow-up backlog** (work that survives Wave 3 closure):
 
-- **Open B1 rows** — B1-1 (baseline strategy), B1-3 (scheduler
-  catchup behavior), B1-5 (local testing strategy), B1-7
-  (compatibility window duration). **B1-2 (BigQuery cost
-  ceilings) resolved 2026-05-25 → ADR-0029. B1-8 (manifest
-  cryptographic posture) resolved 2026-05-25 → ADR-0030
-  (deferral with auditable trigger conditions; B0-5 reopener
-  did not fire). B1-6 (evidence retention parameters)
-  resolved 2026-05-25 → ADR-0031 (single-tier
-  partition-expiration retention + sample-content allowlist;
-  ADR-0026 record-mode privacy deferral redeemed).**
+- **Open B1 rows** — B1-3 (scheduler catchup behavior),
+  B1-5 (local testing strategy), B1-7 (compatibility window
+  duration). **B1-2 (BigQuery cost ceilings) resolved
+  2026-05-25 → ADR-0029. B1-8 (manifest cryptographic
+  posture) resolved 2026-05-25 → ADR-0030 (deferral with
+  auditable trigger conditions; B0-5 reopener did not
+  fire). B1-6 (evidence retention parameters) resolved
+  2026-05-25 → ADR-0031 (single-tier partition-expiration
+  retention + sample-content allowlist; ADR-0026 record-mode
+  privacy deferral redeemed). B1-1 (baseline strategy)
+  resolved 2026-05-25 → ADR-0032 (platform-history +
+  static baselines design; design-only ADR with
+  implementation deferred to the first baselined kind's
+  B2 slice; matches the ADR-0030 deferred-implementation
+  precedent).**
 - **Open B2 rows** — B2-1…B2-7 (long-tail implementation-phase
   items), plus the newly registered B2-9 (owner ↔ CODEOWNERS-group
   linter cross-check) and B2-10 (`dq-manifest set-pointer` rollback
@@ -265,7 +270,13 @@ demand-driven follow-ups, not Wave 3 blockers.
   pending close-step numbering: the pre-existing-table partitioning
   migration runbook (effectively green-field for v1 deployments
   but reserved for any deployment that accumulates non-partitioned
-  history before ADR-0031 reaches it).
+  history before ADR-0031 reaches it). Two further B2 follow-ups
+  register from ADR-0032 pending close-step numbering: the first
+  baselined kind (likely `set.row_count_within_baseline`,
+  shipping the `params.baseline` schema fragment + the
+  `ComputeBaseline` helper + the kind's catalog entry together)
+  and the baselined-check degraded runbook seed (lands when the
+  first baselined kind ships).
 - **Operational `PLACEHOLDER` substitutions** awaiting the
   GitHub-org / GCP-project provisioning session: `@PLACEHOLDER-org/…`
   in `/.github/CODEOWNERS` and `rules/_owners.yaml`;
@@ -296,9 +307,10 @@ Suggested triage order when starting a follow-up session:
    operational task, resolve it before any B1 study session.
 2. **B1 rows with downstream consumers next.** B1-2 (cost
    ceilings → ADR-0029, 2026-05-25), B1-8 (cryptographic
-   posture → ADR-0030, 2026-05-25), and B1-6 (evidence
-   retention → ADR-0031, 2026-05-25) have been resolved. The
-   remaining open B1 rows — B1-1, B1-3, B1-5, B1-7 — are
+   posture → ADR-0030, 2026-05-25), B1-6 (evidence
+   retention → ADR-0031, 2026-05-25), and B1-1 (baseline
+   strategy → ADR-0032, 2026-05-25) have been resolved.
+   The remaining open B1 rows — B1-3, B1-5, B1-7 — are
    demand-driven and have no current B0 reopener.
 3. **B2 rows last**, on demand. B2-9 (linter cross-check) and B2-10
    (CLI rollback subcommand) are demand-driven; the other B2 rows
