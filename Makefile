@@ -123,15 +123,21 @@ demo-p6: ## End-to-end Phase 6 demo (W3-P6d). Closes the W2-3 C-W2-3.4 invariant
 # lane. Empirically that command still performs API-server discovery
 # before parsing — `unable to recognize` fails on any cluster-free
 # host (verified with kubectl 1.36 against an empty kubeconfig).
-# `kubectl kustomize` is the maximum-portable cluster-free surface of
-# CC2's intent: it catches YAML syntax errors, missing-resource
-# references, patch-target mismatches, and strategic-merge conflicts.
-# Deeper schema validation (field-name typos, e.g. `replicass:`) is a
-# follow-up lane — `kubeconform` or a kind-based CI cluster —
-# deferred to B2-3 release-engineering or a Phase-7 follow-up.
-validate-deploy: ## Render every overlay via `kubectl kustomize` (per B2-8 CC2/CC7).
+# `kubectl kustomize` is the maximum-portable cluster-free render
+# surface; B2-30 (per ADR-0042 Clause 4) layered the deeper-
+# validation lane (`kubeconform -strict`) into the same target so
+# field-name typos (e.g. `replicass:`), deprecated API versions,
+# and schema mismatches against the Kubernetes API surface fail
+# loudly without introducing a new top-level CI lane.
+validate-deploy: ## Render every overlay via `kubectl kustomize` + validate via `kubeconform -strict` (B2-8 CC2/CC7 + ADR-0042 Clause 4).
+	@if ! command -v kubeconform >/dev/null 2>&1; then \
+		echo "validate-deploy: kubeconform not on PATH" >&2; \
+		echo "  install via 'brew install kubeconform' (macOS), or download a release from https://github.com/yannh/kubeconform/releases" >&2; \
+		exit 1; \
+	fi
 	@set -e; \
 	for env in local qa prod; do \
-		echo "→ rendering deploy/overlays/$$env/"; \
-		kubectl kustomize deploy/overlays/$$env/ > /dev/null; \
+		echo "→ validating deploy/overlays/$$env/"; \
+		kubectl kustomize deploy/overlays/$$env/ \
+			| kubeconform -strict -summary -; \
 	done
