@@ -31,8 +31,9 @@ is part of the published repository product (per
   decisions. First entry lands with ADR-0030
   (manifest cryptographic posture).
 - **[`dev/`](dev/)** — contributor-facing developer
-  guides. First entry is the local-testing guide that
-  lands with ADR-0034.
+  guides. Entries: the local-testing guide that lands
+  with ADR-0034, and the rule schema-migration playbook
+  that lands with ADR-0035 / B2-22.
 
 ## Current state (post-Wave-3)
 
