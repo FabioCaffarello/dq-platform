@@ -108,6 +108,17 @@ This directory holds:
   test surface; shared-substrate channel-collision
   workaround procedurally enforced; paired runbook
   `runbooks/entity-onboarding.md` ships alongside).
+- `adr/0041` — stream reporting continuity (resolves
+  B2-4; unified-reporting invariant articulated —
+  set-mode and record-mode results coexist in the
+  same tables under the same `execution_id` scheme;
+  `window_start` / `window_end` committed as additive
+  `dq_executions` columns at contract level
+  (implementation deferred to B2-27); per-mode
+  `started_at`/`completed_at` semantics committed;
+  cross-mode dashboard interpretation guidelines +
+  mode-transition rule preserving historical
+  observability across set↔record flips).
 - `glossary.md` — codebase-specific terminology (W3-P8a).
 - `governance.md` — review model and contribution-time
   flows (W3-P8b).
