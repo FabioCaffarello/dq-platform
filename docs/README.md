@@ -65,6 +65,10 @@ This directory holds:
   fixture-tree convention + tooling scope inventory;
   documentation-only ADR + new dev guide at
   `docs/dev/local-testing.md`).
+- `adr/0035` — compatibility window duration (resolves
+  B1-7; N-1 + 90-day calendar-time floor for schema
+  versions; engine-binary-bound drop mechanism; closes
+  the B1 backlog).
 - `glossary.md` — codebase-specific terminology (W3-P8a).
 - `governance.md` — review model and contribution-time
   flows (W3-P8b).

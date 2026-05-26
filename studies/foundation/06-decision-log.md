@@ -66,7 +66,7 @@
 | B1-4 | Environment configuration model | [resolved-study](../decisions/2026-05-22-b1-4-environment-configuration-model.md) → [resolved-adr](../../docs/adr/0018-environment-configuration-model.md) | Which configuration lives in code, deployment, or data, and how are `local`, `qa`, and `prod` isolated? | Prevents configuration sprawl and implicit behavior drift. | Env strategy ADR |
 | B1-5 | Local testing strategy | [resolved-study](../decisions/2026-05-25-b1-5-local-testing-strategy.md) → [resolved-adr](../../docs/adr/0034-local-testing-strategy.md) | What can be tested offline, what needs BigQuery sandbox access, and how is generated SQL inspected? | Developer experience shapes long-term quality. | Dev guide + tooling scope |
 | B1-6 | Evidence retention parameters | [resolved-study](../decisions/2026-05-25-b1-6-evidence-retention-parameters.md) → [resolved-adr](../../docs/adr/0031-evidence-retention-parameters.md) | How many violating samples per check, for how long, under what privacy constraints? | Storage cost and privacy compliance depend on it. | Storage and security note |
-| B1-7 | Compatibility window duration | open | How long is each schema version supported after its successor is released? | Migration ergonomics for domain teams. | Boundary contract refinement |
+| B1-7 | Compatibility window duration | [resolved-study](../decisions/2026-05-25-b1-7-compatibility-window-duration.md) → [resolved-adr](../../docs/adr/0035-compatibility-window-duration.md) | How long is each schema version supported after its successor is released? | Migration ergonomics for domain teams. | Boundary contract refinement |
 | B1-8 | Manifest cryptographic posture | [resolved-study](../decisions/2026-05-25-b1-8-manifest-cryptographic-posture.md) → [resolved-adr](../../docs/adr/0030-manifest-cryptographic-posture.md) | Does the manifest carry signatures beyond checksums? Who signs it? | Defense in depth against tampering or accidental publication. | Security note |
 | B1-9 | CODEOWNERS finalization | [resolved-study](../decisions/2026-05-22-b1-9-codeowners.md) → [resolved-adr](../../docs/adr/0015-codeowners.md) | Final team names and path rules for the asymmetric review model. | Enforces the boundary at PR-review time. | CODEOWNERS file |
 | B1-10 | Workspace tooling stack | [resolved-study](../decisions/2026-05-21-b1-10-workspace-tooling.md) → [resolved-adr](../../docs/adr/0016-workspace-tooling.md) | Confirm Go workspaces (`go.work`) as the tooling choice and finalize the per-tool module structure. | Affects every CI pipeline file. | Topology ADR refinement |
@@ -244,28 +244,26 @@ demand-driven follow-ups, not Wave 3 blockers.
 
 **Post-Wave-3 follow-up backlog** (work that survives Wave 3 closure):
 
-- **Open B1 rows** — B1-7 (compatibility window
-  duration). **B1-2 (BigQuery cost ceilings) resolved
-  2026-05-25 → ADR-0029. B1-8 (manifest cryptographic
-  posture) resolved 2026-05-25 → ADR-0030 (deferral
-  with auditable trigger conditions; B0-5 reopener did
-  not fire). B1-6 (evidence retention parameters)
-  resolved 2026-05-25 → ADR-0031 (single-tier
-  partition-expiration retention + sample-content
-  allowlist; ADR-0026 record-mode privacy deferral
-  redeemed). B1-1 (baseline strategy) resolved
-  2026-05-25 → ADR-0032 (platform-history + static
-  baselines design; design-only ADR). B1-3 (scheduler
-  catchup behavior) resolved 2026-05-25 → ADR-0033
-  (external-scheduler contract + advisory `schedule`
-  field + per-env catchup horizon + missed-window
-  query surface; design-only ADR). B1-5 (local
-  testing strategy) resolved 2026-05-25 → ADR-0034
-  (six-tier test-type taxonomy + dev guide at
-  `docs/dev/local-testing.md`; documentation-only
-  ADR codifying the existing test surface and
-  reserving `//go:build sandbox` for a future
-  consumer slice).**
+- **Open B1 rows — none.** All seven B1 rows are now
+  `resolved-adr` as of 2026-05-25:
+  - B1-1 (baseline strategy) → ADR-0032.
+  - B1-2 (BigQuery cost ceilings) → ADR-0029.
+  - B1-3 (scheduler catchup behavior) → ADR-0033.
+  - B1-4 (environment configuration model) → ADR-0018
+    (resolved earlier; B1-4 closed pre-Wave-S).
+  - B1-5 (local testing strategy) → ADR-0034.
+  - B1-6 (evidence retention parameters) → ADR-0031.
+  - B1-7 (compatibility window duration) → ADR-0035.
+  - B1-8 (manifest cryptographic posture) → ADR-0030
+    (B0-5 reopener did not fire).
+  - B1-9 (CODEOWNERS finalization) → ADR-0015 (Wave-3).
+  - B1-10 (workspace tooling stack) → ADR-0016 (Wave-3).
+  - B1-11 (substrate-posture amendment) → ADR-0017
+    (Wave-3).
+  Seven new B1-tier ADRs landed on 2026-05-25
+  (0029–0035); five carried deferred-implementation
+  posture (ADR-0030 / ADR-0032 / ADR-0033 / ADR-0034 /
+  ADR-0035) with B2 follow-ups for the consumer slices.
 - **Open B2 rows** — B2-1…B2-7 (long-tail implementation-phase
   items), plus the newly registered B2-9 (owner ↔ CODEOWNERS-group
   linter cross-check) and B2-10 (`dq-manifest set-pointer` rollback
@@ -296,7 +294,17 @@ demand-driven follow-ups, not Wave 3 blockers.
   consumer slice (ships the first `//go:build sandbox`
   test + a new `test-engine-sandbox` make target + CI
   configuration for the sandbox lane; lands with the
-  operational session that provisions real GCP).
+  operational session that provisions real GCP). Four
+  further B2 follow-ups register from ADR-0035 pending
+  close-step numbering: `customer.yaml` v1 → v2 migration
+  (gates v1 retirement); the v1-retirement engine
+  release (earliest 2026-08-23 after 90-day floor +
+  customer.yaml migration); the `tools/lint`
+  deprecation warning for `version` field on deprecated
+  schemas; the `docs/dev/schema-migration.md` playbook
+  consolidating v1 → v2 + future deltas; and the
+  `tools/migrate` binary for automated YAML field
+  renames.
 - **Operational `PLACEHOLDER` substitutions** awaiting the
   GitHub-org / GCP-project provisioning session: `@PLACEHOLDER-org/…`
   in `/.github/CODEOWNERS` and `rules/_owners.yaml`;
@@ -325,14 +333,14 @@ Suggested triage order when starting a follow-up session:
 1. **Operational unblocks first.** If a `PLACEHOLDER` substitution
    or a missing CLI surface (e.g., B2-10) is blocking an imminent
    operational task, resolve it before any B1 study session.
-2. **B1 rows with downstream consumers next.** B1-2 (cost
-   ceilings → ADR-0029), B1-8 (cryptographic posture →
-   ADR-0030), B1-6 (evidence retention → ADR-0031), B1-1
-   (baseline strategy → ADR-0032), B1-3 (scheduler
-   catchup behavior → ADR-0033), and B1-5 (local testing
-   strategy → ADR-0034) have all been resolved 2026-05-25.
-   Only B1-7 (compatibility window duration) remains open
-   and is demand-driven with no current B0 reopener.
+2. **All B1 rows are resolved.** B1-1…B1-11 are all at
+   `resolved-adr` as of 2026-05-25. The remaining
+   work flowing from B1 closure is registered as B2
+   follow-ups (consumer slices that ship the
+   implementations the design-only ADRs deferred); no
+   open B1 rows remain to prioritize. Triage focus
+   shifts to the B2 list + operational `PLACEHOLDER`
+   substitutions.
 3. **B2 rows last**, on demand. B2-9 (linter cross-check) and B2-10
    (CLI rollback subcommand) are demand-driven; the other B2 rows
    surface as implementation reveals concrete needs.
