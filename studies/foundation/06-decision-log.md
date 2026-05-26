@@ -11,7 +11,8 @@
 - Audience: project lead, platform engineers, anyone planning the next
   session of work.
 - Status: living document. Update whenever a decision changes state.
-- Last updated: 2026-05-23 (W3-P8d closed — Phase 8 closes; B2-9/B2-10 registered from W3-P8b/P8d follow-ups; B1-9 → ADR-0015, B1-10 → ADR-0016, B1-11 → ADR-0017, B1-4 → ADR-0018, B2-8 → ADR-0019; Wave 3 completion gate met)
+- Last updated: 2026-05-25 (B1 backlog closed in full — seven B1-tier ADRs landed: B1-2 → ADR-0029, B1-8 → ADR-0030, B1-6 → ADR-0031, B1-1 → ADR-0032, B1-3 → ADR-0033, B1-5 → ADR-0034, B1-7 → ADR-0035; thirteen consumer-slice follow-ups numbered B2-11 through B2-23 from those ADRs; total open B2 backlog now 22 rows)
+- Earlier update: 2026-05-23 (W3-P8d closed — Phase 8 closes; B2-9/B2-10 registered from W3-P8b/P8d follow-ups; B1-9 → ADR-0015, B1-10 → ADR-0016, B1-11 → ADR-0017, B1-4 → ADR-0018, B2-8 → ADR-0019; Wave 3 completion gate met)
 - Wave-S preparation: 2026-05-23 scope notes applied to ADRs 0002, 0003, 0004, 0006, 0007, 0010, 0014, 0017 declaring set-oriented mode; ADR-0020 (Wave-S launch) lands 2026-05-23 — forward-pointers redeemed.
 - Wave-S launch: 2026-05-23 launch study closed at resolved-study (two critique rounds; ref: `studies/decisions/2026-05-23-wave-s-launch.md`) and promoted to [ADR-0020](../../docs/adr/0020-wave-s-launch.md); B0-S1…B0-S7 registered in the Wave-S table below.
 - Promotion target: this document stays in `studies/foundation/` for
@@ -88,6 +89,19 @@
 | B2-8 | Infrastructure tooling | [resolved-study](../decisions/2026-05-22-b2-8-infrastructure-tooling.md) → [resolved-adr](../../docs/adr/0019-infrastructure-tooling.md) | Kustomize, Helm, Terraform, or a combination for `deploy/`? | Affects deployment ergonomics and environment isolation. | Infrastructure ADR |
 | B2-9 | Owner ↔ CODEOWNERS-group linter cross-check | open | Should `dq-lint` parse `.github/CODEOWNERS` and reject `_owners.yaml` entries whose `owner:` does not correspond to an existing CODEOWNERS group? | ADR-0006 §9 commits the linter as the first enforcement point for "no alert without owner"; without the cross-check, a stale or typo'd group reference only fails at PR-review time. Defense-in-depth complement to OQ-B1-9.3 (publisher/loader-side validation). Flagged when W3-P8b closed. | Linter rule design note + `dq-lint` extension |
 | B2-10 | `dq-manifest set-pointer` rollback subcommand | open | Should `dq-manifest` expose a first-class `set-pointer <hash>` subcommand to execute the rollback procedure in `docs/runbooks/manifest-rollback.md`? Today the CLI exposes only `publish`, and operators fall back to `gsutil`/console writes that bypass CLI contract enforcement. | Rollback ergonomics during incident response; the runbook's §2 procedure is TBD-blocked on this CLI surface. Flagged when W3-P8d closed. | CLI design note + subcommand under `tools/manifest/` |
+| B2-11 | `tools/dryrun` binary | open | Should a new CLI binary issue a BigQuery dry-run against each rule's compiled query template and post the bytes-scanned estimate per PR? | ADR-0029 §"Compiler layer" committed the posture; until the binary lands, the runtime-layer evaluator dry-run is the sole `MaxBytesScannedPerRun` enforcement. Flagged when ADR-0029 was promoted (B1-2 closure). | New binary under `tools/dryrun/` + Makefile target + CI workflow |
+| B2-12 | `row_count_positive` partition-filter retrofit | open | Should the inaugural set-mode kind grow partition-pruning logic keyed on `Source.PartitionColumn` (or ship a new partition-aware kind alongside)? | ADR-0029 §"row_count_positive cost gap" — the v1 kind issues `SELECT COUNT(*)` with no partition filter; on partition-less tables the bytes-scanned ceiling cannot prevent a runaway scan at the query-template level. Flagged when ADR-0029 was promoted (B1-2 closure). | Kind enrichment or new partition-aware kind under `engine/internal/eval/` |
+| B2-13 | Pre-existing-table partitioning migration runbook | open | Future deployments that have accumulated non-partitioned `dq_executions` + `dq_check_results` history before ADR-0031 reaches them require a one-time `CREATE TABLE ... AS SELECT ... PARTITION BY DATE(recorded_at)` + rename migration. What does the operator runbook look like? | ADR-0031 — v1 deployments are effectively green-field (dq-local wiped routinely; qa/prod PLACEHOLDER-provisioned via the new `EnsureSchema`); the runbook is needed for any future deployment that accumulates non-partitioned history. Flagged when ADR-0031 was promoted (B1-6 closure). | Runbook seed under `docs/runbooks/` |
+| B2-14 | First baselined kind | open | Which baselined-check kind ships first under ADR-0032's framework — `set.row_count_within_baseline`, `set.freshness_within_baseline`, or another? The slice ships the `params.baseline` schema fragment + the `ComputeBaseline` helper + the new kind's handler + catalog entry together. | ADR-0032 §"Why this does NOT commit specific baselined kinds" — the framework is design-only; the first consumer slice implements it. Flagged when ADR-0032 was promoted (B1-1 closure). | New catalog kind + `engine/internal/eval/baselines.go` helper + `rules/_schema/_baseline.fragment.json` (or equivalent) |
+| B2-15 | Baselined-check degraded runbook seed | open | What does the operator do when a baselined check fires `degraded` with `reason: insufficient_baseline_samples`? | ADR-0032 §"Sparse-history policy" — the degraded status is committed; the runbook clarifying the response posture lands with the first baselined kind. Flagged when ADR-0032 was promoted (B1-1 closure). | Runbook seed under `docs/runbooks/` |
+| B2-16 | First scheduler-consumer slice | open | Which external scheduler is the reference consumer of ADR-0033's `schedule` field + `EnvConfig.SchedulerCatchupHorizon` + `LatestExecutionPerEntityCheck` reader? Likely a Kubernetes CronJob manifest under `deploy/overlays/` that reads the manifest at publication time and provisions cron entries. | ADR-0033 — the scheduler is external; the framework is design-only; the first consumer slice ships the reference. Flagged when ADR-0033 was promoted (B1-3 closure). | New `schedule` field on v2 schema + `EnvConfig` field + Store reader method + reference Kubernetes CronJob manifest |
+| B2-17 | Manual-vs-operator-rerun runbook seed | open | When does an operator use `trigger_source: manual` vs `trigger_source: operator-rerun`? Distinct execution_ids per ADR-0002 CC1, but the operational guidance lives in a runbook. | ADR-0033 §"Manual trigger semantics" — committed the distinction; the runbook seed lands with the first scheduler-consumer slice. Flagged when ADR-0033 was promoted (B1-3 closure). | Runbook seed under `docs/runbooks/` |
+| B2-18 | Integration-sandbox tier first consumer slice | open | What's the first test that lands under the `//go:build sandbox` tag, and what `test-engine-sandbox` make target ships alongside? | ADR-0034 §"`integration-sandbox`" reserved the tier at v1; the first consumer slice lands with the operational session that provisions real GCP (and addresses Partial-row capabilities — CAS fidelity, lazy view, broker-set-timestamp watermark). Flagged when ADR-0034 was promoted (B1-5 closure). | First `//go:build sandbox` test + new `test-engine-sandbox` Make target + CI sandbox-lane configuration |
+| B2-19 | `customer.yaml` v1 → v2 migration | open | When does `rules/customer.yaml` migrate from `version: 1` to `version: 2` (gains `mode: set` + `source: { type: bigquery, ... }` + `kind: set.row_count_positive`)? | ADR-0035 §"Current state and v1 retirement sequencing" — the Wave-S β slice's "Option (b) — defer rule migration" left customer.yaml on v1; v1 retirement (B2-20) gates on this migration first. Flagged when ADR-0035 was promoted (B1-7 closure). | Migrated `rules/customer.yaml` v2 + new manifest publication |
+| B2-20 | v1-retirement engine release | open | When does the engine release that drops v1 from `SupportedSchemaVersions` ship? Gates on the 90-day floor (earliest 2026-08-23) AND B2-19 (customer.yaml migrated). | ADR-0035 §"Drop mechanism" + §"Current state" — bounded engine complexity (P4); operators rely on the 90-day floor for migration planning (P5). Flagged when ADR-0035 was promoted (B1-7 closure). | Engine release with `SupportedSchemaVersions: {2}` + v1 parser/schema/mirror/fixture removal + engine version bump + compatibility-state table amendment |
+| B2-21 | `tools/lint` deprecation warning | open | Should `dq-lint` emit a deprecation warning when a rule's `version` field declares a schema version marked deprecated in ADR-0035's compatibility-state table? Warning while deprecated; hard error at the version's drop release. | ADR-0035 §"Migration support level" — pairs with the v1-retirement engine release (B2-20) to give rule authors visible signal during the 90-day floor. Flagged when ADR-0035 was promoted (B1-7 closure). | `tools/lint` extension + compatibility-table read |
+| B2-22 | `docs/dev/schema-migration.md` playbook | open | Should a dedicated dev guide consolidate the v1 → v2 migration delta (and future v(N) → v(N+1) deltas) as a single operator-readable playbook? | ADR-0035 §"Migration support level" — documentation-grade migration guidance; lands under `docs/dev/` (introduced by ADR-0034). Flagged when ADR-0035 was promoted (B1-7 closure). | New guide under `docs/dev/` |
+| B2-23 | `tools/migrate` binary | open | Should an automated rule-migration tool ship that emits the migrated YAML for `tools/migrate -from=v1 -to=v2 rules/customer.yaml`? Would handle field renames + structural transforms. | ADR-0035 §"Migration support level" — operator ergonomic; the v1 escape hatch is engine pinning, so the tool is nice-to-have not load-bearing. Flagged when ADR-0035 was promoted (B1-7 closure). | New binary under `tools/migrate/` |
 
 ---
 
@@ -264,47 +278,24 @@ demand-driven follow-ups, not Wave 3 blockers.
   (0029–0035); five carried deferred-implementation
   posture (ADR-0030 / ADR-0032 / ADR-0033 / ADR-0034 /
   ADR-0035) with B2 follow-ups for the consumer slices.
-- **Open B2 rows** — B2-1…B2-7 (long-tail implementation-phase
-  items), plus the newly registered B2-9 (owner ↔ CODEOWNERS-group
-  linter cross-check) and B2-10 (`dq-manifest set-pointer` rollback
-  subcommand). Two further B2 follow-ups register from ADR-0029
-  pending close-step numbering: `tools/dryrun` binary (compiler-
-  layer cost enforcement) and `row_count_positive` partition-filter
-  retrofit (closes the v1 set-mode cost gap on partition-less
-  tables). One further B2 follow-up registers from ADR-0031
-  pending close-step numbering: the pre-existing-table partitioning
-  migration runbook (effectively green-field for v1 deployments
-  but reserved for any deployment that accumulates non-partitioned
-  history before ADR-0031 reaches it). Two further B2 follow-ups
-  register from ADR-0032 pending close-step numbering: the first
-  baselined kind (likely `set.row_count_within_baseline`,
-  shipping the `params.baseline` schema fragment + the
-  `ComputeBaseline` helper + the kind's catalog entry together)
-  and the baselined-check degraded runbook seed (lands when the
-  first baselined kind ships). Two further B2 follow-ups
-  register from ADR-0033 pending close-step numbering: the
-  first scheduler-consumer slice (ships the `schedule` field
-  on v2 rules + `EnvConfig.SchedulerCatchupHorizon` +
-  `LatestExecutionPerEntityCheck` reader method + reference
-  Kubernetes CronJob manifest) and the manual-vs-
-  operator-rerun runbook seed (lands when the first
-  scheduler-consumer slice ships). One further B2
-  follow-up registers from ADR-0034 pending close-step
-  numbering: the integration-sandbox tier's first
-  consumer slice (ships the first `//go:build sandbox`
-  test + a new `test-engine-sandbox` make target + CI
-  configuration for the sandbox lane; lands with the
-  operational session that provisions real GCP). Four
-  further B2 follow-ups register from ADR-0035 pending
-  close-step numbering: `customer.yaml` v1 → v2 migration
-  (gates v1 retirement); the v1-retirement engine
-  release (earliest 2026-08-23 after 90-day floor +
-  customer.yaml migration); the `tools/lint`
-  deprecation warning for `version` field on deprecated
-  schemas; the `docs/dev/schema-migration.md` playbook
-  consolidating v1 → v2 + future deltas; and the
-  `tools/migrate` binary for automated YAML field
-  renames.
+- **Open B2 rows** — twenty-two rows total at 2026-05-25
+  numbering:
+  - **Long-tail B2 rows from earlier waves** (B2-1, B2-2,
+    B2-3, B2-4, B2-5, B2-6, B2-7, B2-9, B2-10): seven
+    original implementation-phase items + the W3-P8 follow-ups
+    (B2-9 owner ↔ CODEOWNERS-group linter cross-check; B2-10
+    `dq-manifest set-pointer` rollback subcommand).
+  - **B1-closure follow-ups numbered 2026-05-25** (B2-11
+    through B2-23): thirteen rows registered when the seven
+    B1-tier ADRs (0029–0035) landed. Source-ADR mapping:
+    B2-11/B2-12 from ADR-0029; B2-13 from ADR-0031;
+    B2-14/B2-15 from ADR-0032; B2-16/B2-17 from ADR-0033;
+    B2-18 from ADR-0034; B2-19/B2-20/B2-21/B2-22/B2-23 from
+    ADR-0035.
+  Total open B2 rows: 22 (B2-8 resolved-adr → ADR-0019).
+  Triage focus shifts to B2; suggested ordering documented
+  in [§Recommended Next Sequence](#recommended-next-sequence)
+  below.
 - **Operational `PLACEHOLDER` substitutions** awaiting the
   GitHub-org / GCP-project provisioning session: `@PLACEHOLDER-org/…`
   in `/.github/CODEOWNERS` and `rules/_owners.yaml`;
