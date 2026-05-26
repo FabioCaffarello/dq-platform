@@ -152,6 +152,7 @@ echo "[demo-p6] publishing manifest"
   -ruleset-version "rules-v0.1.0" \
   -engine-compatibility ">=0.1.0,<1.0.0" \
   -linter-used "tools-lint-v0.1.0" \
+  -supported-schema-versions "1,2" \
   -storage-emulator-host "${GCS_HOST}"
 
 # ---------------------------------------------------------------------
