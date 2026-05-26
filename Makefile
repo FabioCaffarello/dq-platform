@@ -24,7 +24,7 @@ COMPOSE := docker compose -p $(COMPOSE_PROJECT_NAME)
 	lint-tools test-tools test-tools-manifest-integration \
 	lint-rules dry-run-rules \
 	sync-schema \
-	build-lint build-engine build-manifest \
+	build-lint build-engine build-manifest build-engine-image \
 	up down \
 	smoke-substrate \
 	validate-deploy
@@ -67,6 +67,18 @@ build-engine: ## Build the dq-engine binary at bin/dq-engine.
 build-manifest: ## Build the dq-manifest binary at bin/dq-manifest.
 	@mkdir -p bin
 	@cd tools/manifest && go build -o ../../bin/dq-manifest .
+
+# Image tag derivation per ADR-0042 Clause 3: stripping the
+# `engine-v` prefix from a git tag yields the image tag (e.g.,
+# `engine-v1.2.0` → `dq-engine:1.2.0`). When no `engine-v*` tag
+# points at HEAD, fall back to the short SHA — useful for PR
+# builds where no release tag exists yet.
+ENGINE_GIT_TAG := $(shell git describe --tags --match 'engine-v*' --exact-match 2>/dev/null)
+ENGINE_IMAGE_TAG ?= $(if $(ENGINE_GIT_TAG),$(patsubst engine-v%,%,$(ENGINE_GIT_TAG)),$(shell git rev-parse --short HEAD))
+ENGINE_IMAGE_NAME ?= dq-engine
+
+build-engine-image: ## Build the dq-engine container image per ADR-0042 Clause 1; tag from git per ADR-0042 Clause 3.
+	@docker build -t $(ENGINE_IMAGE_NAME):$(ENGINE_IMAGE_TAG) ./engine
 
 lint-rules: build-lint ## Validate every rule YAML against the schema mirror (per ADR-0001).
 	@./bin/dq-lint -schema rules/_schema/v1.schema.json -rules rules

@@ -1,0 +1,60 @@
+# path: .github/workflows/engine-image.yml
+#
+# Builds the dq-engine container image on every pull request and
+# every push to main per ADR-0042 §"Clause 1" + B2-28's slice. The
+# workflow validates that the Dockerfile + Make target work
+# end-to-end in CI; it does NOT push the image to any registry
+# because the registry choice is still TBD per ADR-0042 OQ-1
+# (depends on the ADR-0008 host-primitive follow-up). When the
+# registry lands, this workflow gains a push step in the same
+# operational session that substitutes PLACEHOLDER-org/.
+#
+# Required-check candidate for branch protection.
+
+name: engine-image
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    name: build dq-engine image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: make build-engine-image
+        run: make build-engine-image
+
+      - name: Inspect image
+        run: |
+          # Resolve the same tag the Makefile's build-engine-image
+          # target produced. Piping `git describe` through `sed`
+          # masks the describe command's exit code, so we capture
+          # describe's output + status separately and fall back to
+          # the short SHA explicitly when no engine-v* tag matches.
+          set -euo pipefail
+          if git_tag="$(git describe --tags --match 'engine-v*' --exact-match 2>/dev/null)"; then
+            tag="${git_tag#engine-v}"
+          else
+            tag="$(git rev-parse --short HEAD)"
+          fi
+          echo "Inspecting dq-engine:$tag"
+          docker inspect "dq-engine:$tag" \
+            --format 'User={{.Config.User}} Entrypoint={{.Config.Entrypoint}}'
+          # The User field must be `nonroot:nonroot` per ADR-0042
+          # Clause 1 + deploy/base/deployment.yaml's runAsUser 65532
+          # pin. Fail the lane loudly if the image base changes
+          # silently.
+          actual="$(docker inspect "dq-engine:$tag" --format '{{.Config.User}}')"
+          if [ "$actual" != "nonroot:nonroot" ]; then
+            echo "::error::image user is $actual; want nonroot:nonroot per ADR-0042 Clause 1"
+            exit 1
+          fi
