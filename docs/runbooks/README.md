@@ -24,6 +24,7 @@ production-ready.
 | `dq_executions` rows stuck in `status = running` past the orphan-detector threshold, or the orphan-detector itself crashed. | [`orphan-run-remediation.md`](orphan-run-remediation.md) |
 | Duplicate alerts in the channel for the same failing check, or missing alerts despite engine logs showing event emission. | [`alert-dedup-debugging.md`](alert-dedup-debugging.md) |
 | Loader refuse-swap fires repeatedly; refresh fails N times consecutively (N per B1-2). | [`refresh-failure-escalation.md`](refresh-failure-escalation.md) |
+| A new entity needs onboarding through the three-tier readiness model (Candidate → Test-soak → Production) per ADR-0040. | [`entity-onboarding.md`](entity-onboarding.md) |
 
 ## Anatomy of a runbook
 
