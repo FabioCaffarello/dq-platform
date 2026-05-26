@@ -40,6 +40,7 @@ import (
 	"dq-platform/engine/internal/env"
 	"dq-platform/engine/internal/eval"
 	"dq-platform/engine/internal/loader"
+	"dq-platform/engine/internal/logging"
 	"dq-platform/engine/internal/orphan"
 	"dq-platform/engine/internal/results"
 	"dq-platform/engine/internal/runner"
@@ -59,10 +60,20 @@ import (
 //
 // SlogLevel is the slog.Level resolved from EnvConfig.LogLevel at
 // readEnv time so logging setup doesn't have to re-parse.
+//
+// LogLevels is the parsed DQ_LOG_LEVELS map per ADR-0043. Empty
+// when the env var is unset; otherwise the keys are package names
+// from ADR-0043's officially-supported inventory plus any
+// intermediate-prefix wildcards the operator chose. IgnoredLogPackages
+// names entries that parsed successfully but are not in the
+// canonical inventory; main.go emits one info-level startup audit
+// line listing them per ADR-0043 §"Clause 4".
 type startupConfig struct {
 	env.EnvConfig
 
 	SlogLevel            slog.Level
+	LogLevels            map[string]slog.Level
+	IgnoredLogPackages   []string
 	StorageEmulatorHost  string
 	BigQueryEmulatorHost string
 }
@@ -75,7 +86,21 @@ func main() {
 		os.Exit(2)
 	}
 
-	logger := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: cfg.SlogLevel}))
+	// Build the custom slog handler from ADR-0043. The base
+	// JSON handler accepts every level; the logging.Handler
+	// gates per-record admission based on the captured
+	// `component` attribute resolved against cfg.LogLevels via
+	// longest-prefix-match. Loggers without a `component`
+	// attribute (this main() function's `logger`) resolve to
+	// the root level — cfg.SlogLevel from EnvConfig.LogLevel,
+	// or the `root:` override if DQ_LOG_LEVELS named one.
+	baseHandler := slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})
+	logHandler := logging.NewHandler(logging.HandlerConfig{
+		Base:      baseHandler,
+		Levels:    cfg.LogLevels,
+		RootLevel: cfg.SlogLevel,
+	})
+	logger := slog.New(logHandler)
 	slog.SetDefault(logger)
 	logger.Info("dq-engine starting",
 		"env", string(cfg.Name),
@@ -84,6 +109,28 @@ func main() {
 		"bigquery_dataset", cfg.BigQueryDataset,
 		"gcs_bucket", cfg.GCSBucket,
 	)
+	// ADR-0043 §"Clause 4" — unknown package names in
+	// DQ_LOG_LEVELS are silently honored but reported in one
+	// startup audit log line so operators can audit.
+	if len(cfg.IgnoredLogPackages) > 0 {
+		logger.Info("DQ_LOG_LEVELS: package names not in canonical inventory (still honored at resolution time)",
+			"ignored_packages", cfg.IgnoredLogPackages,
+			"adr_reference", "ADR-0043 §Clause 4",
+		)
+	}
+
+	// Per-package loggers per ADR-0043 §"Implementation posture"
+	// — each engine/internal/ package gets a logger that
+	// carries `component=engine.<x>` as a fixed attribute. The
+	// custom handler picks up the component on WithAttrs and
+	// resolves per-record level against cfg.LogLevels.
+	alertsLogger := logger.With("component", "engine.alerts")
+	apiLogger := logger.With("component", "engine.api")
+	evalLogger := logger.With("component", "engine.eval")
+	loaderLogger := logger.With("component", "engine.loader")
+	orphanLogger := logger.With("component", "engine.orphan")
+	resultsLogger := logger.With("component", "engine.results")
+	runnerLogger := logger.With("component", "engine.runner")
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
@@ -107,7 +154,7 @@ func main() {
 	// processes that don't need to depend on the Pub/Sub emulator.
 	// The Pub/Sub SDK honors PUBSUB_EMULATOR_HOST automatically;
 	// the binary does not have to plumb it.
-	publisher, closePublisher, err := newAlertsPublisher(ctx, cfg, logger)
+	publisher, closePublisher, err := newAlertsPublisher(ctx, cfg, alertsLogger)
 	if err != nil {
 		logger.Error("create alerts publisher", "error", err.Error())
 		os.Exit(1)
@@ -115,7 +162,7 @@ func main() {
 	defer closePublisher()
 
 	// Result-write layer.
-	store := results.NewBigQueryStore(bqClient, cfg.BigQueryProject, cfg.BigQueryDataset, logger)
+	store := results.NewBigQueryStore(bqClient, cfg.BigQueryProject, cfg.BigQueryDataset, resultsLogger)
 	if err := store.EnsureSchema(ctx); err != nil {
 		logger.Error("ensure schema", "error", err.Error())
 		os.Exit(1)
@@ -150,7 +197,7 @@ func main() {
 	detector, err := orphan.New(store, orphan.Config{
 		EngineVersion: cfg.EngineVersion,
 		Threshold:     cfg.OrphanThreshold,
-		Logger:        logger,
+		Logger:        orphanLogger,
 		Publisher:     publisher,
 	})
 	if err != nil {
@@ -167,7 +214,7 @@ func main() {
 	// a deployment-wide source.
 	evaluator, err := eval.New(eval.Config{
 		Client: bqClient,
-		Logger: logger,
+		Logger: evalLogger,
 	})
 	if err != nil {
 		logger.Error("new evaluator", "error", err.Error())
@@ -182,7 +229,7 @@ func main() {
 	// at boot. Fail-fast if the registry diverges from the
 	// catalog (extra registered kinds are fine; missing kinds
 	// fail the boot).
-	if err := verifyHandlerRegistryAgainstCatalog(evaluator, logger); err != nil {
+	if err := verifyHandlerRegistryAgainstCatalog(evaluator, evalLogger); err != nil {
 		logger.Error("dispatcher startup invariant failed (ADR-0022 §C-B0S2.3)", "error", err.Error())
 		os.Exit(1)
 	}
@@ -199,7 +246,7 @@ func main() {
 		Evaluator:      evaluator,
 		EngineVersion:  cfg.EngineVersion,
 		RulesetVersion: initial.RulesetVersion,
-		Logger:         logger,
+		Logger:         runnerLogger,
 		Publisher:      publisher,
 	})
 	if err != nil {
@@ -278,14 +325,14 @@ func main() {
 		ActiveManifest: current.get,
 		ResolveChecks:  resolveChecks,
 		EngineCtx:      ctx,
-		Logger:         logger,
+		Logger:         apiLogger,
 		Publisher:      publisher,
 	})
 	if err != nil {
 		logger.Error("new api handler", "error", err.Error())
 		os.Exit(1)
 	}
-	httpServer := api.NewServer(cfg.HTTPAddr, apiHandler, logger)
+	httpServer := api.NewServer(cfg.HTTPAddr, apiHandler, apiLogger)
 
 	// Record-mode runners per ADR-0024. For each record-mode
 	// rule in the manifest, the engine starts a FranzConsumer-
@@ -297,7 +344,7 @@ func main() {
 	// Per the β scope, manifest refresh does not yet restart
 	// record runners — the set of record-mode rules is fixed
 	// at boot. A future slice adds the per-rule lifecycle.
-	recordRunners, err := buildRecordRunners(ctx, initial, gcsStore, r, cfg, costGuardrails, logger)
+	recordRunners, err := buildRecordRunners(ctx, initial, gcsStore, r, cfg, costGuardrails, runnerLogger)
 	if err != nil {
 		logger.Error("build record runners", "error", err.Error())
 		os.Exit(1)
@@ -309,8 +356,8 @@ func main() {
 
 	var wg sync.WaitGroup
 	wg.Add(3 + len(recordRunners))
-	go loaderRefreshLoop(ctx, &wg, logger, ldr, current, cfg.LoaderRefreshInterval)
-	go orphanScanLoop(ctx, &wg, logger, detector, cfg.OrphanScanInterval)
+	go loaderRefreshLoop(ctx, &wg, loaderLogger, ldr, current, cfg.LoaderRefreshInterval)
+	go orphanScanLoop(ctx, &wg, orphanLogger, detector, cfg.OrphanScanInterval)
 	go func() {
 		defer wg.Done()
 		if err := httpServer.ListenAndServe(); err != nil {
@@ -375,9 +422,22 @@ func readEnv() (startupConfig, error) {
 	if err != nil {
 		return startupConfig{}, fmt.Errorf("env %q: %w", envCfg.Name, err)
 	}
+	// DQ_LOG_LEVELS parse per ADR-0043. Syntactic errors are
+	// fatal at startup (Clause 4 — engine exits non-zero);
+	// unknown package names parse successfully and are recorded
+	// for the startup audit log line below.
+	parsed, err := logging.ParseLogLevels(os.Getenv("DQ_LOG_LEVELS"))
+	if err != nil {
+		// ParseLogLevels error messages already carry the
+		// "DQ_LOG_LEVELS:" prefix, so we pass through verbatim
+		// rather than double-wrapping.
+		return startupConfig{}, err
+	}
 	return startupConfig{
 		EnvConfig:            envCfg,
 		SlogLevel:            slogLevel,
+		LogLevels:            parsed.Levels,
+		IgnoredLogPackages:   parsed.Ignored,
 		StorageEmulatorHost:  os.Getenv("STORAGE_EMULATOR_HOST"),
 		BigQueryEmulatorHost: os.Getenv("BIGQUERY_EMULATOR_HOST"),
 	}, nil
