@@ -64,7 +64,7 @@
 | B1-2 | BigQuery cost ceilings | [resolved-study](../decisions/2026-05-25-b1-2-bigquery-cost-ceilings.md) → [resolved-adr](../../docs/adr/0029-bigquery-cost-ceilings.md) | What are the per-environment limits for window size, concurrency, failed samples, and dry-run enforcement? | Cost drift is predictable; designing around it is cheap. | Operations doc + defaults policy |
 | B1-3 | Scheduler catchup behavior | [resolved-study](../decisions/2026-05-25-b1-3-scheduler-catchup-behavior.md) → [resolved-adr](../../docs/adr/0033-scheduler-catchup-behavior.md) | How are catchup, missed windows, and manual triggers represented? | A scheduler without precise semantics causes duplicate or missing evaluations. | Scheduling design note |
 | B1-4 | Environment configuration model | [resolved-study](../decisions/2026-05-22-b1-4-environment-configuration-model.md) → [resolved-adr](../../docs/adr/0018-environment-configuration-model.md) | Which configuration lives in code, deployment, or data, and how are `local`, `qa`, and `prod` isolated? | Prevents configuration sprawl and implicit behavior drift. | Env strategy ADR |
-| B1-5 | Local testing strategy | open | What can be tested offline, what needs BigQuery sandbox access, and how is generated SQL inspected? | Developer experience shapes long-term quality. | Dev guide + tooling scope |
+| B1-5 | Local testing strategy | [resolved-study](../decisions/2026-05-25-b1-5-local-testing-strategy.md) → [resolved-adr](../../docs/adr/0034-local-testing-strategy.md) | What can be tested offline, what needs BigQuery sandbox access, and how is generated SQL inspected? | Developer experience shapes long-term quality. | Dev guide + tooling scope |
 | B1-6 | Evidence retention parameters | [resolved-study](../decisions/2026-05-25-b1-6-evidence-retention-parameters.md) → [resolved-adr](../../docs/adr/0031-evidence-retention-parameters.md) | How many violating samples per check, for how long, under what privacy constraints? | Storage cost and privacy compliance depend on it. | Storage and security note |
 | B1-7 | Compatibility window duration | open | How long is each schema version supported after its successor is released? | Migration ergonomics for domain teams. | Boundary contract refinement |
 | B1-8 | Manifest cryptographic posture | [resolved-study](../decisions/2026-05-25-b1-8-manifest-cryptographic-posture.md) → [resolved-adr](../../docs/adr/0030-manifest-cryptographic-posture.md) | Does the manifest carry signatures beyond checksums? Who signs it? | Defense in depth against tampering or accidental publication. | Security note |
@@ -244,24 +244,28 @@ demand-driven follow-ups, not Wave 3 blockers.
 
 **Post-Wave-3 follow-up backlog** (work that survives Wave 3 closure):
 
-- **Open B1 rows** — B1-5 (local testing strategy), B1-7
-  (compatibility window duration). **B1-2 (BigQuery
-  cost ceilings) resolved 2026-05-25 → ADR-0029. B1-8
-  (manifest cryptographic posture) resolved 2026-05-25
-  → ADR-0030 (deferral with auditable trigger
-  conditions; B0-5 reopener did not fire). B1-6
-  (evidence retention parameters) resolved 2026-05-25 →
-  ADR-0031 (single-tier partition-expiration retention +
-  sample-content allowlist; ADR-0026 record-mode
-  privacy deferral redeemed). B1-1 (baseline strategy)
-  resolved 2026-05-25 → ADR-0032 (platform-history +
-  static baselines design; design-only ADR). B1-3
-  (scheduler catchup behavior) resolved 2026-05-25 →
-  ADR-0033 (external-scheduler contract + advisory
-  `schedule` field + per-env catchup horizon +
-  missed-window query surface; design-only ADR with
-  implementation deferred to the first scheduler-consumer
-  slice).**
+- **Open B1 rows** — B1-7 (compatibility window
+  duration). **B1-2 (BigQuery cost ceilings) resolved
+  2026-05-25 → ADR-0029. B1-8 (manifest cryptographic
+  posture) resolved 2026-05-25 → ADR-0030 (deferral
+  with auditable trigger conditions; B0-5 reopener did
+  not fire). B1-6 (evidence retention parameters)
+  resolved 2026-05-25 → ADR-0031 (single-tier
+  partition-expiration retention + sample-content
+  allowlist; ADR-0026 record-mode privacy deferral
+  redeemed). B1-1 (baseline strategy) resolved
+  2026-05-25 → ADR-0032 (platform-history + static
+  baselines design; design-only ADR). B1-3 (scheduler
+  catchup behavior) resolved 2026-05-25 → ADR-0033
+  (external-scheduler contract + advisory `schedule`
+  field + per-env catchup horizon + missed-window
+  query surface; design-only ADR). B1-5 (local
+  testing strategy) resolved 2026-05-25 → ADR-0034
+  (six-tier test-type taxonomy + dev guide at
+  `docs/dev/local-testing.md`; documentation-only
+  ADR codifying the existing test surface and
+  reserving `//go:build sandbox` for a future
+  consumer slice).**
 - **Open B2 rows** — B2-1…B2-7 (long-tail implementation-phase
   items), plus the newly registered B2-9 (owner ↔ CODEOWNERS-group
   linter cross-check) and B2-10 (`dq-manifest set-pointer` rollback
@@ -286,7 +290,13 @@ demand-driven follow-ups, not Wave 3 blockers.
   `LatestExecutionPerEntityCheck` reader method + reference
   Kubernetes CronJob manifest) and the manual-vs-
   operator-rerun runbook seed (lands when the first
-  scheduler-consumer slice ships).
+  scheduler-consumer slice ships). One further B2
+  follow-up registers from ADR-0034 pending close-step
+  numbering: the integration-sandbox tier's first
+  consumer slice (ships the first `//go:build sandbox`
+  test + a new `test-engine-sandbox` make target + CI
+  configuration for the sandbox lane; lands with the
+  operational session that provisions real GCP).
 - **Operational `PLACEHOLDER` substitutions** awaiting the
   GitHub-org / GCP-project provisioning session: `@PLACEHOLDER-org/…`
   in `/.github/CODEOWNERS` and `rules/_owners.yaml`;
@@ -318,10 +328,11 @@ Suggested triage order when starting a follow-up session:
 2. **B1 rows with downstream consumers next.** B1-2 (cost
    ceilings → ADR-0029), B1-8 (cryptographic posture →
    ADR-0030), B1-6 (evidence retention → ADR-0031), B1-1
-   (baseline strategy → ADR-0032), and B1-3 (scheduler
-   catchup behavior → ADR-0033) have all been resolved
-   2026-05-25. The remaining open B1 rows — B1-5, B1-7 —
-   are demand-driven and have no current B0 reopener.
+   (baseline strategy → ADR-0032), B1-3 (scheduler
+   catchup behavior → ADR-0033), and B1-5 (local testing
+   strategy → ADR-0034) have all been resolved 2026-05-25.
+   Only B1-7 (compatibility window duration) remains open
+   and is demand-driven with no current B0 reopener.
 3. **B2 rows last**, on demand. B2-9 (linter cross-check) and B2-10
    (CLI rollback subcommand) are demand-driven; the other B2 rows
    surface as implementation reveals concrete needs.

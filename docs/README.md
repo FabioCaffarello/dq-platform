@@ -30,6 +30,9 @@ is part of the published repository product (per
   trigger conditions for revisiting cryptographic/posture
   decisions. First entry lands with ADR-0030
   (manifest cryptographic posture).
+- **[`dev/`](dev/)** — contributor-facing developer
+  guides. First entry is the local-testing guide that
+  lands with ADR-0034.
 
 ## Current state (post-Wave-3)
 
@@ -57,6 +60,11 @@ This directory holds:
   external-scheduler contract + advisory `schedule` field
   + per-env catchup horizon; design-only, implementation
   deferred to first scheduler-consumer slice).
+- `adr/0034` — local testing strategy (resolves B1-5;
+  six-tier test-type taxonomy + build-tag posture +
+  fixture-tree convention + tooling scope inventory;
+  documentation-only ADR + new dev guide at
+  `docs/dev/local-testing.md`).
 - `glossary.md` — codebase-specific terminology (W3-P8a).
 - `governance.md` — review model and contribution-time
   flows (W3-P8b).

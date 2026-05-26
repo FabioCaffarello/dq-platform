@@ -170,6 +170,16 @@ interval, waiting for `/readyz`, posting a trigger to
 `dq_executions` row, pulling the Pub/Sub topic for the
 operational alert, and printing a green closure banner.
 
+### 2.2.1 Other local test surfaces
+
+The demo is the full-flow E2E lane. The platform also
+exposes five other test tiers — unit-no-substrate,
+integration-compose, integration-sandbox, smoke-substrate,
+and config-validation. The full taxonomy + how-to-run-each
+is in [`docs/dev/local-testing.md`](docs/dev/local-testing.md);
+the authoritative posture is
+[ADR-0034](docs/adr/0034-local-testing-strategy.md).
+
 ### 2.3 Tear down
 
 ```sh
