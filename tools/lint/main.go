@@ -37,6 +37,8 @@ func main() {
 			"directory tree to walk for *.yaml files; the _schema/ subdirectory is excluded automatically")
 		codeownersPath = flag.String("codeowners", ".github/CODEOWNERS",
 			"path to .github/CODEOWNERS for the owner-group cross-check per ADR-0037; empty disables the check")
+		noDeprecationWarnings = flag.Bool("no-deprecation-warnings", false,
+			"suppress deprecation warnings for rules declaring a deprecated schema version per ADR-0035 (B2-21)")
 		verbose = flag.Bool("v", false, "print each file as it is processed")
 	)
 	flag.Parse()
@@ -92,6 +94,20 @@ func main() {
 	}
 	if errs := CheckOwnersGroupMembership(owners, codeowners); len(errs) > 0 {
 		results[*ownersPath] = append(results[*ownersPath], errs...)
+	}
+
+	// ADR-0035 §"Migration support level" deprecation warnings.
+	// Emitted independently of validation errors; the lint exit
+	// code reflects errors only (warnings are informational).
+	if !*noDeprecationWarnings {
+		warnings, werr := CheckDeprecatedSchemaVersions(*rulesDir)
+		if werr != nil {
+			fmt.Fprintf(os.Stderr, "dq-lint: deprecation-warning walk: %v\n", werr)
+			os.Exit(exitOperationalError)
+		}
+		for _, w := range warnings {
+			fmt.Fprintf(os.Stderr, "%s: DEPRECATED: %s\n", w.Path, w.Message)
+		}
 	}
 
 	if len(results) == 0 {
