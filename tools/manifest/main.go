@@ -35,6 +35,8 @@ func main() {
 	switch os.Args[1] {
 	case "publish":
 		os.Exit(runPublish(os.Args[2:]))
+	case "set-pointer":
+		os.Exit(runSetPointer(os.Args[2:]))
 	case "-h", "--help", "help":
 		printUsage()
 		os.Exit(exitOK)
@@ -49,7 +51,8 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, `dq-manifest — publish a DQ Platform ruleset manifest per ADR-0005.
 
 Usage:
-  dq-manifest publish [flags]
+  dq-manifest publish     [flags]
+  dq-manifest set-pointer [flags]
 
 Flags (publish):
   -rules <dir>                    Directory tree to walk for rule YAMLs (default: rules/)
@@ -63,9 +66,16 @@ Flags (publish):
   -storage-emulator-host <host>   Override the GCS endpoint (e.g. localhost:4443).
                                   Honored if non-empty; ignored otherwise.
 
+Flags (set-pointer):
+  -bucket <name>                  Object-store bucket (required)
+  -manifest-hash <64-char-hex>    Target manifest sha256 hex digest (required;
+                                  64-char lowercase hex; do NOT prefix with sha256:)
+  -dry-run                        Verify + emit planned pointer JSON without writing
+  -storage-emulator-host <host>   Override the GCS endpoint (e.g. localhost:4443).
+
 Exit codes:
-  0  publish OK
-  1  pre-publish verification failed (content problem; operator fixes rules)
+  0  OK
+  1  verification failed (content problem; operator fixes inputs)
   2  operational failure (bucket missing, network, etc.)
   3  CAS precondition failed (pointer lost; operator retries)
   64 usage error
@@ -142,6 +152,68 @@ func runPublish(args []string) int {
 	}
 	fmt.Fprintf(os.Stderr, "dq-manifest publish: OK ruleset_version=%s manifest_hash=%s rules=%d pointer_gen=%d dry_run=%v\n",
 		result.RulesetVersion, result.ManifestHash, result.RulesPublished, result.PointerGen, *dryRun)
+	return exitOK
+}
+
+// runSetPointer implements the set-pointer subcommand — the
+// rollback CLI surface per ADR-0036. It re-points
+// manifests/latest.json at a prior manifest hash via one
+// CAS-conditional write. The exit-code contract mirrors publish.
+func runSetPointer(args []string) int {
+	fs := flag.NewFlagSet("set-pointer", flag.ContinueOnError)
+	var (
+		bucket              = fs.String("bucket", "", "object-store bucket (required)")
+		manifestHash        = fs.String("manifest-hash", "", "target manifest sha256 hex digest (required; 64-char lowercase hex)")
+		dryRun              = fs.Bool("dry-run", false, "verify + emit planned pointer JSON without writing")
+		storageEmulatorHost = fs.String("storage-emulator-host", "", "override the GCS endpoint (e.g. localhost:4443)")
+	)
+	if err := fs.Parse(args); err != nil {
+		return exitUsage
+	}
+	if *bucket == "" || *manifestHash == "" {
+		fmt.Fprintln(os.Stderr, "dq-manifest set-pointer: -bucket and -manifest-hash are required")
+		return exitUsage
+	}
+
+	logger := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	ctx := context.Background()
+
+	client, err := newStorageClient(ctx, *storageEmulatorHost)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "dq-manifest set-pointer: create storage client: %v\n", err)
+		return exitOperationalFail
+	}
+	defer client.Close()
+
+	rb, err := NewRollback(RollbackConfig{
+		Store:  NewGCSStore(client, *bucket),
+		Logger: logger,
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "dq-manifest set-pointer: %v\n", err)
+		return exitUsage
+	}
+
+	result, err := rb.Execute(ctx, RollbackOptions{
+		TargetHashHex: *manifestHash,
+		DryRun:        *dryRun,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrVerificationFailed):
+			fmt.Fprintf(os.Stderr, "dq-manifest set-pointer: %v\n", err)
+			return exitVerificationFail
+		case errors.Is(err, ErrPreconditionFailed):
+			fmt.Fprintf(os.Stderr, "dq-manifest set-pointer: %v\n", err)
+			return exitCASLost
+		default:
+			fmt.Fprintf(os.Stderr, "dq-manifest set-pointer: %v\n", err)
+			return exitOperationalFail
+		}
+	}
+	fmt.Fprintf(os.Stderr, "dq-manifest set-pointer: OK target_hash=%s target_ruleset_version=%s prior_hash=%s prior_ruleset_version=%s prior_pointer_gen=%d post_pointer_gen=%d dry_run=%v\n",
+		result.TargetHash, result.TargetRulesetVer, result.PriorHash, result.PriorRulesetVer,
+		result.PriorPointerGen, result.PostPointerGen, *dryRun)
 	return exitOK
 }
 

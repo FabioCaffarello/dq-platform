@@ -45,20 +45,75 @@ or for stuck executions (use
 
 ## 3. Procedure
 
-The engine binary today exposes `dq-manifest publish` only —
-a `dq-manifest set-pointer <hash>` subcommand is **TBD**
-(opening a B-item for the rollback CLI surface is a follow-up
-worth tracking). Until that lands, use one of the two
-workarounds below.
+The primary path is `dq-manifest set-pointer` — the rollback
+CLI surface committed by
+[ADR-0036](../adr/0036-set-pointer-subcommand.md). It runs
+the same CAS-conditional pointer write that `publish`
+issues, but reads the target body's `ruleset_version`
+instead of re-computing it. The subcommand verifies the
+target manifest body exists before issuing the CAS write,
+so a typo'd or purged hash fails closed at the CLI surface
+rather than producing a dangling pointer.
 
-### 3.A Workaround — re-publish the prior ruleset version
+1. **Recover the target hash.** List the immutable manifest
+   bodies and pick the prior known-good:
 
-If the prior ruleset version is reproducible from git **and**
-the operator has access to the prior linter binary digest
-(the linter pin is unforgeable per
-[ADR-0001](../adr/0001-engine-rules-compatibility.md) §C9 —
-without that exact digest, the manifest hash will differ;
-fall back to 3.B):
+   ```
+   gcloud storage ls gs://<bucket>/manifests/by-hash/
+   ```
+
+   Each entry is `manifests/by-hash/sha256-<hex>.json`. The
+   `<hex>` portion is what `set-pointer` takes (lowercase
+   hex, no `sha256:` prefix). To confirm which ruleset
+   version a hash carries, read the body:
+
+   ```
+   gcloud storage cat \
+     gs://<bucket>/manifests/by-hash/sha256-<hex>.json \
+     | jq .ruleset_version
+   ```
+
+2. **Dry-run the rollback** to validate inputs and inspect
+   the planned pointer JSON before committing:
+
+   ```
+   dq-manifest set-pointer \
+     -bucket <bucket> \
+     -manifest-hash <hex> \
+     -dry-run
+   ```
+
+   On success, the log line shows `target_hash`,
+   `target_ruleset_version`, `prior_hash`,
+   `prior_ruleset_version`, and the prior pointer
+   generation. No pointer mutation occurs. Exit 1 indicates
+   the target body is missing or malformed; fix the hash
+   and retry.
+
+3. **Apply the rollback** by dropping `-dry-run`:
+
+   ```
+   dq-manifest set-pointer \
+     -bucket <bucket> \
+     -manifest-hash <hex>
+   ```
+
+   On exit 0, the pointer was CAS-rewritten to the target
+   hash and carries the target's `ruleset_version`. Exit 3
+   indicates the pointer moved between the read and the
+   write (a concurrent publisher won the race) — re-run
+   `set-pointer` to retry; the CAS primitive guarantees the
+   retry is safe.
+
+### 3.fallback.A — re-publish the prior ruleset version (forensic)
+
+This path is rarely needed; reserved for the case where
+the operator wants to reconstruct the prior linter pin
+exactly (e.g., to confirm a prior manifest was reproducible
+from git for audit). If the prior linter binary digest
+is unrecoverable, the re-published manifest hash will
+differ from the original — at which point `set-pointer`
+(§3 above) is the correct tool.
 
 1. `git checkout <prior-tag>` (the tag matching the prior
    `ruleset-version`).
@@ -75,13 +130,14 @@ fall back to 3.B):
 
 3. `dq-manifest` produces the same `manifests/by-hash/...`
    body (content-addressed; if the inputs match, the hash
-   matches) and CAS-writes the pointer to the same generation.
+   matches) and CAS-writes the pointer.
 
-### 3.B Workaround — pointer-only rewrite
+### 3.fallback.B — gsutil pointer rewrite (CLI unavailable)
 
-If reproducing the prior publish is impractical (lint binary
-unavailable, schema mirror changed), write the pointer
-directly with a generation-conditional copy:
+Reserved for the edge case where `dq-manifest` itself is
+broken or unavailable (binary missing, dependency outage).
+Bypasses the CLI contract — prefer §3 above whenever
+possible.
 
 1. Read the current pointer's `Generation`:
    `gcloud storage ls -L gs://<bucket>/manifests/latest.json`
