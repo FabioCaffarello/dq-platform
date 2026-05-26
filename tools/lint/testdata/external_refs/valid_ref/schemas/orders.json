@@ -1,0 +1,8 @@
+{
+  "type": "object",
+  "required": ["order_id", "event_type"],
+  "properties": {
+    "order_id": { "type": "string" },
+    "event_type": { "type": "string" }
+  }
+}

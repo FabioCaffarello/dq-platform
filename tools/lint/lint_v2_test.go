@@ -118,9 +118,15 @@ func TestV2CrossCheck_7_SourceTypeMismatch(t *testing.T) {
 	mustContain(t, results, "cross-check #7")
 }
 
-func TestV2CrossCheck_6_ParamsMissingRequired(t *testing.T) {
+func TestV2CrossCheck_12_NeitherSchemaNorRef(t *testing.T) {
+	// After B2-32 + ADR-0044, the catalog no longer marks `schema`
+	// as JSON-Schema-required (since `schema_ref` is an equivalent
+	// alternative). Cross-check #12 enforces the "exactly one of
+	// {schema, schema_ref}" obligation. This fixture was previously
+	// named for the old cross-check #6 firing; it now exercises
+	// cross-check #12's at-least-one branch.
 	results := lintV2File(t, "testdata/v2/invalid/params-missing-required.yaml", "testdata/v2/valid/_owners.yaml")
-	mustContain(t, results, "cross-check #6")
+	mustContain(t, results, "cross-check #12")
 }
 
 func TestV2CrossCheck_6_ParamsUnknownField(t *testing.T) {

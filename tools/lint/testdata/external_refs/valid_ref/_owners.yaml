@@ -1,0 +1,9 @@
+# path: tools/lint/testdata/external_refs/valid_ref/_owners.yaml
+schema_version: 2
+entities:
+  orders_stream:
+    owner: data-platform
+    mode: record
+    channels:
+      data_quality:
+        - slack:#dq-orders

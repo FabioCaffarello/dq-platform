@@ -162,8 +162,22 @@ func (p *Publisher) Publish(ctx context.Context, opts Options) (*Result, error) 
 		return nil, errors.New("publish: Options.RulesDir is required")
 	}
 
-	// Step 1a — discover and parse rule YAMLs.
-	rules, err := collectRules(opts.RulesDir)
+	// Step 1a — load the catalog's external-eligible-field
+	// inventory per ADR-0044 §Clause 2. The catalog mirror lives
+	// inside the schema mirror directory (sync-schema target keeps
+	// it byte-identical with the engine-side canonical). A missing
+	// catalog file is tolerated — refs is empty, no `_ref` keys
+	// are honored, and any rule with an unexpected `_ref` fails
+	// the per-rule resolveCheckParams non-eligible check.
+	catalogPath := filepath.Join(p.schemaMirrorDir, "catalog.v1.yaml")
+	refs, err := loadCatalogKindRefs(catalogPath)
+	if err != nil {
+		return nil, fmt.Errorf("load catalog %s: %w", catalogPath, err)
+	}
+
+	// Step 1b — discover and parse rule YAMLs; inline ADR-0044
+	// external references for v2 rules with eligible kinds.
+	rules, err := collectRules(opts.RulesDir, refs)
 	if err != nil {
 		return nil, fmt.Errorf("collect rules from %s: %w", opts.RulesDir, err)
 	}
@@ -325,16 +339,27 @@ type rule struct {
 
 // collectRules walks rulesDir and parses every *.yaml/*.yml
 // file outside `_schema/` subdirectories and outside underscore-
-// prefixed names (`_owners.yaml` etc.). Returns the parsed rules
-// in walker order (the caller sorts deterministically before
-// hashing the manifest).
-func collectRules(rulesDir string) ([]rule, error) {
+// prefixed names (`_owners.yaml` etc.). For v2 rules whose
+// kinds declare external_eligible_fields in the catalog, any
+// `<field>_ref` keys are resolved + inlined per ADR-0044 so the
+// content-addressed YAML body is fully self-contained.
+//
+// Returns the parsed rules in walker order (the caller sorts
+// deterministically before hashing the manifest).
+func collectRules(rulesDir string, refs catalogKindRefs) ([]rule, error) {
 	var out []rule
 	// Stat the rulesDir explicitly so a missing dir surfaces as
 	// an operational error (CLI exit 2), distinguishable from a
 	// present-but-empty dir (verification failure, exit 1).
 	if _, err := os.Stat(rulesDir); err != nil {
 		return nil, fmt.Errorf("stat rules dir %s: %w", rulesDir, err)
+	}
+	// Absolutize rulesDir once so pathsafe.Resolve's containment
+	// check has a canonical comparison anchor regardless of how
+	// the operator passed the -rules flag (relative or absolute).
+	absRulesDir, err := filepath.Abs(rulesDir)
+	if err != nil {
+		return nil, fmt.Errorf("absolutize rules dir %s: %w", rulesDir, err)
 	}
 	walkErr := filepath.WalkDir(rulesDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -370,12 +395,23 @@ func collectRules(rulesDir string) ([]rule, error) {
 		if doc.Version == 0 {
 			return fmt.Errorf("%s: rule has missing or zero `version` field: %w", path, ErrVerificationFailed)
 		}
+
+		// ADR-0044 inlining: for v2 rules, resolve any `_ref`
+		// keys and replace them with the parsed content. The
+		// content-addressed body the publisher uploads + hashes
+		// is the inlined form, so the manifest stays
+		// self-contained per ADR-0005.
+		inlined, inlineErr := inlineExternalRefs(body, path, absRulesDir, refs)
+		if inlineErr != nil {
+			return inlineErr
+		}
+
 		out = append(out, rule{
 			path:    path,
 			entity:  doc.Entity,
 			version: doc.Version,
-			bytes:   body,
-			hashHex: sha256Hex(body),
+			bytes:   inlined,
+			hashHex: sha256Hex(inlined),
 		})
 		return nil
 	})

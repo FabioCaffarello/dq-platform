@@ -6,4 +6,5 @@ use (
 	./engine
 	./tools/lint
 	./tools/manifest
+	./tools/pathsafe
 )

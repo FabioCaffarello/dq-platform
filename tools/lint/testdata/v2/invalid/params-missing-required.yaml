@@ -1,6 +1,10 @@
 # path: tools/lint/testdata/v2/invalid/params-missing-required.yaml
-# Cross-check #6: record.schema_conformance requires params.schema;
-# omitting it fails the catalog's params_schema validation.
+# Cross-check #12: record.schema_conformance requires exactly one
+# of params.schema or params.schema_ref. Omitting both fails the
+# external-references cross-check per ADR-0044. (As of B2-32, the
+# catalog no longer marks `schema` as JSON-Schema-required since
+# `schema_ref` is an equivalent alternative; cross-check #12
+# carries the "at least one is present" obligation.)
 version: 2
 entity: orders_stream
 mode: record

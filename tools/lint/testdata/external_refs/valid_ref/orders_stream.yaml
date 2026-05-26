@@ -1,0 +1,20 @@
+# path: tools/lint/testdata/external_refs/valid_ref/orders_stream.yaml
+# B2-32 cross-check #12 fixture: valid external schema_ref.
+# The referenced schemas/orders.json validates against the
+# catalog's `schema` sub-schema (a JSON Schema fragment).
+version: 2
+entity: orders_stream
+mode: record
+source:
+  type: kafka
+  topic: orders.events.v1
+  consumer_group: dq-orders-stream
+  window:
+    type: tumbling
+    duration: 1m
+    lateness_tolerance: 30s
+checks:
+  - check_id: schema_present
+    kind: record.schema_conformance
+    params:
+      schema_ref: schemas/orders.json
