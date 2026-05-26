@@ -25,6 +25,7 @@ COMPOSE := docker compose -p $(COMPOSE_PROJECT_NAME)
 	lint-rules dry-run-rules \
 	sync-schema \
 	build-lint build-engine build-manifest build-engine-image \
+	build-dryrun \
 	check-tag-scope \
 	up down \
 	smoke-substrate \
@@ -69,6 +70,10 @@ build-manifest: ## Build the dq-manifest binary at bin/dq-manifest.
 	@mkdir -p bin
 	@cd tools/manifest && go build -o ../../bin/dq-manifest .
 
+build-dryrun: ## Build the dq-dryrun binary at bin/dq-dryrun.
+	@mkdir -p bin
+	@cd tools/dryrun && go build -o ../../bin/dq-dryrun .
+
 # Image tag derivation per ADR-0042 Clause 3: stripping the
 # `engine-v` prefix from a git tag yields the image tag (e.g.,
 # `engine-v1.2.0` → `dq-engine:1.2.0`). When no `engine-v*` tag
@@ -88,8 +93,8 @@ check-tag-scope: ## Validate that TAG=<workspace-v…> diffs cleanly against its
 lint-rules: build-lint ## Validate every rule YAML against the schema mirror (per ADR-0001).
 	@./bin/dq-lint -schema rules/_schema/v1.schema.json -rules rules
 
-dry-run-rules: ## Stub: generate SQL for every rule without executing (lands in Phase 4 with tools/dryrun).
-	@echo "dry-run-rules: not yet implemented; lands in Phase 4 (tools/dryrun binary)."
+dry-run-rules: build-dryrun ## Dry-run every set-mode BigQuery rule via dq-dryrun (per ADR-0029 + B2-11). Requires `make up` to seed the local emulator.
+	@./bin/dq-dryrun -rules rules -bigquery-project dq-local -bigquery-emulator-host $${BIGQUERY_EMULATOR_HOST:-localhost:9050}
 
 sync-schema: ## Mechanically derive the rules schema + catalog mirrors from the engine source (ADR-0001 C3, ADR-0022 §C-B0S2.1).
 	@for src in engine/internal/dsl/schema/v*.schema.json; do \

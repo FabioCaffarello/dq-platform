@@ -4,6 +4,7 @@ go 1.25.0
 
 use (
 	./engine
+	./tools/dryrun
 	./tools/lint
 	./tools/manifest
 	./tools/pathsafe

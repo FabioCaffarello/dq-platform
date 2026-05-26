@@ -1,0 +1,48 @@
+# path: .github/workflows/dryrun.yml
+#
+# Per-PR BigQuery dry-run pre-flight per ADR-0029 §"Compiler
+# layer" + B2-11. Brings up the local Compose substrate (provides
+# the BigQuery emulator at localhost:9050), runs `make
+# dry-run-rules` which exercises the dq-dryrun binary against
+# every set-mode BigQuery rule in the tree, and reports + (when
+# configured) enforces the per-rule bytes-scanned ceiling
+# committed by ADR-0029.
+#
+# Emulator dry-run fidelity caveat: the BigQuery emulator's
+# `--dry-run=true` is best-effort; SQL-syntax and source-existence
+# regressions are caught faithfully, but the bytes-scanned figure
+# is not authoritative. Real-BQ enforcement awaits the operational
+# PR that wires CI credentials. Until then this lane is the
+# compile-check + emulator-syntax-check stage.
+
+name: dryrun
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  dryrun:
+    name: make dry-run-rules
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/dryrun/go.mod
+          cache: true
+
+      - name: Bring up docker-compose substrate
+        run: make up
+
+      - name: Run dry-run-rules
+        run: make dry-run-rules
+
+      - name: Tear down docker-compose substrate
+        if: always()
+        run: make down
