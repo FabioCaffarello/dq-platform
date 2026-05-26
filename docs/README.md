@@ -88,6 +88,16 @@ This directory holds:
   search-quality friction, external link-out demand;
   source conventions already migration-friendly if a
   trigger fires).
+- `adr/0039` — dashboard contract (resolves B2-6; two
+  consumer-surface contracts committed — SQL tables
+  (`dq_executions_current`, `dq_check_results`) with
+  per-column stability tiers + the
+  Prometheus-compatible `/metrics` endpoint with an
+  eight-metric inventory; closed-but-additive enum
+  posture for consumer enum handling; `dq_` prefix
+  committed as part of the contract; baseline-dashboard
+  implementation deferred as B2-24 paced post-Phase-4c
+  metric emission).
 - `glossary.md` — codebase-specific terminology (W3-P8a).
 - `governance.md` — review model and contribution-time
   flows (W3-P8b).
