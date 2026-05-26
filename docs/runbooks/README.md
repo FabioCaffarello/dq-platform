@@ -25,6 +25,7 @@ production-ready.
 | Duplicate alerts in the channel for the same failing check, or missing alerts despite engine logs showing event emission. | [`alert-dedup-debugging.md`](alert-dedup-debugging.md) |
 | Loader refuse-swap fires repeatedly; refresh fails N times consecutively (N per B1-2). | [`refresh-failure-escalation.md`](refresh-failure-escalation.md) |
 | A new entity needs onboarding through the three-tier readiness model (Candidate → Test-soak → Production) per ADR-0040. | [`entity-onboarding.md`](entity-onboarding.md) |
+| An existing deployment has accumulated non-partitioned `dq_executions` / `dq_check_results` tables from before ADR-0031's partitioning posture took effect. | [`results-partition-migration.md`](results-partition-migration.md) |
 
 ## Anatomy of a runbook
 
