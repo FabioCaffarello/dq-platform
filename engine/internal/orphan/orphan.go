@@ -247,6 +247,8 @@ func (d *Detector) buildFollowupRow(candidate results.ExecutionRow) results.Exec
 		RulesetVersion:        candidate.RulesetVersion,
 		Entity:                candidate.Entity,
 		TriggerSource:         candidate.TriggerSource,
+		WindowStart:           candidate.WindowStart, // ADR-0041 + B2-27 — preserved from candidate
+		WindowEnd:             candidate.WindowEnd,
 		StartedAt:             candidate.StartedAt,
 		CompletedAt:           &now,
 		ErrorSummary:          &summary,

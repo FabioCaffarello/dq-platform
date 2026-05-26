@@ -38,6 +38,16 @@ type ExecutionRow struct {
 	Entity         string
 	TriggerSource  TriggerSource // ADR-0002 CC6
 
+	// Window endpoints per ADR-0041 §"Window-endpoint columns
+	// (design-only)" + B2-27 implementation. Both are required
+	// (the ADR-0002 execution_id formula already needs them at
+	// compute time; storing them avoids the per-execution
+	// recompute every observability query would otherwise need).
+	// Pre-B2-27 deployments require an ALTER TABLE backfill (see
+	// the package doc) before flipping the columns to Required.
+	WindowStart time.Time
+	WindowEnd   time.Time
+
 	StartedAt             *time.Time
 	CompletedAt           *time.Time
 	ErrorSummary          *string

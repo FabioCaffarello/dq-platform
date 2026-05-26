@@ -480,6 +480,8 @@ func (r *Runner) buildRunningRow(executionID, attemptID string, startedAt time.T
 		RulesetVersion:        trigger.RulesetVersion,
 		Entity:                trigger.Entity,
 		TriggerSource:         trigger.TriggerSource,
+		WindowStart:           trigger.WindowStart, // ADR-0041 + B2-27
+		WindowEnd:             trigger.WindowEnd,
 		StartedAt:             nil, // ADR-0003 CC3: nullable on running row
 		CompletedAt:           nil, // ADR-0003 CC3: nullable on running row
 		ErrorSummary:          nil,
@@ -523,6 +525,8 @@ func (r *Runner) writePreCheckErrorRow(ctx context.Context, dedup *alerts.Attemp
 		RulesetVersion:        trigger.RulesetVersion,
 		Entity:                trigger.Entity,
 		TriggerSource:         trigger.TriggerSource,
+		WindowStart:           trigger.WindowStart, // ADR-0041 + B2-27
+		WindowEnd:             trigger.WindowEnd,
 		StartedAt:             &startedAt,
 		CompletedAt:           &now,
 		ErrorSummary:          summary,
@@ -559,6 +563,8 @@ func (r *Runner) writeTerminalRow(ctx context.Context, dedup *alerts.AttemptDedu
 		RulesetVersion:        trigger.RulesetVersion,
 		Entity:                trigger.Entity,
 		TriggerSource:         trigger.TriggerSource,
+		WindowStart:           trigger.WindowStart, // ADR-0041 + B2-27
+		WindowEnd:             trigger.WindowEnd,
 		StartedAt:             &startedAt,
 		CompletedAt:           &now,
 		ErrorSummary:          errorSummary,
