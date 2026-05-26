@@ -141,6 +141,18 @@ This directory holds:
   fatal + unknown package names silently ignored;
   additive to `EnvConfig.LogLevel`; implementation
   deferred to B2-31 slice).
+- `adr/0044` — external artifact references in DSL
+  (resolves B2-1; bounded external-reference
+  contract — per-field `<field>_ref` suffix on
+  catalog-declared external-eligible fields;
+  publish-time inlining preserves ADR-0005's
+  content-addressed self-contained manifest body;
+  three-step path safety — no `..`, symlink
+  canonicalization, rules-tree containment;
+  permanent SQL/expression prohibition closed by
+  three independent brakes; no rule-schema bump
+  needed (additive within catalog v1);
+  implementation deferred to B2-32 slice).
 - `glossary.md` — codebase-specific terminology (W3-P8a).
 - `governance.md` — review model and contribution-time
   flows (W3-P8b).
