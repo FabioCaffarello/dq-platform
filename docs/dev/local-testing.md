@@ -29,7 +29,7 @@ You're here for one of these reasons:
 |---|---|---|
 | **unit-no-substrate** | Pure-Go logic; no substrate | `make test-engine`, `make test-tools` |
 | **integration-compose** | Engine ↔ Compose substrate roundtrip | `make up && make test-engine-integration` |
-| **integration-sandbox** | Partial-row / No-row capability (CAS, OIDC, etc.) | (reserved at v1; no tests carry the tag yet) |
+| **integration-sandbox** | Partial-row / No-row capability (CAS, OIDC, etc.) | `make test-sandbox` (env: `DQ_SANDBOX_PROJECT`, `DQ_SANDBOX_BUCKET`) |
 | **smoke-substrate** | Per-emulator smoke | `make up && make smoke-substrate` |
 | **e2e-demo** | Full platform flow | `make up && make demo-p6` |
 | **config-validation** | Deploy / schema mirror static check | `make validate-deploy`; schema-mirror runs in CI |
@@ -135,7 +135,7 @@ What integration-compose does **not** cover:
   Those land in integration-sandbox when an operator
   provisions real GCP.
 
-### integration-sandbox (reserved at v1)
+### integration-sandbox
 
 For Partial-row / No-row capabilities that the local
 emulator stack cannot faithfully reproduce:
@@ -147,15 +147,76 @@ emulator stack cannot faithfully reproduce:
   (ADR-0028 Partial row).
 - OIDC / service-identity flows (ADR-0010 No row).
 
-No test carries `//go:build sandbox` at v1; the tier is
-reserved for the operational session that provisions
-real GCP. When the first sandbox test lands:
+**First test landed at B2-18**: the CAS-race-loser branch
+at `tools/manifest/publisher_sandbox_test.go`. It exercises
+the ADR-0017 Partial-row gap — fake-gcs-server accepts
+`ifGenerationMatch` query parameters without rejecting
+stale-generation writes; real GCS returns HTTP 412. Two
+test functions:
 
-- The `//go:build sandbox` tag goes on the test file.
-- A new `test-engine-sandbox` make target lands.
-- A CI lane that runs the sandbox tests when sandbox
-  credentials are available is configured (it is NOT
-  gating the default PR lane).
+- `TestSandbox_CASWritePointer_HappyPath` — confirms real
+  GCS returns a non-zero post-write generation for both
+  `DoesNotExist` and `GenerationMatch` preconditions
+  (smoke signal that doesn't depend on the race-loser
+  path).
+- `TestSandbox_CASWritePointer_StaleGenerationRejected` —
+  the load-bearing case. Two CAS writes advance the
+  pointer from gen=G1 to gen=G2; a third write
+  parameterised with the now-stale gen=G1 must reject
+  with `ErrPreconditionFailed`. fake-gcs-server fails to
+  produce that 412; real GCS does. Without this test the
+  race-loser contract was only ever exercised against the
+  in-mem fake in `publisher_test.go`.
+
+Run the sandbox tier:
+
+```
+export DQ_SANDBOX_PROJECT=<gcp-project>
+export DQ_SANDBOX_BUCKET=<sandbox-bucket>
+export GOOGLE_APPLICATION_CREDENTIALS=<service-account-json>
+make test-sandbox
+```
+
+The two env vars (`DQ_SANDBOX_PROJECT`, `DQ_SANDBOX_BUCKET`)
+gate the tests' execution. Without them set, every
+sandbox test issues `t.Skip(…)` cleanly, so a local
+`make test-sandbox` invocation without credentials is a
+no-op rather than a hard failure. The
+`tools/manifest/publisher_sandbox_test.go` writes under a
+unique `dq-sandbox/manifests/<timestamp>/` prefix and
+cleans up via `t.Cleanup`.
+
+Make targets:
+
+- `make test-tools-manifest-sandbox` — runs the
+  `tools/manifest` sandbox tests directly.
+- `make test-engine-sandbox` — runs the `engine` sandbox
+  tests; no engine-side sandbox test exists at the time
+  of B2-18, so the target is a no-op until a later slice
+  adds engine-side sandbox tests (e.g., lazy-view
+  fidelity per ADR-0010 Partial row, broker-set-
+  timestamp watermark per ADR-0028).
+- `make test-sandbox` — umbrella: every `//go:build
+  sandbox` test across all modules.
+
+CI lane:
+[`.github/workflows/sandbox.yml`](../../.github/workflows/sandbox.yml).
+Workflow trigger is **`workflow_dispatch` only** at v1
+— operators trigger from the Actions UI when reviewing
+a PR that touches a sandbox-relevant surface. The job
+is gated on `vars.SANDBOX_ENABLED == 'true'` or the
+presence of the `DQ_SANDBOX_PROJECT` secret, so the
+workflow definition stays green while the platform
+waits for the operational session that provisions real
+GCP. A weekly `schedule` trigger is committed but
+commented out; uncomment once sandbox credentials are
+stable.
+
+**The default PR lane is explicitly NOT gated on the
+sandbox tier** per ADR-0034 §"`integration-sandbox`".
+Sandbox spend is a P4 cost concern; gating every PR on
+real GCP traffic would multiply the substrate bill
+without operational benefit.
 
 ### smoke-substrate
 

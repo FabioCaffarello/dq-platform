@@ -20,8 +20,9 @@ COMPOSE := docker compose -p $(COMPOSE_PROJECT_NAME)
 
 .PHONY: help \
 	lint test \
-	lint-engine test-engine test-engine-integration \
-	lint-tools test-tools test-tools-manifest-integration \
+	lint-engine test-engine test-engine-integration test-engine-sandbox \
+	lint-tools test-tools test-tools-manifest-integration test-tools-manifest-sandbox \
+	test-sandbox \
 	lint-rules dry-run-rules \
 	sync-schema \
 	build-lint build-engine build-manifest build-engine-image \
@@ -47,6 +48,9 @@ test-engine: ## go test across the engine module (unit tests only).
 test-engine-integration: ## go test -tags integration across the engine module; requires `make up` first.
 	@cd engine && go test -tags integration ./...
 
+test-engine-sandbox: ## go test -tags sandbox across the engine module (ADR-0034 integration-sandbox tier). No engine-side sandbox tests at v1; target is reserved.
+	@cd engine && go test -tags sandbox ./...
+
 lint-tools: ## go vet across every module under tools/.
 	@cd tools/lint && go vet ./...
 	@cd tools/manifest && go vet ./...
@@ -57,6 +61,11 @@ test-tools: ## go test across every module under tools/.
 
 test-tools-manifest-integration: ## go test -tags integration on tools/manifest; requires `make up` first.
 	@cd tools/manifest && go test -tags integration ./...
+
+test-tools-manifest-sandbox: ## go test -tags sandbox on tools/manifest (ADR-0034 integration-sandbox tier). Tests skip without DQ_SANDBOX_PROJECT + DQ_SANDBOX_BUCKET; CI lane provides them via secrets.
+	@cd tools/manifest && go test -tags sandbox ./...
+
+test-sandbox: test-engine-sandbox test-tools-manifest-sandbox ## Umbrella: every //go:build sandbox test across all modules (ADR-0034 integration-sandbox tier per B2-18).
 
 build-lint: ## Build the dq-lint binary at bin/dq-lint.
 	@mkdir -p bin
