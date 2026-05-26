@@ -35,11 +35,17 @@ jobs:
 
       - name: Inspect image
         run: |
-          # Confirm the ADR-0042 Clause 1 image invariants are
-          # actually present: non-root user, correct entrypoint.
-          # The Make target derived the tag from git; resolve it
-          # the same way for the inspect step.
-          tag="$(git describe --tags --match 'engine-v*' --exact-match 2>/dev/null | sed 's/^engine-v//' || git rev-parse --short HEAD)"
+          # Resolve the same tag the Makefile's build-engine-image
+          # target produced. Piping `git describe` through `sed`
+          # masks the describe command's exit code, so we capture
+          # describe's output + status separately and fall back to
+          # the short SHA explicitly when no engine-v* tag matches.
+          set -euo pipefail
+          if git_tag="$(git describe --tags --match 'engine-v*' --exact-match 2>/dev/null)"; then
+            tag="${git_tag#engine-v}"
+          else
+            tag="$(git rev-parse --short HEAD)"
+          fi
           echo "Inspecting dq-engine:$tag"
           docker inspect "dq-engine:$tag" \
             --format 'User={{.Config.User}} Entrypoint={{.Config.Entrypoint}}'
