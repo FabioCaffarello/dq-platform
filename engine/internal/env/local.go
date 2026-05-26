@@ -33,4 +33,10 @@ var Local = EnvConfig{
 		MaxLatenessTolerance:  5 * time.Minute,
 		SampleStorageCapMB:    100,
 	},
+	EvidenceRetention: EvidenceRetention{
+		// ADR-0031 §"Single-tier retention" — local env keeps
+		// 30 days of evidence; matches the partition_expiration
+		// applied by EnsureSchema.
+		ResultsRetention: 30 * 24 * time.Hour,
+	},
 }

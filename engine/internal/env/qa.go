@@ -46,4 +46,8 @@ var QA = EnvConfig{
 		MaxLatenessTolerance:  30 * time.Minute,
 		SampleStorageCapMB:    1000,
 	},
+	EvidenceRetention: EvidenceRetention{
+		// ADR-0031 §"Single-tier retention" — qa keeps 90 days.
+		ResultsRetention: 90 * 24 * time.Hour,
+	},
 }

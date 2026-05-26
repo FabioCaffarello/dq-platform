@@ -78,6 +78,21 @@ type EnvConfig struct {
 	OrphanThreshold       time.Duration  // ADR-0007 CC11 cutoff
 	OrphanScanInterval    time.Duration  // orphan ticker cadence
 	RecordModeCost        RecordModeCost // per ADR-0027 record-mode cost guardrails
+	EvidenceRetention     EvidenceRetention // per ADR-0031 results-table retention
+}
+
+// EvidenceRetention carries the per-env results-table retention
+// posture per ADR-0031. The single-tier retention applies to both
+// `dq_executions` and `dq_check_results`; partition expiration is
+// enforced by the substrate (BigQuery `partition_expiration_ms`).
+//
+// ResultsRetention is also consumed by the baseline framework
+// (ADR-0032 + B2-14): `ComputeBaseline` caps the effective
+// reference window at `min(declared, ResultsRetention)` so a rule
+// declaring a 200-day reference window doesn't silently scan
+// missing partitions in a local-env (30-day retention) deployment.
+type EvidenceRetention struct {
+	ResultsRetention time.Duration // partition_expiration_ms applied to both tables
 }
 
 // RecordModeCost groups the four cost-guardrail dimensions

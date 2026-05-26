@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sort"
+	"time"
 
 	"cloud.google.com/go/bigquery"
 
@@ -21,8 +22,9 @@ import (
 // (cmd/dq-engine/main.go) cross-checks the registry against the
 // catalog.
 const (
-	KindSetRowCountPositive    = "set.row_count_positive"
-	KindRecordSchemaConformance = "record.schema_conformance"
+	KindSetRowCountPositive      = "set.row_count_positive"
+	KindSetRowCountWithinBaseline = "set.row_count_within_baseline"
+	KindRecordSchemaConformance  = "record.schema_conformance"
 )
 
 // Handler is the per-kind evaluation function the registry
@@ -43,6 +45,22 @@ type Config struct {
 	// Logger is the structured logger. Optional; defaults to
 	// slog.Default().
 	Logger *slog.Logger
+
+	// ResultsProject + ResultsDataset locate `dq_check_results`
+	// + `dq_executions` for the baseline framework (ADR-0032).
+	// Optional at construction time; baselined kinds fail loud
+	// at evaluation time when these are empty and a baseline
+	// query is needed. Set from EnvConfig.BigQueryProject /
+	// .BigQueryDataset in main.go.
+	ResultsProject string
+	ResultsDataset string
+
+	// ResultsRetention is the per-env partition-expiration
+	// duration (ADR-0031). ComputeBaseline caps the effective
+	// reference window at `min(declared, ResultsRetention)` so
+	// a rule declaring a long reference window doesn't silently
+	// scan missing partitions on a short-retention env.
+	ResultsRetention time.Duration
 }
 
 // Evaluator dispatches CheckSpecs to per-kind handlers. The
@@ -52,9 +70,12 @@ type Config struct {
 //
 // Satisfies runner.CheckEvaluator via the Evaluate method below.
 type Evaluator struct {
-	client   *bigquery.Client
-	logger   *slog.Logger
-	handlers map[string]Handler
+	client           *bigquery.Client
+	logger           *slog.Logger
+	handlers         map[string]Handler
+	resultsProject   string
+	resultsDataset   string
+	resultsRetention time.Duration
 }
 
 // New validates the Config and returns an Evaluator with the
@@ -86,11 +107,15 @@ func New(cfg Config) (*Evaluator, error) {
 		logger = slog.Default()
 	}
 	e := &Evaluator{
-		client:   cfg.Client,
-		logger:   logger,
-		handlers: map[string]Handler{},
+		client:           cfg.Client,
+		logger:           logger,
+		handlers:         map[string]Handler{},
+		resultsProject:   cfg.ResultsProject,
+		resultsDataset:   cfg.ResultsDataset,
+		resultsRetention: cfg.ResultsRetention,
 	}
 	e.Register(KindSetRowCountPositive, setRowCountPositiveHandler)
+	e.Register(KindSetRowCountWithinBaseline, setRowCountWithinBaselineHandler)
 	e.Register(KindRecordSchemaConformance, recordSchemaConformanceHandler)
 	return e, nil
 }

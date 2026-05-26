@@ -27,6 +27,82 @@ kinds:
     aggregation:
       type: none
 
+  - name: set.row_count_within_baseline
+    description: >-
+      Set-mode baselined check (ADR-0032 framework, B2-14 first kind).
+      Counts rows in the source table within the trigger's window, then
+      compares the result against the historical baseline derived from
+      `dq_check_results` (platform_history mode) or against an
+      operator-declared static value (static mode), within the rule's
+      tolerance. Sparse history (samples_used < params.baseline.min_samples)
+      surfaces ResultDegraded with reason `insufficient_baseline_samples`
+      per ADR-0032 §"Sparse-history policy". Produces one CheckResult per
+      window with no per-record aggregation.
+    mode: set
+    source_mode: set
+    params_schema:
+      type: object
+      additionalProperties: false
+      required:
+        - baseline
+      properties:
+        baseline:
+          description: >-
+            ADR-0032 baseline block. The `source` enum selects between
+            platform_history (compute baseline from dq_check_results) and
+            static (operator-declared value). Tolerance is required in
+            both sub-modes.
+          type: object
+          additionalProperties: false
+          required:
+            - source
+            - tolerance
+          properties:
+            source:
+              type: string
+              enum: [platform_history, static]
+            reference_window:
+              description: >-
+                Duration the baseline query covers (platform_history only).
+                Lexical grammar `^[0-9]+(ms|s|m|h|d)$` per ADR-0032; the `d`
+                suffix supports the longer reference windows baselined
+                set-mode checks typically need. Effective window at runtime
+                is `min(declared, env's ResultsRetention)`.
+              type: string
+              pattern: "^[0-9]+(ms|s|m|h|d)$"
+            min_samples:
+              description: >-
+                Minimum count of `pass` rows required to compute a fair
+                baseline (platform_history only). Below this, the check
+                returns `degraded`. Default 5.
+              type: integer
+              minimum: 1
+            aggregation:
+              description: >-
+                Aggregation applied to the historical samples to produce
+                a single baseline value (platform_history only).
+              type: string
+              enum: [mean, median, min, max, p50, p90, p95, p99]
+            value:
+              description: >-
+                Operator-declared baseline value (static only).
+              type: number
+            tolerance:
+              type: object
+              additionalProperties: false
+              required:
+                - type
+                - value
+              properties:
+                type:
+                  type: string
+                  enum: [percent, absolute, stddev]
+                value:
+                  type: number
+                  minimum: 0
+    aggregation:
+      type: none
+
   - name: record.schema_conformance
     description: >-
       Record-mode check that validates each Kafka record against a

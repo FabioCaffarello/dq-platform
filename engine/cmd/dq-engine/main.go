@@ -213,8 +213,11 @@ func main() {
 	// carries the BigQuery target; the evaluator no longer pins
 	// a deployment-wide source.
 	evaluator, err := eval.New(eval.Config{
-		Client: bqClient,
-		Logger: evalLogger,
+		Client:           bqClient,
+		Logger:           evalLogger,
+		ResultsProject:   cfg.BigQueryProject,
+		ResultsDataset:   cfg.BigQueryDataset,
+		ResultsRetention: cfg.EvidenceRetention.ResultsRetention,
 	})
 	if err != nil {
 		logger.Error("new evaluator", "error", err.Error())
