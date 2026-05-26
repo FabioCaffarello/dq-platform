@@ -249,6 +249,148 @@ func TestLoadOwners_V2_MissingMode_RejectsBySchema(t *testing.T) {
 	}
 }
 
+func TestCheckOwnersGroupMembership_NilGroups_NoErrors(t *testing.T) {
+	// Disable case: nil groups argument returns no errors so the
+	// linter can opt out for fixture-only test harnesses.
+	owners := &Owners{
+		Entities: map[string]OwnerEntity{
+			"customer": {Owner: "data-platform"},
+		},
+	}
+	if errs := CheckOwnersGroupMembership(owners, nil); len(errs) != 0 {
+		t.Errorf("nil groups produced %d errors; want 0: %v", len(errs), errs)
+	}
+}
+
+func TestCheckOwnersGroupMembership_EmptyGroups_NoErrors(t *testing.T) {
+	// Degenerate disable case: groups with empty set returns no
+	// errors (LoadCodeOwners("") returns this shape).
+	owners := &Owners{
+		Entities: map[string]OwnerEntity{
+			"customer": {Owner: "data-platform"},
+		},
+	}
+	groups := &CodeOwnersGroups{set: map[string]struct{}{}}
+	if errs := CheckOwnersGroupMembership(owners, groups); len(errs) != 0 {
+		t.Errorf("empty groups produced %d errors; want 0: %v", len(errs), errs)
+	}
+}
+
+func TestCheckOwnersGroupMembership_HappyPath(t *testing.T) {
+	owners := &Owners{
+		Entities: map[string]OwnerEntity{
+			"customer":      {Owner: "@PLACEHOLDER-org/rules-authors"},
+			"orders_stream": {Owner: "@PLACEHOLDER-org/rules-authors"},
+		},
+	}
+	groups := &CodeOwnersGroups{
+		set: map[string]struct{}{
+			"@PLACEHOLDER-org/platform-team":  {},
+			"@PLACEHOLDER-org/rules-authors":  {},
+			"@PLACEHOLDER-org/sre":            {},
+		},
+		Path: ".github/CODEOWNERS",
+	}
+	if errs := CheckOwnersGroupMembership(owners, groups); len(errs) != 0 {
+		t.Errorf("happy path produced %d errors; want 0: %v", len(errs), errs)
+	}
+}
+
+func TestCheckOwnersGroupMembership_UnknownGroup_Rejected(t *testing.T) {
+	owners := &Owners{
+		Entities: map[string]OwnerEntity{
+			"customer": {Owner: "@PLACEHOLDER-org/typo-group"},
+		},
+	}
+	groups := &CodeOwnersGroups{
+		set: map[string]struct{}{
+			"@PLACEHOLDER-org/platform-team": {},
+			"@PLACEHOLDER-org/rules-authors": {},
+		},
+		Path: ".github/CODEOWNERS",
+	}
+	errs := CheckOwnersGroupMembership(owners, groups)
+	if len(errs) != 1 {
+		t.Fatalf("unknown group produced %d errors; want 1: %v", len(errs), errs)
+	}
+	combined := combineErrs(errs)
+	if !strings.Contains(combined, "ADR-0037") {
+		t.Errorf("error %q should cite ADR-0037", combined)
+	}
+	if !strings.Contains(combined, "@PLACEHOLDER-org/typo-group") {
+		t.Errorf("error %q should quote the offending owner value", combined)
+	}
+	if !strings.Contains(combined, "customer") {
+		t.Errorf("error %q should name the entity", combined)
+	}
+	if !strings.Contains(combined, "@PLACEHOLDER-org/rules-authors") {
+		t.Errorf("error %q should list valid groups", combined)
+	}
+}
+
+func TestCheckOwnersGroupMembership_MultipleMisses(t *testing.T) {
+	owners := &Owners{
+		Entities: map[string]OwnerEntity{
+			"a": {Owner: "@PLACEHOLDER-org/unknown-a"},
+			"b": {Owner: "@PLACEHOLDER-org/known"},
+			"c": {Owner: "@PLACEHOLDER-org/unknown-c"},
+		},
+	}
+	groups := &CodeOwnersGroups{
+		set: map[string]struct{}{
+			"@PLACEHOLDER-org/known": {},
+		},
+		Path: ".github/CODEOWNERS",
+	}
+	errs := CheckOwnersGroupMembership(owners, groups)
+	if len(errs) != 2 {
+		t.Fatalf("expected 2 errors (a + c); got %d: %v", len(errs), errs)
+	}
+	combined := combineErrs(errs)
+	if !strings.Contains(combined, `"a"`) || !strings.Contains(combined, `"c"`) {
+		t.Errorf("expected entity names a and c in errors; got %q", combined)
+	}
+	if strings.Contains(combined, `"b"`) {
+		t.Errorf("entity b is valid; should not appear in errors: %q", combined)
+	}
+}
+
+func TestCheckOwnersGroupMembership_EmptyOwnerSkipped(t *testing.T) {
+	// Schema validation (LoadOwners) already requires owner to be a
+	// non-empty string; the cross-check skips empty values to avoid
+	// double-reporting.
+	owners := &Owners{
+		Entities: map[string]OwnerEntity{
+			"x": {Owner: ""},
+		},
+	}
+	groups := &CodeOwnersGroups{
+		set:  map[string]struct{}{"@PLACEHOLDER-org/known": {}},
+		Path: ".github/CODEOWNERS",
+	}
+	if errs := CheckOwnersGroupMembership(owners, groups); len(errs) != 0 {
+		t.Errorf("empty owner produced %d errors; want 0 (schema layer handles it): %v", len(errs), errs)
+	}
+}
+
+func TestLoadOwners_CapturesOwnerField(t *testing.T) {
+	// LoadOwners must populate OwnerEntity.Owner so the cross-check
+	// (CheckOwnersGroupMembership) has a value to compare.
+	set := ownersSchemaSet(t)
+	owners, valErrs, err := LoadOwners(set, "testdata/owners/valid/_owners.yaml")
+	if err != nil || len(valErrs) != 0 {
+		t.Fatalf("LoadOwners returned err=%v valErrs=%v", err, valErrs)
+	}
+	cust := owners.Entities["customer"]
+	if cust.Owner != "data-platform" {
+		t.Errorf("customer.Owner = %q; want %q", cust.Owner, "data-platform")
+	}
+	acc := owners.Entities["account"]
+	if acc.Owner != "finance-data" {
+		t.Errorf("account.Owner = %q; want %q", acc.Owner, "finance-data")
+	}
+}
+
 func combineErrs(errs []ValidationError) string {
 	out := ""
 	for _, e := range errs {

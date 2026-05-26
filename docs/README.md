@@ -74,6 +74,12 @@ This directory holds:
   CAS-conditional pointer rewrite primitive; closes the
   bypass-via-gsutil failure mode; runbook §3 rewritten
   around the new primary path).
+- `adr/0037` — `_owners.yaml` owner ↔ CODEOWNERS-group
+  linter cross-check (resolves B2-9; new `-codeowners` flag
+  on `dq-lint` extends the existing validation-error exit
+  code with a group-membership check; closes the timing
+  gap where a stale or typo'd `owner:` previously only
+  failed at PR-review time).
 - `glossary.md` — codebase-specific terminology (W3-P8a).
 - `governance.md` — review model and contribution-time
   flows (W3-P8b).

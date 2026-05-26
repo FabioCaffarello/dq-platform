@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/santhosh-tekuri/jsonschema/v5"
@@ -67,15 +68,22 @@ func LoadOwnersSchemaSet(v1Path, v2Path string) (*OwnersSchemaSet, error) {
 
 // OwnerEntity is the reduced in-memory descriptor for one entity
 // in _owners.yaml. The linter retains only what is needed for
-// cross-checks: the entity is declared (presence) and its mode
-// (for v2 cross-check #3). Channels and severity overrides are
-// consumed by the alerting layer per ADR-0006 CC3, not by the
-// linter, so they are intentionally not retained here.
+// cross-checks: the entity is declared (presence), its mode
+// (for v2 cross-check #3), and its owner identifier (for the
+// CODEOWNERS-group membership check per ADR-0037). Channels and
+// severity overrides are consumed by the alerting layer per
+// ADR-0006 CC3, not by the linter, so they are intentionally
+// not retained here.
 type OwnerEntity struct {
 	// Mode is "set" or "record" for v2 owners; empty string for
 	// v1 owners (which had no mode field). Cross-check #3 only
 	// fires when both the rule and the owners entry carry a mode.
 	Mode string
+
+	// Owner is the literal `owner:` value from _owners.yaml. The
+	// CODEOWNERS-group cross-check (CheckOwnersGroupMembership)
+	// compares this against the loaded CodeOwnersGroups inventory.
+	Owner string
 }
 
 // Owners is the in-memory representation of a loaded _owners.yaml.
@@ -161,12 +169,57 @@ func LoadOwners(set *OwnersSchemaSet, ownersPath string) (*Owners, []ValidationE
 					if mode, ok := entMap["mode"].(string); ok {
 						ent.Mode = mode
 					}
+					if owner, ok := entMap["owner"].(string); ok {
+						ent.Owner = owner
+					}
 				}
 				owners.Entities[name] = ent
 			}
 		}
 	}
 	return owners, nil, nil
+}
+
+// CheckOwnersGroupMembership verifies every `owner:` value in the
+// loaded owners set resolves to a CodeOwnersGroups entry. A nil or
+// empty groups argument disables the check (returns nil); the
+// caller does not need to guard. Returns one ValidationError per
+// miss, keyed by the entity's name in the message.
+//
+// The check implements ADR-0037: lint-time enforcement of "the
+// owner field references a real review group." It is the cheaper
+// first line of defense complementing ADR-0006 §9's CODEOWNERS-
+// routed review (the second line of defense).
+func CheckOwnersGroupMembership(owners *Owners, groups *CodeOwnersGroups) []ValidationError {
+	if owners == nil || groups == nil || len(groups.set) == 0 {
+		return nil
+	}
+	var errs []ValidationError
+	entityNames := make([]string, 0, len(owners.Entities))
+	for name := range owners.Entities {
+		entityNames = append(entityNames, name)
+	}
+	sort.Strings(entityNames)
+	inventory := groups.Slice()
+	for _, name := range entityNames {
+		ent := owners.Entities[name]
+		if ent.Owner == "" {
+			// Schema validation (LoadOwners) already requires
+			// `owner` to be a non-empty string; skip rather than
+			// double-report.
+			continue
+		}
+		if groups.Contains(ent.Owner) {
+			continue
+		}
+		errs = append(errs, ValidationError{
+			Message: fmt.Sprintf(
+				"ADR-0037: entity %q owner %q does not match any CODEOWNERS group in %s; valid groups: %v",
+				name, ent.Owner, groups.Path, inventory,
+			),
+		})
+	}
+	return errs
 }
 
 // CheckRulesHaveOwners walks the rules directory and verifies that
