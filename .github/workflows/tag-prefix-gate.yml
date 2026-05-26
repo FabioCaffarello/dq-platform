@@ -1,0 +1,74 @@
+# path: .github/workflows/tag-prefix-gate.yml
+#
+# Per-workspace tag-prefix CI gate per ADR-0042 §"Clause 3 —
+# Versioning invariants" + B2-29's slice. Closes W2-5 §C-W2-5.5
+# (the original "Wave 3 CI design item" deferral).
+#
+# Trigger: any tag push matching one of the five committed
+# prefixes from ADR-0042 Clause 3.
+#
+# Posture: a tag with prefix `<workspace>-v*` MUST diff cleanly
+# against its prior matching tag — every changed file must be
+# under the workspace's path. If the diff touches files outside
+# the workspace (e.g., an `engine-v*` tag whose diff includes
+# changes under `rules/`), the gate rejects loudly. Cross-
+# workspace changes (Makefile bumps, ADR additions, root
+# configuration) must land in their own commit; the workspace
+# tag then points at a later commit that only touches that
+# workspace.
+#
+# First-tag behavior: when the pushed tag is the first one
+# matching its prefix, no prior exists; the gate passes by
+# inception (no diff to validate).
+#
+# workflow_dispatch is enabled for manual testing against any
+# existing tag.
+
+name: tag-prefix-gate
+
+on:
+  push:
+    tags:
+      - 'engine-v*'
+      - 'rules-v*'
+      - 'tools-lint-v*'
+      - 'tools-manifest-v*'
+      - 'deploy-v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to validate (e.g., engine-v1.2.0)'
+        required: true
+        type: string
+
+jobs:
+  validate:
+    name: validate tag scope
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history + tags)
+        uses: actions/checkout@v4
+        with:
+          # The gate needs every prior tag to find the closest
+          # match for the pushed prefix. Shallow clones omit
+          # tags by default.
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Resolve tag
+        id: resolve
+        env:
+          DISPATCH_TAG: ${{ inputs.tag }}
+        run: |
+          # On tag push the ref is refs/tags/<name>; on
+          # workflow_dispatch we read the tag from the input.
+          if [ -n "${DISPATCH_TAG:-}" ]; then
+            tag="$DISPATCH_TAG"
+          else
+            tag="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Resolved tag: $tag"
+
+      - name: Validate tag scope
+        run: bash scripts/check-tag-scope.sh "${{ steps.resolve.outputs.tag }}"
