@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"regexp"
 
+	"cloud.google.com/go/bigquery"
+
 	"dq-platform/engine/internal/results"
 	"dq-platform/engine/internal/runner"
 )
@@ -26,6 +28,13 @@ const rowCountPositiveThreshold = int64(0)
 // the parser (direct CheckSpec construction in tests).
 var bqIdentifierPattern = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 
+// bqColumnPattern restricts the partition column name to BigQuery
+// identifier shape (no hyphens — BQ column names follow a tighter
+// grammar than project/dataset/table identifiers). Mirrors the
+// dsl/spec parser's `v2BigQueryColumnPattern`; defense-in-depth
+// for direct CheckSpec construction in tests.
+var bqColumnPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
 // errSourceMissing is returned when a set-mode CheckSpec carries
 // no source descriptor. v1 rules surface here because v1 has no
 // source descriptor; the operator's migration to v2 closes this
@@ -37,10 +46,27 @@ var errSourceMissing = errors.New(
 // evaluateRowCountPositive runs the set.row_count_positive check:
 //
 //	SELECT COUNT(*) AS row_count FROM `<project>.<dataset>.<table>`
+//	[ WHERE `<partition_column>` >= @window_start
+//	    AND `<partition_column>` <  @window_end ]
 //
 // Project / dataset / table come from the rule's source descriptor
 // per ADR-0023; the evaluator no longer pins a deployment-wide
 // SourceProject / SourceDataset.
+//
+// When `source.partition_column` is set, the query gains a
+// half-open-interval predicate using the trigger's window
+// endpoints — the B2-12 retrofit per ADR-0029 §"row_count_positive
+// cost gap". The predicate uses the partition column directly
+// (no wrapping function) so BigQuery's partition pruning fires.
+// The partition column is assumed to be TIMESTAMP-compatible
+// (TIMESTAMP, DATETIME, or DATE); the dsl/spec parser does not
+// carry a type tag today, and a future ADR amendment may extend
+// the source descriptor with one if other partition-column types
+// surface operationally.
+//
+// Window endpoints are bound as `@window_start` / `@window_end`
+// parameterized values — never string-interpolated — so the SQL
+// remains injection-safe.
 //
 // Maps the count to results.CheckResult:
 //
@@ -73,9 +99,15 @@ func (e *Evaluator) evaluateRowCountPositive(
 	}
 
 	tableRef := fmt.Sprintf("%s.%s.%s", spec.Source.ProjectID, spec.Source.DatasetID, spec.Source.TableID)
-	sql := fmt.Sprintf("SELECT COUNT(*) AS row_count FROM `%s`", tableRef)
+	sql := rowCountPositiveSQL(tableRef, spec.Source.PartitionColumn)
 
 	q := e.client.Query(sql)
+	if spec.Source.PartitionColumn != "" {
+		q.Parameters = []bigquery.QueryParameter{
+			{Name: "window_start", Value: trigger.WindowStart},
+			{Name: "window_end", Value: trigger.WindowEnd},
+		}
+	}
 	it, err := q.Read(ctx)
 	if err != nil {
 		e.logger.Warn("row_count_positive query read failed",
@@ -148,7 +180,29 @@ func validateBQIdentifiers(s *runner.RuleSource) error {
 	if !bqIdentifierPattern.MatchString(s.TableID) {
 		return fmt.Errorf("source.table_id %q does not match %s", s.TableID, bqIdentifierPattern.String())
 	}
+	if s.PartitionColumn != "" && !bqColumnPattern.MatchString(s.PartitionColumn) {
+		return fmt.Errorf("source.partition_column %q does not match %s", s.PartitionColumn, bqColumnPattern.String())
+	}
 	return nil
+}
+
+// rowCountPositiveSQL emits the SQL template for one
+// (tableRef, partitionColumn) combination. Exported (lowercase
+// but package-internal use) so the unit tests and the
+// tools/dryrun binary can keep the templates aligned without
+// duplicating string formatting.
+func rowCountPositiveSQL(tableRef, partitionColumn string) string {
+	if partitionColumn == "" {
+		return fmt.Sprintf("SELECT COUNT(*) AS row_count FROM `%s`", tableRef)
+	}
+	// Half-open interval [@window_start, @window_end) per the
+	// common partitioning convention; matches the runner's
+	// `WindowEnd > WindowStart` precondition in validateTrigger.
+	return fmt.Sprintf(
+		"SELECT COUNT(*) AS row_count FROM `%s` "+
+			"WHERE `%s` >= @window_start AND `%s` < @window_end",
+		tableRef, partitionColumn, partitionColumn,
+	)
 }
 
 // Compile-time assertion that *Evaluator satisfies the runner's

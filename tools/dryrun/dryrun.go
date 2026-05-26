@@ -40,11 +40,31 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"cloud.google.com/go/bigquery"
 	"google.golang.org/api/iterator"
 	"gopkg.in/yaml.v3"
 )
+
+// dryRunPlaceholderStart / End are arbitrary timestamps bound to
+// the @window_start / @window_end parameters when the runtime
+// SQL template carries a partition predicate. Dry-run reports
+// only bytes-scanned; the values don't influence the result
+// beyond satisfying BigQuery's parameter-required validation.
+var (
+	dryRunPlaceholderStart = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	dryRunPlaceholderEnd   = time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+)
+
+// containsWindowParams reports whether the SQL references the
+// @window_start / @window_end parameters added by the B2-12
+// partition predicate. Cheap substring check — the only
+// templates that emit these parameters today are the
+// row_count_positive partition path.
+func containsWindowParams(sql string) bool {
+	return strings.Contains(sql, "@window_start") && strings.Contains(sql, "@window_end")
+}
 
 // ErrCostCeilingExceeded is returned (wrapped) when a rule's
 // dry-run estimate exceeds the configured MaxBytesScannedPerRun
@@ -182,10 +202,11 @@ type ruleDoc struct {
 }
 
 type ruleSource struct {
-	Type      string `yaml:"type"`
-	ProjectID string `yaml:"project_id"`
-	DatasetID string `yaml:"dataset_id"`
-	TableID   string `yaml:"table_id"`
+	Type            string `yaml:"type"`
+	ProjectID       string `yaml:"project_id"`
+	DatasetID       string `yaml:"dataset_id"`
+	TableID         string `yaml:"table_id"`
+	PartitionColumn string `yaml:"partition_column,omitempty"`
 }
 
 type ruleCheckDoc struct {
@@ -260,11 +281,24 @@ func (r *Runner) handleRule(ctx context.Context, path string, body []byte, rep *
 // for the only set-mode kind shipping today. Returns (sql, true)
 // on success; ("", false) when no template exists for the kind
 // (caller logs a skip and proceeds).
+//
+// When src.PartitionColumn is set, the SQL gains the same
+// half-open-interval partition predicate the runtime evaluator
+// emits (B2-12 retrofit). Window endpoints render as parameter
+// placeholders — the dry-run still binds them via the BigQuery
+// client's QueryParameters API at dryRun-time.
 func compileSQL(kind string, src ruleSource) (string, bool) {
 	switch kind {
 	case "set.row_count_positive":
 		tableRef := fmt.Sprintf("%s.%s.%s", src.ProjectID, src.DatasetID, src.TableID)
-		return fmt.Sprintf("SELECT COUNT(*) AS row_count FROM `%s`", tableRef), true
+		if src.PartitionColumn == "" {
+			return fmt.Sprintf("SELECT COUNT(*) AS row_count FROM `%s`", tableRef), true
+		}
+		return fmt.Sprintf(
+			"SELECT COUNT(*) AS row_count FROM `%s` "+
+				"WHERE `%s` >= @window_start AND `%s` < @window_end",
+			tableRef, src.PartitionColumn, src.PartitionColumn,
+		), true
 	}
 	return "", false
 }
@@ -274,9 +308,22 @@ func compileSQL(kind string, src ruleSource) (string, bool) {
 // commonly used in the local Compose stack does not faithfully
 // implement dry-run; this function still returns nil-error on
 // emulator runs but the bytes figure is unreliable.
+//
+// When the SQL references `@window_start` / `@window_end`
+// parameters (B2-12 partition pruning), the caller supplies
+// representative timestamps. The dry-run binary uses
+// year-2026 placeholder timestamps because dry-run only reports
+// bytes-scanned — the actual values don't matter for the
+// pre-flight estimate.
 func (r *Runner) dryRun(ctx context.Context, sql string) (int64, error) {
 	q := r.cfg.BigQueryClient.Query(sql)
 	q.DryRun = true
+	if containsWindowParams(sql) {
+		q.Parameters = []bigquery.QueryParameter{
+			{Name: "window_start", Value: dryRunPlaceholderStart},
+			{Name: "window_end", Value: dryRunPlaceholderEnd},
+		}
+	}
 	job, err := q.Run(ctx)
 	if err != nil {
 		// Emulator does not support DryRun? Surface the error
