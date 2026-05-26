@@ -1,12 +1,21 @@
 # path: .github/workflows/deploy-validate.yml
 #
-# Renders + client-side validates every Kustomize overlay under
+# Renders + validates every Kustomize overlay under
 # deploy/overlays/{local,qa,prod}/ on every pull request and every
-# push to main. Implements the B2-8 CC2 CI validity gate (study at
-# studies/decisions/2026-05-22-b2-8-infrastructure-tooling.md;
-# provisional ADR-0017). ubuntu-latest runners ship `kubectl`
-# pre-installed, and Kustomize is built into kubectl 1.14+ via
-# `kubectl apply -k` — no separate install step required.
+# push to main.
+#
+#   - Implements the B2-8 CC2 CI validity gate (study at
+#     studies/decisions/2026-05-22-b2-8-infrastructure-tooling.md;
+#     provisional ADR-0017).
+#   - B2-30 (per ADR-0042 Clause 4) extended the same lane with
+#     deeper validation via kubeconform: field-name typos,
+#     deprecated API versions, and schema compliance against the
+#     Kubernetes API surface now fail loudly without introducing a
+#     new top-level CI lane.
+#
+# ubuntu-latest runners ship `kubectl` pre-installed and Kustomize
+# is built into kubectl 1.14+ via `kubectl apply -k`; kubeconform
+# is downloaded explicitly with a pinned version.
 
 name: deploy-validate
 
@@ -16,6 +25,11 @@ on:
   push:
     branches: [main]
 
+env:
+  # Pinned kubeconform version. Bump deliberately; the validation
+  # lane is reproducible only when this version is stable.
+  KUBECONFORM_VERSION: "0.7.0"
+
 jobs:
   validate:
     name: make validate-deploy
@@ -23,6 +37,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Install kubeconform
+        run: |
+          set -euo pipefail
+          url="https://github.com/yannh/kubeconform/releases/download/v${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz"
+          tmp="$(mktemp -d)"
+          curl -fsSL "$url" | tar -xz -C "$tmp"
+          sudo install -m 0755 "$tmp/kubeconform" /usr/local/bin/kubeconform
+          rm -rf "$tmp"
+          kubeconform -v
 
       - name: make validate-deploy
         run: make validate-deploy
