@@ -27,6 +27,7 @@ production-ready.
 | A new entity needs onboarding through the three-tier readiness model (Candidate → Test-soak → Production) per ADR-0040. | [`entity-onboarding.md`](entity-onboarding.md) |
 | An existing deployment has accumulated non-partitioned `dq_executions` / `dq_check_results` tables from before ADR-0031's partitioning posture took effect. | [`results-partition-migration.md`](results-partition-migration.md) |
 | A baselined check (e.g. `set.row_count_within_baseline`) returns `result: degraded` with `evidence_summary.reason: insufficient_baseline_samples`. | [`baselined-check-degraded.md`](baselined-check-degraded.md) |
+| An operator needs to trigger an evaluation outside the scheduler and is unsure whether to use `trigger_source: manual` (ad-hoc; parallel observation) or `trigger_source: operator-rerun` (replace a prior result; carries `supersedes_execution_id`). | [`manual-vs-operator-rerun.md`](manual-vs-operator-rerun.md) |
 
 ## Anatomy of a runbook
 
