@@ -227,6 +227,62 @@ func (s *BigQueryStore) ListRunningOlderThan(ctx context.Context, before time.Ti
 	return rows, nil
 }
 
+// LatestExecutionPerEntityCheck returns one row per
+// `(entity, check_id)` carrying the latest execution observed
+// at or before asOf per ADR-0033 §"Missed-window detection —
+// query surface". External monitors call this to surface
+// "no execution seen for (entity X, check Y) in the last N
+// hours" gaps; retrospective investigations pass an earlier
+// asOf to reconstruct the state of the world at that moment.
+//
+// Returns an empty (non-nil) slice when no rows match so
+// callers can range safely.
+func (s *BigQueryStore) LatestExecutionPerEntityCheck(ctx context.Context, asOf time.Time) ([]LatestExecutionRow, error) {
+	dataset := s.fullyQualifiedDataset()
+	sql := strings.ReplaceAll(latestExecutionPerEntityCheckSQL, "{{dataset}}", dataset)
+
+	q := s.client.Query(sql)
+	q.QueryConfig.UseLegacySQL = false
+	q.Parameters = []bigquery.QueryParameter{
+		{Name: "as_of", Value: asOf.UTC()},
+	}
+
+	it, err := q.Read(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("submit LatestExecutionPerEntityCheck query: %w", err)
+	}
+
+	rows := []LatestExecutionRow{}
+	for {
+		var rec latestExecutionRecord
+		if err := it.Next(&rec); err != nil {
+			if errors.Is(err, iterator.Done) {
+				break
+			}
+			return nil, fmt.Errorf("read LatestExecutionPerEntityCheck row: %w", err)
+		}
+		rows = append(rows, LatestExecutionRow{
+			Entity:       rec.Entity,
+			CheckID:      rec.CheckID,
+			LatestEnd:    rec.LatestEnd,
+			LatestStatus: ExecutionStatus(rec.LatestStatus),
+			Mode:         Mode(rec.Mode),
+		})
+	}
+	return rows, nil
+}
+
+// latestExecutionRecord mirrors LatestExecutionRow with
+// BigQuery-friendly struct tags. Private to this package so the
+// public type stays tag-free.
+type latestExecutionRecord struct {
+	Entity       string    `bigquery:"entity"`
+	CheckID      string    `bigquery:"check_id"`
+	LatestEnd    time.Time `bigquery:"latest_end"`
+	LatestStatus string    `bigquery:"latest_status"`
+	Mode         string    `bigquery:"mode"`
+}
+
 func (s *BigQueryStore) fullyQualifiedDataset() string {
 	return fmt.Sprintf("%s.%s", s.projectID, s.datasetID)
 }

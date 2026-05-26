@@ -38,6 +38,22 @@
         "$ref": "#/$defs/check"
       }
     },
+    "schedule": {
+      "description": "Optional advisory cadence per ADR-0033. Two forms: a 5-field cron expression (e.g., \"0 * * * *\", \"*/15 * * * *\") disambiguated by internal whitespace, or a duration literal (e.g., \"1h\", \"15m\", \"1d\") with no whitespace. The engine does not interpret this field; external schedulers READ the manifest at publish time and provision their own triggers per ADR-0033's contract. Cron aliases (@daily, @hourly) are not supported at v1.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "oneOf": [
+        {
+          "title": "Duration literal",
+          "pattern": "^[0-9]+(ms|s|m|h|d)$"
+        },
+        {
+          "title": "5-field cron expression",
+          "pattern": "^\\S+ \\S+ \\S+ \\S+ \\S+$"
+        }
+      ]
+    },
     "description": {
       "description": "Optional human-readable description of the rule.",
       "type": "string"

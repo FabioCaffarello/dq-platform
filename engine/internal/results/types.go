@@ -65,6 +65,27 @@ const (
 	ModeRecord Mode = "record"
 )
 
+// LatestExecutionRow is one row in the result set of
+// Reader.LatestExecutionPerEntityCheck. Carries the latest
+// observed `(entity, check_id)` pair as of the query's asOf
+// snapshot per ADR-0033 §"Missed-window detection — query
+// surface". External monitors join the platform's published rule
+// inventory against this surface to detect "no execution seen
+// for (entity X, check Y) in the last N hours" gaps.
+//
+// LatestEnd is the `window_end` of the latest execution; the
+// row's recorded_at is implicit in the query's `recorded_at <=
+// asOf` filter. LatestStatus is the canonical-view status (per
+// ADR-0003 CC2 latest-by-recorded_at). Mode is the execution's
+// mode column per ADR-0021.
+type LatestExecutionRow struct {
+	Entity       string
+	CheckID      string
+	LatestEnd    time.Time
+	LatestStatus ExecutionStatus
+	Mode         Mode
+}
+
 // CheckResultRow is one row in dq_check_results. Field set mirrors
 // ADR-0003 CC7. The table is append-only per ADR-0003 CC1; the
 // composite key is (ExecutionID, AttemptID, CheckID).

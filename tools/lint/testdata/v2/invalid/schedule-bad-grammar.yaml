@@ -1,0 +1,18 @@
+# path: tools/lint/testdata/v2/invalid/schedule-bad-grammar.yaml
+# Schema-level failure: the schedule field's oneOf rejects values
+# that match neither the duration-literal pattern (no whitespace)
+# nor the 5-field cron pattern (exactly 4 internal whitespace
+# runs). This value has only 4 fields, so the cron branch
+# rejects; it has whitespace, so the duration branch rejects.
+version: 2
+entity: customer-bad-schedule
+mode: set
+schedule: "0 * * *"
+source:
+  type: bigquery
+  project_id: dq-local
+  dataset_id: dq_fixture
+  table_id: customer
+checks:
+  - check_id: row_count_positive
+    kind: set.row_count_positive

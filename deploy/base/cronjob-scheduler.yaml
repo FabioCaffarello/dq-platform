@@ -1,0 +1,169 @@
+# path: deploy/base/cronjob-scheduler.yaml
+#
+# Reference Kubernetes CronJob — first scheduler-consumer slice
+# per ADR-0033 §"Why this does NOT commit specific scheduler
+# tooling". The platform's `/v1/trigger` endpoint accepts any
+# external scheduler that can emit an HTTP POST; this manifest is
+# the simplest illustrative consumer.
+#
+# What this CronJob does
+# ----------------------
+# On the cluster cron schedule below (`spec.schedule`), the Job
+# pod resolves the current trigger window (window_end = "now"
+# rounded down to the minute, window_start = window_end - WINDOW
+# from the ConfigMap), then POSTs a JSON trigger to the
+# in-cluster engine Service `dq-engine` (port 8080) per
+# ADR-0014's `/v1/trigger` contract.
+#
+# What this CronJob does NOT do
+# -----------------------------
+# - It does NOT read the rule's advisory `schedule` field from
+#   the published manifest. ADR-0033 commits the `schedule`
+#   field as advisory; the operator translates it into the
+#   Kubernetes CronJob `spec.schedule` at deploy time (cron-
+#   compatible syntax: `0 * * * *` for hourly, `*/15 * * * *`
+#   for every 15 min, etc.). A future enhancement could ship a
+#   manifest-aware controller that derives CronJob entries from
+#   the manifest's `schedule` fields; not committed at v1.
+# - It does NOT enforce the per-env SchedulerCatchupHorizon
+#   (1h / 6h / 24h for local / qa / prod per
+#   engine/internal/env/{local,qa,prod}.go). Catchup is
+#   delegated to the external scheduler tool's own posture —
+#   Kubernetes CronJob's `spec.startingDeadlineSeconds` is the
+#   knob that approximates the catchup horizon and is set per-env
+#   in the overlays. The ADR-0033 commitment is the documented
+#   value, not a runtime ceiling.
+# - It does NOT cover record-mode entities. Record-mode trigger
+#   patterns are watermark-driven (per ADR-0024); the
+#   record-mode runner emits its own triggers when window
+#   boundaries close. CronJob-driven scheduling is set-mode
+#   territory.
+#
+# Operator workflow
+# -----------------
+# 1. Copy this file to the matching overlay
+#    (deploy/overlays/{local,qa,prod}/) and rename per entity
+#    (e.g., `cronjob-customer.yaml`).
+# 2. Replace ENTITY_PLACEHOLDER + WINDOW_PLACEHOLDER + the
+#    `spec.schedule` field with the entity-specific values
+#    (translate the rule's advisory `schedule` literal into
+#    Kubernetes cron syntax).
+# 3. Reference the new file from the overlay's
+#    kustomization.yaml `resources:` block.
+# 4. (Optional) Configure `spec.startingDeadlineSeconds` to
+#    match the per-env SchedulerCatchupHorizon — e.g.,
+#    `startingDeadlineSeconds: 3600` for local (1h),
+#    `21600` for qa (6h), `86400` for prod (24h).
+#
+# The container uses `curlimages/curl` — a small, pinned curl
+# image. Any image with `curl` + `date` would work; the choice
+# is operational, not contractual.
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: dq-engine-trigger-example
+  labels:
+    app.kubernetes.io/name: dq-engine-scheduler
+    app.kubernetes.io/component: scheduler
+    app.kubernetes.io/part-of: dq-engine
+spec:
+  # PLACEHOLDER schedule. Operators replace this with the
+  # cron-syntax translation of the rule's advisory `schedule`
+  # field. Examples:
+  #
+  #   "0 * * * *"        — every hour at minute 0 (rule schedule: "1h")
+  #   "*/15 * * * *"     — every 15 minutes (rule schedule: "15m")
+  #   "0 0 * * *"        — daily at midnight UTC (rule schedule: "1d")
+  #   "0 */6 * * *"      — every 6 hours (no exact duration-literal equivalent)
+  #
+  # The cron expression is the OPERATIONAL surface; the rule's
+  # `schedule` literal is the DECLARATIVE one. ADR-0033 keeps
+  # them deliberately separate so the rule artefact stays
+  # tooling-neutral.
+  schedule: "0 * * * *"
+  # concurrencyPolicy: Forbid prevents two overlapping invocations
+  # if the prior pod hasn't finished by the next tick. Matches
+  # ADR-0029's MaxConcurrentEvaluations cost-discipline posture:
+  # let the engine semaphore handle catchup bursts, not the
+  # scheduler.
+  concurrencyPolicy: Forbid
+  # startingDeadlineSeconds bounds how late the controller will
+  # still start a missed run. Set per-overlay to match the env's
+  # SchedulerCatchupHorizon (1h / 6h / 24h for local / qa / prod
+  # per engine/internal/env/{local,qa,prod}.go); the base uses
+  # the local value (1h) so an un-overlaid deploy fails closed
+  # rather than catching up arbitrarily.
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: dq-engine-scheduler
+            app.kubernetes.io/component: scheduler
+            app.kubernetes.io/part-of: dq-engine
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: trigger
+              image: curlimages/curl:8.11.0
+              imagePullPolicy: IfNotPresent
+              env:
+                # ENTITY_PLACEHOLDER: replace per CronJob copy
+                # with the entity identifier (matches the
+                # `entity` field on the rule YAML).
+                - name: ENTITY
+                  value: ENTITY_PLACEHOLDER
+                # WINDOW_PLACEHOLDER: replace with the trigger
+                # window length (Go duration literal: 1h, 15m,
+                # 1d, etc.). Must align with the rule's
+                # schedule so successive windows tile without
+                # gaps or overlaps.
+                - name: WINDOW
+                  value: WINDOW_PLACEHOLDER
+                - name: ENGINE_URL
+                  value: "http://dq-engine:8080"
+              command:
+                - /bin/sh
+                - -ec
+                - |
+                  # Compute the window: end at the current minute
+                  # boundary (truncating seconds); start at
+                  # end - $WINDOW. The duration parsing relies on
+                  # GNU `date -d`; alpine's busybox date does not
+                  # support `-d` — curlimages/curl ships an
+                  # alpine base but with the BusyBox toolset, so
+                  # operators verify their image's date semantics
+                  # before relying on this exact computation.
+                  # Future enhancement: ship a small Go binary
+                  # `dq-trigger` that computes the window from a
+                  # rule's `schedule` field directly.
+                  END=$(date -u +%Y-%m-%dT%H:%M:00Z)
+                  START=$(date -u -d "$END - $WINDOW" +%Y-%m-%dT%H:%M:00Z)
+                  echo "Triggering ${ENTITY}: [${START}, ${END}) via ${ENGINE_URL}/v1/trigger"
+                  exec curl -fsS -X POST \
+                    -H 'Content-Type: application/json' \
+                    -d "{\"entity\":\"${ENTITY}\",\"window_start\":\"${START}\",\"window_end\":\"${END}\",\"trigger_source\":\"scheduler\"}" \
+                    "${ENGINE_URL}/v1/trigger"
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  cpu: 100m
+                  memory: 64Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                runAsNonRoot: true
+                runAsUser: 65532
+                capabilities:
+                  drop:
+                    - ALL
+          securityContext:
+            seccompProfile:
+              type: RuntimeDefault

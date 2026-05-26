@@ -88,6 +88,7 @@ func TestValidateRulesDir_V2_AllInvalid(t *testing.T) {
 		"params-unknown-field.yaml",
 		"schema-fails-no-mode.yaml",
 		"schema-fails-bad-duration.yaml",
+		"schedule-bad-grammar.yaml",
 	}
 	for _, want := range expected {
 		found := false
@@ -168,6 +169,45 @@ func TestV2CrossCheck_CatalogNil_RejectsV2Rules(t *testing.T) {
 	}
 	if len(results) == 0 {
 		t.Fatalf("expected v2 rules to fail when catalog is nil; got no errors")
+	}
+}
+
+// TestV2Schema_ScheduleField_AcceptsBothForms asserts the
+// schema's oneOf gates both ADR-0033 grammars: duration-literal
+// (e.g., "1h") and 5-field cron (e.g., "0 * * * *"). The two
+// valid fixtures are part of the testdata/v2/valid/ set so
+// TestValidateRulesDir_V2_AllValid already exercises them
+// indirectly; this targeted test confirms the schema path
+// individually.
+func TestV2Schema_ScheduleField_AcceptsBothForms(t *testing.T) {
+	set := schemaSet(t)
+	for _, fixture := range []string{
+		"testdata/v2/valid/customer-with-schedule.yaml",
+		"testdata/v2/valid/customer-with-cron-schedule.yaml",
+	} {
+		raw := mustReadFile(t, fixture)
+		if errs := ValidateRuleBytes(set, raw); len(errs) != 0 {
+			t.Errorf("%s: schema validation failed: %v", fixture, errs)
+		}
+	}
+}
+
+// TestV2Schema_ScheduleField_RejectsMalformed exercises the
+// negative path: a 4-field-cron value (the only ambiguous-looking
+// shape the oneOf intentionally rejects).
+func TestV2Schema_ScheduleField_RejectsMalformed(t *testing.T) {
+	set := schemaSet(t)
+	raw := mustReadFile(t, "testdata/v2/invalid/schedule-bad-grammar.yaml")
+	errs := ValidateRuleBytes(set, raw)
+	if len(errs) == 0 {
+		t.Fatal("expected schema validation error for malformed schedule; got none")
+	}
+	combined := ""
+	for _, e := range errs {
+		combined += e.Message + "\n"
+	}
+	if !strings.Contains(combined, "schedule") {
+		t.Errorf("expected error to mention 'schedule'; got: %s", combined)
 	}
 }
 
