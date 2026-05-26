@@ -265,6 +265,8 @@ type executionRecord struct {
 	RulesetVersion        string                 `bigquery:"ruleset_version"`
 	Entity                string                 `bigquery:"entity"`
 	TriggerSource         string                 `bigquery:"trigger_source"`
+	WindowStart           time.Time              `bigquery:"window_start"`
+	WindowEnd             time.Time              `bigquery:"window_end"`
 	StartedAt             bigquery.NullTimestamp `bigquery:"started_at"`
 	CompletedAt           bigquery.NullTimestamp `bigquery:"completed_at"`
 	ErrorSummary          bigquery.NullString    `bigquery:"error_summary"`
@@ -290,6 +292,8 @@ func toExecutionRecord(r ExecutionRow) executionRecord {
 		RulesetVersion: r.RulesetVersion,
 		Entity:         r.Entity,
 		TriggerSource:  string(r.TriggerSource),
+		WindowStart:    r.WindowStart,
+		WindowEnd:      r.WindowEnd,
 	}
 	if r.StartedAt != nil {
 		rec.StartedAt = bigquery.NullTimestamp{Timestamp: *r.StartedAt, Valid: true}
@@ -321,6 +325,8 @@ func fromExecutionRecord(rec executionRecord) *ExecutionRow {
 		RulesetVersion: rec.RulesetVersion,
 		Entity:         rec.Entity,
 		TriggerSource:  TriggerSource(rec.TriggerSource),
+		WindowStart:    rec.WindowStart,
+		WindowEnd:      rec.WindowEnd,
 	}
 	if rec.StartedAt.Valid {
 		t := rec.StartedAt.Timestamp

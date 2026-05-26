@@ -44,6 +44,10 @@ func executionsSchema() bigquery.Schema {
 		{Name: "entity", Type: bigquery.StringFieldType, Required: true},
 		{Name: "trigger_source", Type: bigquery.StringFieldType, Required: true,
 			Description: "ADR-0002 CC6: scheduler|manual|operator-rerun"},
+		{Name: "window_start", Type: bigquery.TimestampFieldType, Required: true,
+			Description: "ADR-0041 + B2-27: window opened-at endpoint; required for every new row (pre-B2-27 deployments need an ALTER TABLE backfill before flipping Required=true)"},
+		{Name: "window_end", Type: bigquery.TimestampFieldType, Required: true,
+			Description: "ADR-0041 + B2-27: window closed-at endpoint; required for every new row"},
 		{Name: "started_at", Type: bigquery.TimestampFieldType, Required: false,
 			Description: "nullable for the running transition row; required for terminal rows"},
 		{Name: "completed_at", Type: bigquery.TimestampFieldType, Required: false,
@@ -121,6 +125,7 @@ WHERE rn = 1
 const runningOlderThanSQL = `
 SELECT execution_id, attempt_id, recorded_at, status, mode,
        engine_version, ruleset_version, entity, trigger_source,
+       window_start, window_end,
        started_at, completed_at, error_summary,
        supersedes_execution_id
 FROM (
@@ -147,6 +152,7 @@ WHERE rn = 1
 const currentExecutionsInlineSQL = `
 SELECT execution_id, attempt_id, recorded_at, status, mode,
        engine_version, ruleset_version, entity, trigger_source,
+       window_start, window_end,
        started_at, completed_at, error_summary,
        supersedes_execution_id
 FROM (

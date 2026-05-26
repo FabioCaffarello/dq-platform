@@ -111,6 +111,7 @@ stability tier explicit:
 | `ruleset_version` | string | stable across engine minor versions |
 | `entity` | string | stable across engine minor versions |
 | `trigger_source` | enum (ADR-0002) | stable; additive |
+| `window_start` / `window_end` | timestamp (UTC, microsecond) | stable across engine minor versions (added by ADR-0041 + B2-27; required for every row written after B2-27 lands) |
 | `started_at` / `completed_at` | timestamp (nullable) | stable across engine minor versions |
 | `error_summary` | string (nullable) | stable across engine minor versions |
 | `supersedes_execution_id` | string (nullable) | stable across engine minor versions |
