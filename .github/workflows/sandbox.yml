@@ -1,0 +1,103 @@
+# path: .github/workflows/sandbox.yml
+#
+# Integration-sandbox tier (ADR-0034 + B2-18). Runs every test
+# tagged `//go:build sandbox` against a real GCP project — the
+# tier that exercises Partial-row / No-row capabilities the local
+# fake-gcs-server cannot faithfully reproduce. The first
+# consumer is `tools/manifest/publisher_sandbox_test.go`, which
+# exercises the `ifGenerationMatch` CAS-race-loser branch
+# (ADR-0017 §Partial row gap).
+#
+# # Trigger posture (ADR-0034 §"`integration-sandbox`")
+#
+# This workflow is **deliberately not** wired to `pull_request`
+# or `push`. The default PR lane is explicitly NOT gated on the
+# sandbox tier:
+#
+# - Sandbox spend is a P4 cost concern; gating every PR on real
+#   GCP traffic would multiply the platform's monthly substrate
+#   bill.
+# - Most PRs do not touch the Partial-row code paths the sandbox
+#   tier covers; gating them on sandbox runs would slow the
+#   development loop without operational benefit.
+#
+# Two trigger modes are committed:
+#
+# - **workflow_dispatch** — an operator can trigger the lane
+#   manually from the Actions UI when reviewing a PR that
+#   touches a sandbox-relevant surface (manifest publisher,
+#   results-store view, record-mode runner). This is the v1
+#   primary trigger until the operational session that
+#   provisions real GCP lands.
+# - **schedule** (commented out at v1) — once sandbox
+#   credentials are stable, a weekly schedule catches drift
+#   between the emulator and real GCP without operator burden.
+#   Uncomment the schedule block after the operational GCP
+#   provisioning session.
+#
+# # Credential gating
+#
+# The job's `if:` condition checks for the presence of
+# `secrets.DQ_SANDBOX_PROJECT`. Until repository administrators
+# configure the secret, the job is skipped with a clear "not
+# configured" notice. This keeps the workflow definition green
+# while the platform waits for the GCP provisioning session.
+#
+# Once configured:
+#
+# - `secrets.DQ_SANDBOX_PROJECT` → exported as
+#   `DQ_SANDBOX_PROJECT` env var; the test reads it via
+#   `loadSandboxConfig`.
+# - `secrets.DQ_SANDBOX_BUCKET` → exported as
+#   `DQ_SANDBOX_BUCKET`; the test reads it the same way.
+# - `secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON` → written to
+#   a file in the runner; the path is exported as
+#   `GOOGLE_APPLICATION_CREDENTIALS` so the GCS SDK resolves
+#   Application Default Credentials from it.
+#
+# Alternative auth (workload-identity-federation) is also
+# acceptable; the operational session picks the auth path that
+# matches the platform's broader GCP-auth posture. Until then,
+# JSON-credential-file via secret is the simplest baseline.
+
+name: sandbox
+
+on:
+  workflow_dispatch:
+  # schedule:
+  #   # Weekly drift catcher. Uncomment after the operational GCP
+  #   # provisioning session lands so the lane has real credentials.
+  #   - cron: '0 6 * * 1'  # Mondays at 06:00 UTC
+
+jobs:
+  sandbox:
+    name: make test-sandbox
+    runs-on: ubuntu-latest
+    # Gate on the presence of the sandbox-project secret. Until
+    # an administrator configures it, the job is skipped with a
+    # visible "not configured" status in the Actions UI — the
+    # workflow definition stays green and the lane is ready for
+    # the moment sandbox credentials land.
+    if: ${{ vars.SANDBOX_ENABLED == 'true' || secrets.DQ_SANDBOX_PROJECT != '' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: engine/go.mod
+          cache: true
+
+      - name: Write service-account credentials
+        if: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON != '' }}
+        run: |
+          install -m 0600 /dev/null "${HOME}/sandbox-sa.json"
+          printf '%s' "${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}" > "${HOME}/sandbox-sa.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=${HOME}/sandbox-sa.json" >> "${GITHUB_ENV}"
+
+      - name: Run sandbox tests
+        env:
+          DQ_SANDBOX_PROJECT: ${{ secrets.DQ_SANDBOX_PROJECT }}
+          DQ_SANDBOX_BUCKET: ${{ secrets.DQ_SANDBOX_BUCKET }}
+        run: make test-sandbox
