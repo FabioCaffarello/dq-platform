@@ -35,6 +35,8 @@ func main() {
 			"path to the _owners.yaml; the file may be missing, in which case ownerless rules are still rejected per ADR-0006 CC9")
 		rulesDir = flag.String("rules", "rules",
 			"directory tree to walk for *.yaml files; the _schema/ subdirectory is excluded automatically")
+		codeownersPath = flag.String("codeowners", ".github/CODEOWNERS",
+			"path to .github/CODEOWNERS for the owner-group cross-check per ADR-0037; empty disables the check")
 		verbose = flag.Bool("v", false, "print each file as it is processed")
 	)
 	flag.Parse()
@@ -81,6 +83,15 @@ func main() {
 	}
 	for path, errs := range ownersCheckResults {
 		results[path] = append(results[path], errs...)
+	}
+
+	codeowners, err := LoadCodeOwners(*codeownersPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "dq-lint: %v\n", err)
+		os.Exit(exitOperationalError)
+	}
+	if errs := CheckOwnersGroupMembership(owners, codeowners); len(errs) > 0 {
+		results[*ownersPath] = append(results[*ownersPath], errs...)
 	}
 
 	if len(results) == 0 {
