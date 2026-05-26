@@ -82,6 +82,36 @@ func TestCompileSQL_UnknownKind(t *testing.T) {
 	}
 }
 
+func TestCompileSQL_RowCountWithinBaseline(t *testing.T) {
+	// B2-14: the baselined kind's dry-run estimates the
+	// **current-value** count (same SQL as the unbaselined kind);
+	// the baseline query itself is NOT dry-run-checked.
+	src := ruleSource{
+		Type:      "bigquery",
+		ProjectID: "dq-local",
+		DatasetID: "dq_fixture",
+		TableID:   "customer",
+	}
+	got, ok := compileSQL("set.row_count_within_baseline", src)
+	if !ok {
+		t.Fatal("compileSQL returned !ok for set.row_count_within_baseline")
+	}
+	want := "SELECT COUNT(*) AS row_count FROM `dq-local.dq_fixture.customer`"
+	if got != want {
+		t.Errorf("baseline kind SQL = %q; want %q", got, want)
+	}
+
+	// Partition retrofit applies equally.
+	srcPart := src
+	srcPart.PartitionColumn = "event_ts"
+	got, _ = compileSQL("set.row_count_within_baseline", srcPart)
+	wantPart := "SELECT COUNT(*) AS row_count FROM `dq-local.dq_fixture.customer` " +
+		"WHERE `event_ts` >= @window_start AND `event_ts` < @window_end"
+	if got != wantPart {
+		t.Errorf("baseline+partition SQL = %q; want %q", got, wantPart)
+	}
+}
+
 func TestNew_RequiresRulesDirAndClient(t *testing.T) {
 	if _, err := New(Config{}); err == nil {
 		t.Error("New({}) returned nil; want error for missing RulesDir")

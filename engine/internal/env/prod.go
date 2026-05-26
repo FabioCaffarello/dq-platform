@@ -45,4 +45,8 @@ var Prod = EnvConfig{
 		MaxLatenessTolerance:  30 * time.Minute,
 		SampleStorageCapMB:    10000,
 	},
+	EvidenceRetention: EvidenceRetention{
+		// ADR-0031 §"Single-tier retention" — prod keeps 365 days.
+		ResultsRetention: 365 * 24 * time.Hour,
+	},
 }

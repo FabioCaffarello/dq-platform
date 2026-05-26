@@ -278,18 +278,28 @@ func (r *Runner) handleRule(ctx context.Context, path string, body []byte, rep *
 
 // compileSQL produces the SQL template for one (kind, source)
 // combination. Mirrors engine/internal/eval/row_count_positive.go
-// for the only set-mode kind shipping today. Returns (sql, true)
-// on success; ("", false) when no template exists for the kind
-// (caller logs a skip and proceeds).
+// (and row_count_within_baseline.go for the current-value half
+// of the baselined kind) for the set-mode kinds shipping today.
+// Returns (sql, true) on success; ("", false) when no template
+// exists for the kind (caller logs a skip and proceeds).
 //
 // When src.PartitionColumn is set, the SQL gains the same
 // half-open-interval partition predicate the runtime evaluator
 // emits (B2-12 retrofit). Window endpoints render as parameter
 // placeholders — the dry-run still binds them via the BigQuery
 // client's QueryParameters API at dryRun-time.
+//
+// Note: for baselined kinds (set.row_count_within_baseline), the
+// dry-run only estimates the **current-value** count — the same
+// SQL set.row_count_positive uses. The historical baseline query
+// is NOT dry-run-checked here because (a) it reads
+// dq_check_results which may not exist in a green-field
+// emulator and (b) the runtime evaluator runs the baseline query
+// independently per ADR-0032. The current-value query is the
+// portion the PR-time cost ceiling cares about.
 func compileSQL(kind string, src ruleSource) (string, bool) {
 	switch kind {
-	case "set.row_count_positive":
+	case "set.row_count_positive", "set.row_count_within_baseline":
 		tableRef := fmt.Sprintf("%s.%s.%s", src.ProjectID, src.DatasetID, src.TableID)
 		if src.PartitionColumn == "" {
 			return fmt.Sprintf("SELECT COUNT(*) AS row_count FROM `%s`", tableRef), true
