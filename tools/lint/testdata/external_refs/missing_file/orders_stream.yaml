@@ -1,0 +1,17 @@
+# Cross-check #12: referenced file does not exist.
+version: 2
+entity: orders_stream
+mode: record
+source:
+  type: kafka
+  topic: orders.events.v1
+  consumer_group: dq-orders-stream
+  window:
+    type: tumbling
+    duration: 1m
+    lateness_tolerance: 30s
+checks:
+  - check_id: schema_present
+    kind: record.schema_conformance
+    params:
+      schema_ref: schemas/does-not-exist.json

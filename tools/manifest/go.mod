@@ -6,9 +6,15 @@ go 1.25.0
 
 require (
 	cloud.google.com/go/storage v1.62.2
+	dq-platform/tools/pathsafe v0.0.0-00010101000000-000000000000
 	google.golang.org/api v0.280.0
 	gopkg.in/yaml.v3 v3.0.1
 )
+
+// pathsafe is a sibling module in the same monorepo; the
+// replace makes `cd tools/manifest && go build` work outside
+// the go.work workspace (e.g., for future Dockerfile builds).
+replace dq-platform/tools/pathsafe => ../pathsafe
 
 require (
 	cel.dev/expr v0.25.1 // indirect

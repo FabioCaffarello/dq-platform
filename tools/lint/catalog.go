@@ -44,6 +44,15 @@ type CatalogKind struct {
 	Mode         string // "set" | "record" (per ADR-0021)
 	SourceMode   string // "set" | "record" (per ADR-0023)
 	ParamsSchema *jsonschema.Schema
+
+	// ExternalEligibleFields holds per-field compiled sub-schemas
+	// for fields the catalog declares as external-reference-eligible
+	// (ADR-0044 §"Clause 2"). The map key is the field name (e.g.,
+	// "schema"); the value is the compiled sub-schema for that
+	// field's accepted inline content. Lint cross-check #12
+	// validates inlined `<field>_ref` content against this
+	// sub-schema before accepting the reference.
+	ExternalEligibleFields map[string]*jsonschema.Schema
 }
 
 // LoadCatalog reads the catalog YAML, validates the surface shape,
@@ -64,11 +73,12 @@ func LoadCatalog(path string) (*Catalog, error) {
 	var doc struct {
 		CatalogVersion int `yaml:"catalog_version"`
 		Kinds          []struct {
-			Name         string         `yaml:"name"`
-			Description  string         `yaml:"description"`
-			Mode         string         `yaml:"mode"`
-			SourceMode   string         `yaml:"source_mode"`
-			ParamsSchema map[string]any `yaml:"params_schema"`
+			Name                   string         `yaml:"name"`
+			Description            string         `yaml:"description"`
+			Mode                   string         `yaml:"mode"`
+			SourceMode             string         `yaml:"source_mode"`
+			ParamsSchema           map[string]any `yaml:"params_schema"`
+			ExternalEligibleFields []string       `yaml:"external_eligible_fields"`
 			// Aggregation is loaded but not retained — the engine
 			// consumes it at runtime.
 			Aggregation map[string]any `yaml:"aggregation"`
@@ -114,11 +124,34 @@ func LoadCatalog(path string) (*Catalog, error) {
 			return nil, fmt.Errorf("catalog kind %q: %w", k.Name, err)
 		}
 
+		// ADR-0044 §"Clause 2" — compile per-field sub-schemas for
+		// every declared external-eligible field. The sub-schema is
+		// extracted from params_schema.properties[<field>]; if the
+		// field is not declared in properties, the catalog entry is
+		// self-inconsistent and we surface a clear error.
+		eligibleSubs := map[string]*jsonschema.Schema{}
+		for _, fieldName := range k.ExternalEligibleFields {
+			props, ok := k.ParamsSchema["properties"].(map[string]any)
+			if !ok {
+				return nil, fmt.Errorf("catalog kind %q: external_eligible_fields names %q but params_schema has no properties block", k.Name, fieldName)
+			}
+			frag, ok := props[fieldName].(map[string]any)
+			if !ok {
+				return nil, fmt.Errorf("catalog kind %q: external_eligible_fields names %q but params_schema.properties.%s is not an object schema", k.Name, fieldName, fieldName)
+			}
+			sub, err := compileSubSchema(k.Name+"/"+fieldName, frag)
+			if err != nil {
+				return nil, fmt.Errorf("catalog kind %q: external_eligible_fields[%q]: %w", k.Name, fieldName, err)
+			}
+			eligibleSubs[fieldName] = sub
+		}
+
 		cat.Kinds[k.Name] = &CatalogKind{
-			Name:         k.Name,
-			Mode:         k.Mode,
-			SourceMode:   k.SourceMode,
-			ParamsSchema: ps,
+			Name:                   k.Name,
+			Mode:                   k.Mode,
+			SourceMode:             k.SourceMode,
+			ParamsSchema:           ps,
+			ExternalEligibleFields: eligibleSubs,
 		}
 	}
 

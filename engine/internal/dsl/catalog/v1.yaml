@@ -37,18 +37,35 @@ kinds:
       params.aggregation block.
     mode: record
     source_mode: record
+    # ADR-0044 §"Clause 2": fields named here may carry an
+    # external-reference sibling `<field>_ref` whose value is a
+    # relative path under rules/. The publisher and linter resolve
+    # the path, read + parse the file, validate it against the
+    # field's sub-schema, and inline the content. The `schema`
+    # field is the inaugural external-eligible entry; the nested
+    # `aggregation` block stays inline-only (small, per-rule,
+    # ergonomically fine).
+    external_eligible_fields:
+      - schema
     params_schema:
       type: object
       additionalProperties: false
-      required:
-        - schema
       properties:
         schema:
           description: >-
             JSON Schema fragment to validate each record against. The
             handler treats the record body as a JSON object and applies
-            this fragment per-record.
+            this fragment per-record. Mutually exclusive with `schema_ref`;
+            lint cross-check #12 enforces that exactly one of the two is
+            present.
           type: object
+        schema_ref:
+          description: >-
+            ADR-0044 external reference for the `schema` field. Relative
+            path under rules/ pointing at a JSON or YAML file whose
+            parsed content is inlined into the manifest body at publish
+            time. Mutually exclusive with `schema`.
+          type: string
         aggregation:
           description: >-
             Optional per-rule overrides for the catalog

@@ -257,9 +257,9 @@ func ValidateRulesDir(set *SchemaSet, catalog *Catalog, owners *Owners, dir stri
 			results[path] = schemaErrs
 			return nil
 		}
-		// Schema-valid; for v2 rules, run cross-checks #3–#8.
+		// Schema-valid; for v2 rules, run cross-checks #3–#8 + #12.
 		if parseRuleVersion(raw) == 2 {
-			if cErrs := validateV2CrossChecks(raw, catalog, owners); len(cErrs) > 0 {
+			if cErrs := validateV2CrossChecks(raw, catalog, owners, dir, path); len(cErrs) > 0 {
 				results[path] = append(results[path], cErrs...)
 			}
 		}
@@ -297,7 +297,7 @@ type ruleCheckV2 struct {
 	Params  map[string]any `yaml:"params,omitempty"`
 }
 
-// validateV2CrossChecks runs lint cross-checks #3–#8 on a
+// validateV2CrossChecks runs lint cross-checks #3–#8 + #12 on a
 // schema-valid v2 rule. Cross-checks #1, #2, #4, #7 first-half,
 // #9, #10, #11 are enforced by the v2 schema itself (mode field
 // required, kind regex, source oneOf, window structure, duration
@@ -310,7 +310,15 @@ type ruleCheckV2 struct {
 //   #6 per-rule check params validate against catalog.params_schema
 //   #7 source.type matches rule.mode (bigquery↔set, kafka↔record)
 //   #8 source.type matches catalog.kind.source_mode for every check
-func validateV2CrossChecks(ruleBytes []byte, catalog *Catalog, owners *Owners) []ValidationError {
+//   #12 external-artifact references (ADR-0044): mutual-exclusion,
+//       eligibility, pathsafe resolution, sub-schema validation
+//
+// rulesRoot is the rules directory root passed via the -rules
+// flag; rulePath is the absolute or relative path of the rule
+// being validated. Both are forwarded to cross-check #12 which
+// uses them to resolve `_ref` references via the shared pathsafe
+// helper.
+func validateV2CrossChecks(ruleBytes []byte, catalog *Catalog, owners *Owners, rulesRoot, rulePath string) []ValidationError {
 	var rule ruleDocV2
 	if err := yaml.Unmarshal(ruleBytes, &rule); err != nil {
 		// Schema validation has already passed, so a parse error
@@ -385,6 +393,11 @@ func validateV2CrossChecks(ruleBytes []byte, catalog *Catalog, owners *Owners) [
 				c.CheckID, c.Kind, err)})
 		}
 	}
+
+	// #12 — ADR-0044 external-artifact references. Runs after #5/#6
+	// so it sees only kinds the catalog recognises; the helper
+	// itself skips unknown kinds defensively.
+	errs = append(errs, checkExternalReferences(rulesRoot, rulePath, rule, catalog)...)
 
 	return errs
 }
