@@ -69,6 +69,11 @@ This directory holds:
   B1-7; N-1 + 90-day calendar-time floor for schema
   versions; engine-binary-bound drop mechanism; closes
   the B1 backlog).
+- `adr/0036` — `dq-manifest set-pointer` rollback subcommand
+  (resolves B2-10; first-class CLI surface for the
+  CAS-conditional pointer rewrite primitive; closes the
+  bypass-via-gsutil failure mode; runbook §3 rewritten
+  around the new primary path).
 - `glossary.md` — codebase-specific terminology (W3-P8a).
 - `governance.md` — review model and contribution-time
   flows (W3-P8b).
