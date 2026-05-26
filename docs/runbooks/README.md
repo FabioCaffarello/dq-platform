@@ -26,6 +26,7 @@ production-ready.
 | Loader refuse-swap fires repeatedly; refresh fails N times consecutively (N per B1-2). | [`refresh-failure-escalation.md`](refresh-failure-escalation.md) |
 | A new entity needs onboarding through the three-tier readiness model (Candidate → Test-soak → Production) per ADR-0040. | [`entity-onboarding.md`](entity-onboarding.md) |
 | An existing deployment has accumulated non-partitioned `dq_executions` / `dq_check_results` tables from before ADR-0031's partitioning posture took effect. | [`results-partition-migration.md`](results-partition-migration.md) |
+| A baselined check (e.g. `set.row_count_within_baseline`) returns `result: degraded` with `evidence_summary.reason: insufficient_baseline_samples`. | [`baselined-check-degraded.md`](baselined-check-degraded.md) |
 
 ## Anatomy of a runbook
 
