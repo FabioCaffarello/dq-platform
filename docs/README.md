@@ -119,6 +119,18 @@ This directory holds:
   cross-mode dashboard interpretation guidelines +
   mode-transition rule preserving historical
   observability across set↔record flips).
+- `adr/0042` — release engineering invariants
+  (resolves B2-3; four-clause cross-workspace
+  contract — Docker (multi-stage + non-root +
+  read-only-root + `dq-<binary>:<tag>` image
+  naming), Make (`lint-<ws>` / `test-<ws>` /
+  `build-<binary>` inventory + aggregator
+  obligation), Versioning (W2-5 prefixes extended
+  with `tools-manifest-v*`; tags immutable;
+  image-tag = git-tag with `<workspace>-v` stripped),
+  Deploy-validation (deeper lane integrated into
+  existing `validate-deploy`); three implementation
+  slices registered as B2-28 / B2-29 / B2-30).
 - `glossary.md` — codebase-specific terminology (W3-P8a).
 - `governance.md` — review model and contribution-time
   flows (W3-P8b).
