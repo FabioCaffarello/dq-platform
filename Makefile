@@ -25,6 +25,7 @@ COMPOSE := docker compose -p $(COMPOSE_PROJECT_NAME)
 	lint-rules dry-run-rules \
 	sync-schema \
 	build-lint build-engine build-manifest build-engine-image \
+	check-tag-scope \
 	up down \
 	smoke-substrate \
 	validate-deploy
@@ -79,6 +80,10 @@ ENGINE_IMAGE_NAME ?= dq-engine
 
 build-engine-image: ## Build the dq-engine container image per ADR-0042 Clause 1; tag from git per ADR-0042 Clause 3.
 	@docker build -t $(ENGINE_IMAGE_NAME):$(ENGINE_IMAGE_TAG) ./engine
+
+check-tag-scope: ## Validate that TAG=<workspace-v…> diffs cleanly against its prior matching tag (ADR-0042 Clause 3 / B2-29 gate).
+	@if [ -z "$(TAG)" ]; then echo "usage: make check-tag-scope TAG=<workspace-v…>" >&2; exit 1; fi
+	@bash scripts/check-tag-scope.sh "$(TAG)"
 
 lint-rules: build-lint ## Validate every rule YAML against the schema mirror (per ADR-0001).
 	@./bin/dq-lint -schema rules/_schema/v1.schema.json -rules rules
