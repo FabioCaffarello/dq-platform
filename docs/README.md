@@ -131,6 +131,16 @@ This directory holds:
   Deploy-validation (deeper lane integrated into
   existing `validate-deploy`); three implementation
   slices registered as B2-28 / B2-29 / B2-30).
+- `adr/0043` — logging contract specifics (resolves
+  B2-2; `DQ_LOG_LEVELS` formalized as five-clause
+  contract — grammar (case-insensitive level
+  values; whitespace trimmed around `,` and `:`);
+  ten-leaf package inventory aligned to actual
+  `engine/internal/` tree; longest-prefix-match
+  precedence at dot boundaries; syntactic errors
+  fatal + unknown package names silently ignored;
+  additive to `EnvConfig.LogLevel`; implementation
+  deferred to B2-31 slice).
 - `glossary.md` — codebase-specific terminology (W3-P8a).
 - `governance.md` — review model and contribution-time
   flows (W3-P8b).
