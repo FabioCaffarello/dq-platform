@@ -47,12 +47,16 @@ This directory holds:
 - `adr/0029` — set-mode BigQuery cost ceilings (resolves B1-2).
 - `adr/0030` — manifest cryptographic posture (resolves B1-8;
   deferral with auditable trigger conditions).
+- `adr/0031` — evidence retention parameters (resolves B1-6;
+  single-tier partition-expiration retention + sample-content
+  allowlist).
 - `glossary.md` — codebase-specific terminology (W3-P8a).
 - `governance.md` — review model and contribution-time
   flows (W3-P8b).
 - `runbooks/` — operator-facing playbooks (W3-P8d).
 - `security/` — operator-facing security notes
-  (introduced 2026-05-25 with ADR-0030).
+  (introduced 2026-05-25 with ADR-0030;
+  evidence-retention note added with ADR-0031).
 
 The contributor-facing guide lives at the repository root as
 [`../CONTRIBUTING.md`](../CONTRIBUTING.md) per GitHub convention

@@ -65,7 +65,7 @@
 | B1-3 | Scheduler catchup behavior | open | How are catchup, missed windows, and manual triggers represented? | A scheduler without precise semantics causes duplicate or missing evaluations. | Scheduling design note |
 | B1-4 | Environment configuration model | [resolved-study](../decisions/2026-05-22-b1-4-environment-configuration-model.md) → [resolved-adr](../../docs/adr/0018-environment-configuration-model.md) | Which configuration lives in code, deployment, or data, and how are `local`, `qa`, and `prod` isolated? | Prevents configuration sprawl and implicit behavior drift. | Env strategy ADR |
 | B1-5 | Local testing strategy | open | What can be tested offline, what needs BigQuery sandbox access, and how is generated SQL inspected? | Developer experience shapes long-term quality. | Dev guide + tooling scope |
-| B1-6 | Evidence retention parameters | open | How many violating samples per check, for how long, under what privacy constraints? | Storage cost and privacy compliance depend on it. | Storage and security note |
+| B1-6 | Evidence retention parameters | [resolved-study](../decisions/2026-05-25-b1-6-evidence-retention-parameters.md) → [resolved-adr](../../docs/adr/0031-evidence-retention-parameters.md) | How many violating samples per check, for how long, under what privacy constraints? | Storage cost and privacy compliance depend on it. | Storage and security note |
 | B1-7 | Compatibility window duration | open | How long is each schema version supported after its successor is released? | Migration ergonomics for domain teams. | Boundary contract refinement |
 | B1-8 | Manifest cryptographic posture | [resolved-study](../decisions/2026-05-25-b1-8-manifest-cryptographic-posture.md) → [resolved-adr](../../docs/adr/0030-manifest-cryptographic-posture.md) | Does the manifest carry signatures beyond checksums? Who signs it? | Defense in depth against tampering or accidental publication. | Security note |
 | B1-9 | CODEOWNERS finalization | [resolved-study](../decisions/2026-05-22-b1-9-codeowners.md) → [resolved-adr](../../docs/adr/0015-codeowners.md) | Final team names and path rules for the asymmetric review model. | Enforces the boundary at PR-review time. | CODEOWNERS file |
@@ -245,12 +245,15 @@ demand-driven follow-ups, not Wave 3 blockers.
 **Post-Wave-3 follow-up backlog** (work that survives Wave 3 closure):
 
 - **Open B1 rows** — B1-1 (baseline strategy), B1-3 (scheduler
-  catchup behavior), B1-5 (local testing strategy), B1-6
-  (evidence retention parameters), B1-7 (compatibility window
-  duration). **B1-2 (BigQuery cost ceilings) resolved
-  2026-05-25 → ADR-0029. B1-8 (manifest cryptographic
-  posture) resolved 2026-05-25 → ADR-0030 (deferral with
-  auditable trigger conditions; B0-5 reopener did not fire).**
+  catchup behavior), B1-5 (local testing strategy), B1-7
+  (compatibility window duration). **B1-2 (BigQuery cost
+  ceilings) resolved 2026-05-25 → ADR-0029. B1-8 (manifest
+  cryptographic posture) resolved 2026-05-25 → ADR-0030
+  (deferral with auditable trigger conditions; B0-5 reopener
+  did not fire). B1-6 (evidence retention parameters)
+  resolved 2026-05-25 → ADR-0031 (single-tier
+  partition-expiration retention + sample-content allowlist;
+  ADR-0026 record-mode privacy deferral redeemed).**
 - **Open B2 rows** — B2-1…B2-7 (long-tail implementation-phase
   items), plus the newly registered B2-9 (owner ↔ CODEOWNERS-group
   linter cross-check) and B2-10 (`dq-manifest set-pointer` rollback
@@ -258,7 +261,11 @@ demand-driven follow-ups, not Wave 3 blockers.
   pending close-step numbering: `tools/dryrun` binary (compiler-
   layer cost enforcement) and `row_count_positive` partition-filter
   retrofit (closes the v1 set-mode cost gap on partition-less
-  tables).
+  tables). One further B2 follow-up registers from ADR-0031
+  pending close-step numbering: the pre-existing-table partitioning
+  migration runbook (effectively green-field for v1 deployments
+  but reserved for any deployment that accumulates non-partitioned
+  history before ADR-0031 reaches it).
 - **Operational `PLACEHOLDER` substitutions** awaiting the
   GitHub-org / GCP-project provisioning session: `@PLACEHOLDER-org/…`
   in `/.github/CODEOWNERS` and `rules/_owners.yaml`;
@@ -288,10 +295,11 @@ Suggested triage order when starting a follow-up session:
    or a missing CLI surface (e.g., B2-10) is blocking an imminent
    operational task, resolve it before any B1 study session.
 2. **B1 rows with downstream consumers next.** B1-2 (cost
-   ceilings → ADR-0029, 2026-05-25) and B1-8 (cryptographic
-   posture → ADR-0030, 2026-05-25) have been resolved. The
-   remaining open B1 rows — B1-1, B1-3, B1-5, B1-6, B1-7 —
-   are demand-driven and have no current B0 reopener.
+   ceilings → ADR-0029, 2026-05-25), B1-8 (cryptographic
+   posture → ADR-0030, 2026-05-25), and B1-6 (evidence
+   retention → ADR-0031, 2026-05-25) have been resolved. The
+   remaining open B1 rows — B1-1, B1-3, B1-5, B1-7 — are
+   demand-driven and have no current B0 reopener.
 3. **B2 rows last**, on demand. B2-9 (linter cross-check) and B2-10
    (CLI rollback subcommand) are demand-driven; the other B2 rows
    surface as implementation reveals concrete needs.
