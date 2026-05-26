@@ -98,6 +98,16 @@ This directory holds:
   committed as part of the contract; baseline-dashboard
   implementation deferred as B2-24 paced post-Phase-4c
   metric emission).
+- `adr/0040` — entity onboarding workflow (resolves
+  B2-5; three-tier readiness model — Candidate →
+  Test-soak → Production; six-criterion Tier 0 →
+  Tier 1 checklist + seven-criterion Tier 1 → Tier 2
+  checklist with auditable thresholds (≥ 50 successful
+  runs, ≥ 7 calendar days, ≥ 95% pass-rate) queryable
+  against ADR-0039's surfaces; qa substrate is the
+  test surface; shared-substrate channel-collision
+  workaround procedurally enforced; paired runbook
+  `runbooks/entity-onboarding.md` ships alongside).
 - `glossary.md` — codebase-specific terminology (W3-P8a).
 - `governance.md` — review model and contribution-time
   flows (W3-P8b).
