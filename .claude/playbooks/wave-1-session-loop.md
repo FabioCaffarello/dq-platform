@@ -36,26 +36,74 @@ can be pointed at it as required reading.
 6. **Critique.** Run `/critique studies/decisions/<file>.md`. Read
    the findings.
 
+   **Preserve the round** per
+   [ADR-0048](../../docs/adr/0048-critique-rounds-preservation.md):
+
+   - Capture the `/critique` stdout to a file at
+     `studies/critiques/<today>-<slug>-critique-<N>.md`, where
+     `<slug>` matches the parent study's slug exactly and `<N>`
+     is the round number (1-indexed; this round is `1`, the
+     optional second round in step 7 is `2`).
+   - The capture is operator-side — `/critique` itself stays
+     stdout-pure. Redirect
+     (`claude /critique ... > studies/critiques/...md`) or
+     copy-paste from the session transcript.
+   - Wrap the captured findings in the file shape ADR-0048
+     §"What" commits: path-header HTML comment (R6), H1 title
+     `# B<N>-<M> — Critique Round <K>`, `## Metadata` block
+     (target study, round, date, preservation status, closing
+     commit hash — the latter filled in at step 10),
+     `## Critique Output` containing the verbatim stdout inside
+     a fenced ```text block, and `## Operator Response` trailer
+     with one entry per finding using the disposition vocabulary
+     from ADR-0048 §"What" (`applied as recommended` /
+     `applied with variation` / `deferred to Open Questions` /
+     `deferred to a future round` / `accepted as-is` /
+     `rejected`).
+   - Commit the critique file as an intermediate commit, before
+     any revision lands:
+     ```
+     git add studies/critiques/
+     git commit -m "docs(decision): B<N>-<M> — critique round <K> findings"
+     ```
+   - The sequence is draft → **critique (commit)** → revision
+     (commit at step 7).
+
 7. **Iterate.** Ask the agent to revise the **original study** (not
-   the critique) to address `blocking` findings. Re-run `/critique`
-   if needed. **Maximum two critique-revise rounds.** After that,
-   accept the document as the best Wave 1 can do and let remaining
-   doubts surface in Open Questions.
+   the critique) to address `blocking` findings. Commit the
+   revision as its own commit. Re-run `/critique` if needed —
+   **preserve round 2 per step 6's contract** (capture to
+   `studies/critiques/<today>-<slug>-critique-2.md`, intermediate
+   commit, operator-response trailer). **Maximum two
+   critique-revise rounds.** After that, accept the document as
+   the best Wave 1 can do and let remaining doubts surface in
+   Open Questions.
 
-8. **[H] Check Open Questions.** Either:
-   - the Open Questions section is empty, **or**
-   - every item is explicitly marked "out-of-scope for current
+8. **[H] Check Open Questions and Critique rounds.** Two gates must
+   pass before the study can move to `resolved-study`:
+
+   - **Open Questions** — either the section is empty, **or**
+     every item is explicitly marked "out-of-scope for current
      cycle" with a one-line reason.
+   - **Critique rounds bullet** — the study's Metadata block has
+     a `Critique rounds:` bullet listing each round's disposition
+     per [ADR-0048](../../docs/adr/0048-critique-rounds-preservation.md)
+     §"Skip" grammar: rounds in chronological order; each entry
+     `preserved (<filepath>)` or `skipped (<reason>)`; entries
+     comma-separated; the bullet may span multiple lines. Absence
+     of the bullet is itself a `blocking` finding under ADR-0048.
 
-   If neither, the study is not ready. Continue iterating or accept
-   it as is and document why.
+   If either gate fails, the study is not ready. Continue
+   iterating or accept it as is and document why.
 
 9. **Update the log.** Edit
    `studies/foundation/06-decision-log.md` — change the row for this
    B0 to `resolved-study` and add the link to the file written in
    step 4.
 
-10. **Commit.**
+10. **Commit.** This is the **close commit** — log update only.
+    Intermediate critique-and-revision commits already landed in
+    steps 6 and 7.
     ```
     git add studies/
     git commit -m "docs(decision): resolve B0-N — <topic>"
