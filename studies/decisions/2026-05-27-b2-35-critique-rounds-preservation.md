@@ -10,7 +10,7 @@
   output "Draft study at this path; provisional promotion to
   `docs/adr/0048-critique-rounds-preservation.md` once
   `resolved-study`").
-- **Status:** draft (resolved-study after the critique pass).
+- **Status:** resolved-study (B2-35; one critique round; round 1 cleared with no blocking findings).
 - **Last updated:** 2026-05-27.
 - **Upstream resolved:**
   - **ADR-0014** ([`docs/adr/0014-trigger-handler-contract.md`](../../docs/adr/0014-trigger-handler-contract.md))
@@ -111,7 +111,7 @@ The gap is bounded: only critique *transcripts* are missing.
 The decision-log rows, the studies themselves, the promoted
 ADRs, and the salvaged anti-patterns catalog are all present.
 B2-35 closes the transcript gap going forward; it does not try
-to reconstruct what was lost (see D4).
+to reconstruct what was lost (see SD-4).
 
 **Scope guardrail.** This study commits the preservation
 shape only. It does not modify the finding template, the
@@ -123,36 +123,35 @@ adversarial-review nature of the cycle is unchanged.
 
 ## Decision Drivers
 
-- **D1.** Preservation must not break **R8**: studies are
+- **DD-1.** Preservation must not break **R8**: studies are
   scaffolding, not the published repository. Critique
   transcripts are reasoning artifacts, so they live under
   `studies/`, not `docs/`.
-- **D2.** Preservation must not balloon the commit count per
+- **DD-2.** Preservation must not balloon the commit count per
   decision to the point that step 10 of
   [`wave-1-session-loop.md`](../../.claude/playbooks/wave-1-session-loop.md)
   becomes confusing. One additional commit per critique round
   is acceptable; more is not.
-- **D3.** Operators must be able to see, from a single study
+- **DD-3.** Operators must be able to see, from a single study
   file's Metadata block, whether and how many critique rounds
   it went through. Hidden critique skips are the failure mode
   to guard against.
-- **D4.** The `/critique` command must remain idempotent and
+- **DD-4.** The `/critique` command must remain idempotent and
   safe to re-run (no destructive side effects on previously
   preserved rounds; no implicit file overwrites).
-- **D5.** Retroactive cost must be bounded. Wave 1 closed
+- **DD-5.** Retroactive cost must be bounded. Wave 1 closed
   long ago; the B2 series is the active surface. Reconstructing
   30+ lost rounds is not a useful expenditure of the platform's
   time budget.
-- **D6.** The protocol change must be auditable from the
+- **DD-6.** The protocol change must be auditable from the
   [`wave-1-session-loop.md`](../../.claude/playbooks/wave-1-session-loop.md)
   diff alone — i.e., a single playbook edit captures the
   whole new preservation contract, with no hidden behavior
   living elsewhere.
-- **D7.** The preservation mechanism must accommodate
+- **DD-7.** The preservation mechanism must accommodate
   legitimate skip cases (e.g., a typo-only revision, an
   operator-level edit that doesn't warrant a fresh critique)
-  without becoming a hidden critique drop. Skip-with-declaration
-  in the study's Metadata is the seam this driver names.
+  without becoming a hidden critique drop.
 
 ## Considered Options
 
@@ -164,32 +163,33 @@ adversarial-review nature of the cycle is unchanged.
   the slug of the parent study file under
   `studies/decisions/`. Filename example:
   `studies/critiques/2026-05-27-b2-35-critique-rounds-preservation-critique-1.md`.
-- **D1 (where):** `studies/critiques/`. Lives under `studies/`
+- **SD-1 (where):** `studies/critiques/`. Lives under `studies/`
   per R8.
-- **D2 (when):** Separate commit before the revision commit.
+- **SD-2 (when):** Separate commit before the revision commit.
   Sequence: draft → critique (commit) → revision (commit).
-- **D3 (what):** Full `/critique` stdout preserved verbatim
+- **SD-3 (what):** Full `/critique` stdout preserved verbatim
   inside a fenced `text` block, followed by an "Operator
   response" trailer recording per-finding disposition
   (`addressed` / `accepted-as-is with reason` /
   `deferred to OQ` / `out-of-scope per AC`).
-- **D4 (retroactive):** Accept loss for all pre-B2-35
+- **SD-4 (retroactive):** Accept loss for all pre-B2-35
   studies. The anti-patterns catalog is the salvage. ADR-0014
   / commit `926e3e5` is the bootstrap exemplar but is **not**
   required to be backfilled into `studies/critiques/` in this
   session (see Open Questions).
-- **D5 (protocol):** `wave-1-session-loop.md` step 6
+- **SD-5 (protocol):** `wave-1-session-loop.md` step 6
   amended to specify that the operator captures the
   `/critique` stdout to the named file before the next
   iteration. `/critique` command itself is unchanged
   (stays stdout-pure, idempotent). Operator captures via
   shell redirection or copy-paste.
-- **D6 (guarantee):** Skip is allowed if declared in the
+- **SD-6 (guarantee):** Skip is allowed if declared in the
   parent study's Metadata block under a `Critique rounds:`
   bullet (e.g., `Critique rounds: 1 preserved
   (studies/critiques/...-critique-1.md), 1 skipped (typo
   fix)`). A skipped round with no declaration is treated as
-  an R3/R5-class violation by the next critique pass.
+  violating the SD-6 declaration contract by the next critique
+  pass.
 
 **Pros:** Clean separation between studies (the decisions)
 and critiques (the reasoning that shaped them); each critique
@@ -200,7 +200,7 @@ existing capture-stdout-to-file pattern used by `/critique`'s
 sibling commands.
 
 **Cons:** Adds one commit per critique round; relies on
-operator discipline to capture stdout (the skip-rate risk D7
+operator discipline to capture stdout (the skip-rate risk DD-7
 names); requires the slug to be derivable from the parent
 study filename (one-to-one mapping; minor maintenance cost).
 
@@ -214,15 +214,15 @@ maximal R8 / R1 alignment, no command rewrite.
   `studies/decisions/2026-05-27-b2-35-critique-rounds-preservation/study.md`
   + `critique-1.md` + `critique-2.md` siblings. The study
   filename loses its `.md` extension at the path level.
-- **D1 (where):** `studies/decisions/<slug>/critique-N.md`.
-- **D2 (when):** Atomic commit bundling critique + revision.
-- **D3 (what):** Full critique output verbatim.
-- **D4 (retroactive):** Accept loss, but every existing
+- **SD-1 (where):** `studies/decisions/<slug>/critique-N.md`.
+- **SD-2 (when):** Atomic commit bundling critique + revision.
+- **SD-3 (what):** Full critique output verbatim.
+- **SD-4 (retroactive):** Accept loss, but every existing
   study must be migrated from file → directory shape, even
   empty ones. ~30 file-rename operations.
-- **D5 (protocol):** `/critique` command rewritten to write
+- **SD-5 (protocol):** `/critique` command rewritten to write
   the file directly to the parent study's directory.
-- **D6 (guarantee):** Mandatory — no critique = no commit,
+- **SD-6 (guarantee):** Mandatory — no critique = no commit,
   enforced by a hook or convention.
 
 **Pros:** Critiques live adjacent to the study they critique
@@ -232,11 +232,11 @@ risk; atomic commit makes the audit trail compact.
 **Cons:** Disruptive — all existing studies must be
 restructured, even though their critiques are lost. Atomic
 commits hide the draft→critique→revision sequence in a single
-diff (loses the visibility D6 demands). `/critique` writing a
+diff (loses the visibility DD-6 demands). `/critique` writing a
 file directly couples the command to a path convention and
-makes the command non-trivially stateful (D4-violating).
+makes the command non-trivially stateful (DD-4-violating).
 Mandatory guarantee with no skip-with-declaration seam
-violates D7.
+violates DD-7.
 
 **Verdict:** Rejected. Restructuring cost too high for a
 gap that has already accepted loss; mandatory-no-skip is
@@ -248,16 +248,16 @@ without proportionate gain.
 - **Shape:** Critique transcripts live as published
   artifacts under `docs/critique-history/`, intended to be
   readable by anyone browsing the repo.
-- **D1 (where):** `docs/critique-history/`. Directly under
+- **SD-1 (where):** `docs/critique-history/`. Directly under
   the published tree.
-- **D2 (when):** Atomic commit.
-- **D3 (what):** Findings only (verbatim) — no raw
+- **SD-2 (when):** Atomic commit.
+- **SD-3 (what):** Findings only (verbatim) — no raw
   `/critique` stdout, no operator response trailer.
-- **D4 (retroactive):** Reconstruct lost rounds from git
+- **SD-4 (retroactive):** Reconstruct lost rounds from git
   blame, PR comments, and prior commit messages where
   feasible. Up to 30+ reconstruction passes.
-- **D5 (protocol):** `/critique` writes the file.
-- **D6 (guarantee):** Mandatory.
+- **SD-5 (protocol):** `/critique` writes the file.
+- **SD-6 (guarantee):** Mandatory.
 
 **Pros:** Critique history becomes discoverable to anyone
 reading `docs/` — useful onboarding signal for new
@@ -265,12 +265,12 @@ contributors.
 
 **Cons:** **Violates R8** — published artifacts are not
 reasoning artifacts; critiques are explicitly reasoning. The
-findings-only D3 position loses the operator-response signal
+findings-only SD-3 position loses the operator-response signal
 the catalog itself identifies as load-bearing
-(anti-pattern B7 "strawman options" is recognizable only
+(anti-pattern B6 "strawman options" is recognizable only
 when you can see the operator's disposition of each
 finding). Reconstruction is high effort and low fidelity
-(D5-violating). Mandatory-no-skip is too rigid (D7-violating).
+(DD-5-violating). Mandatory-no-skip is too rigid (DD-7-violating).
 
 **Verdict:** Rejected outright on R8 grounds. Even
 ignoring R8, the findings-only content shape, the
@@ -286,7 +286,7 @@ zero changes to the `/critique` command, one targeted edit to
 step 6. The chosen positions for each sub-decision below
 formalize what Option 1 commits.
 
-### D1 — Where: `studies/critiques/`
+### SD-1 — Where: `studies/critiques/`
 
 Preserved critique rounds live at
 `studies/critiques/<date>-<slug>-critique-<N>.md`, where:
@@ -308,7 +308,7 @@ The directory is created on first use; it is absent from the
 repository until the first post-B2-35 critique runs
 (R8-consistent: studies are scaffolding, optional).
 
-### D2 — When: separate commit, before the revision
+### SD-2 — When: separate commit, before the revision
 
 Sequence: draft commit → **critique commit** → revision
 commit. The critique transcript is committed *before* any
@@ -320,10 +320,10 @@ gains one bullet allowing this intermediate commit:
 
 ```
 git add studies/critiques/
-git commit -m "docs(critique): B<N>-<M> — round <K> findings"
+git commit -m "docs(decision): B<N>-<M> — critique round <K> findings"
 ```
 
-### D3 — What: full stdout verbatim + operator-response trailer
+### SD-3 — What: full stdout verbatim + operator-response trailer
 
 Each `studies/critiques/<date>-<slug>-critique-<N>.md` file
 contains:
@@ -352,7 +352,7 @@ to reconstruct the operator's judgement, not just the
 findings — without it, the preserved transcript reduces to
 Option 3's findings-only stance.
 
-### D4 — Retroactive: accept loss; the catalog is the salvage
+### SD-4 — Retroactive: accept loss; the catalog is the salvage
 
 No reconstruction is attempted for pre-B2-35 studies. The
 `.claude/skills/critique-anti-patterns/` corpus (extracted in
@@ -367,7 +367,7 @@ Going forward, the first post-B2-35 critique round (whether
 on this study or on the next decision in flight) is the
 first entry in `studies/critiques/`.
 
-### D5 — Protocol changes: `wave-1-session-loop.md` step 6 amends; `/critique` unchanged
+### SD-5 — Protocol changes: `wave-1-session-loop.md` step 6 amends; `/critique` unchanged
 
 The downstream protocol-edit session (gated on this study
 reaching `resolved-study`) makes exactly two changes:
@@ -377,14 +377,14 @@ reaching `resolved-study`) makes exactly two changes:
    - the capture target (`studies/critiques/<date>-<slug>-critique-<N>.md`),
    - the capture mechanism (operator-side stdout redirection
      or copy-paste; `/critique` stays stdout-pure),
-   - the intermediate commit (per D2 above),
-   - the operator-response trailer requirement (per D3
+   - the intermediate commit (per SD-2 above),
+   - the operator-response trailer requirement (per SD-3
      above),
-   - the skip-with-declaration seam (per D6 below).
+   - the skip-with-declaration seam (per SD-6 below).
 
 2. **`.claude/commands/critique.md`** — *no change*. The
    command remains the adversarial-review-to-stdout
-   surface defined today. This protects D4 (`/critique`
+   surface defined today. This protects DD-4 (`/critique`
    stays idempotent and stateless) and keeps the
    command's protocol footprint trivial.
 
@@ -392,7 +392,7 @@ The protocol-edit session does **not** run inside this
 B2-35 session per R1 (no protocol-file edits during study
 drafts).
 
-### D6 — Skip is allowed if declared in study Metadata
+### SD-6 — Skip is allowed if declared in study Metadata
 
 A study's Metadata block gains an optional `Critique rounds:`
 bullet listing each round's disposition. Examples:
@@ -408,11 +408,17 @@ bullet listing each round's disposition. Examples:
   (studies/critiques/.../critique-1.md)` — single round,
   no second round needed.
 
+Grammar: rounds listed in chronological order (round 1 first);
+each entry uses one of two verbs — `preserved (<filepath>)` or
+`skipped (<reason>)`; entries separated by commas within the
+bullet, which may span multiple lines.
+
 A study with no `Critique rounds:` bullet is treated by the
 next adversarial review as having undeclared rounds, and the
-review will fire a `blocking` finding citing R6-class
-visibility failure. This is the seam D7 names: skips are
-permitted, hidden skips are not.
+review will fire a `blocking` finding citing violation of the
+SD-6 declaration-presence contract introduced by this study.
+This is the seam DD-7 names: skips are permitted, hidden skips
+are not.
 
 ### Why this does not reopen ADR-0014
 
@@ -428,7 +434,7 @@ the bootstrap exemplar; whether its preserved transcript
 is migrated into `studies/critiques/` is an Open Question
 below, not a contract change to ADR-0014 itself.
 
-### Why this does not reopen R8
+### Why this respects R8
 
 R8 in `CLAUDE.md` §3 says studies are reasoning artifacts
 and are not part of the published repository. This study
@@ -476,7 +482,7 @@ tree.
   remains the single "log update + commit" step; the
   intermediate critique commits are operator-driven.
 - **Operator must remember to capture `/critique`
-  stdout.** This is the skip-rate risk D7 names. The
+  stdout.** This is the skip-rate risk DD-7 names. The
   skip-with-declaration seam mitigates it but does not
   eliminate it — an operator can still forget to declare.
 - **Slug derivation has minor maintenance cost.** If a
@@ -491,7 +497,7 @@ tree.
   [`wave-1-session-loop.md`](../../.claude/playbooks/wave-1-session-loop.md)
   step 6 cannot begin until this study reaches
   `resolved-study`. That session's scope is bounded to the
-  single playbook edit described in D5.
+  single playbook edit described in SD-5.
 - The first post-B2-35 critique round is the implicit
   acceptance test. If it surfaces a mismatch between this
   study's prescription and operator reality, the protocol
@@ -515,31 +521,33 @@ tree.
 
 ## Open Questions
 
-- **OQ-1.** Should commit `926e3e5`'s preserved critique
-  round-1 (currently in the PR description for #10) and
-  commit `d2fd4a5`'s preserved critique round-2 be
-  backfilled into `studies/critiques/` as the bootstrap
-  exemplar pair? Or left where they are, with this study
-  pointing at them as the de facto exemplars? *Deferred to
-  the protocol-edit session; out-of-scope for this study.*
+- **OQ-1.** Backfill of pre-B2-35 critique rounds (e.g.,
+  `926e3e5`) into `studies/critiques/` is not gated on any
+  future session; SD-4's "accept loss" resolution stands.
+  Should any future operator wish to perform best-effort
+  backfill as a discretionary archival exercise, they may
+  do so without amending this study or ADR-0048.
 - **OQ-2.** Should `/critique`'s exit code differ when
   `blocking` findings are present (e.g., exit 1 for
   blocking, 0 otherwise), so that an operator's skip
   decision is auditable from CI? *Out-of-scope for B2-35;
   potential B3 row.*
 - **OQ-3.** Does the `studies/critiques/` slug convention
-  need to be enforced by a linter (analogous to the path
-  conventions
+  need to be enforced by a linter? At present, studies
+  under `studies/decisions/` have no slug-enforcement
+  mechanism either —
   [`.claude/playbooks/acceptance-criteria.md`](../../.claude/playbooks/acceptance-criteria.md)
-  enforces for studies)? Likely no — the convention is
-  one-to-one with parent study filenames, and divergence
-  is self-evident from a directory listing — but the
-  question survives the study draft. *Out-of-scope for
-  B2-35; revisit if the operator-discipline risk
-  materializes.*
+  AC-1 only enforces R6 path-header presence, not filename
+  shape; the convention is held by operator vigilance and
+  pull-request review. Likely the same posture suffices for
+  `studies/critiques/` (one-to-one with parent study
+  filenames, divergence self-evident from a directory
+  listing), but the question survives the study draft.
+  *Out-of-scope for B2-35; revisit if the operator-discipline
+  risk materializes.*
 
 All other questions surfaced during drafting are decided
-explicitly in D1–D6 or rejected with reason in the
+explicitly in SD-1–SD-6 or rejected with reason in the
 Considered Options section.
 
 ## Promotion target
@@ -556,7 +564,7 @@ and content survive any renumbering.
 ADR-0020 pass already redeemed the prior overload. The
 promotion target is committed at the standard
 MADR-ADR shape: Title / Status / Context / Decision Drivers
-/ Considered Options / Decision Outcome (mapping D1–D6
+/ Considered Options / Decision Outcome (mapping SD-1–SD-6
 verbatim) / Consequences. The promoted ADR is the
 load-bearing artifact for future critique runs; this study
 is the reasoning behind it.
