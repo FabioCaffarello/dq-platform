@@ -6,6 +6,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -41,6 +42,8 @@ func main() {
 			"path to .github/CODEOWNERS for the owner-group cross-check per ADR-0037; empty disables the check")
 		noDeprecationWarnings = flag.Bool("no-deprecation-warnings", false,
 			"suppress deprecation warnings for rules declaring a deprecated schema version per ADR-0035 (B2-21)")
+		checkChannelReachability = flag.Bool("check-channel-reachability", false,
+			"opt-in: walk every _owners.yaml channel reference and probe per-substrate reachability (Slack, email, PagerDuty) per ADR-0047. Credentials via DQ_LINT_SLACK_TOKEN / DQ_LINT_PAGERDUTY_KEY env vars (email uses DNS only). Outcomes are warnings — never influence exit code.")
 		verbose = flag.Bool("v", false, "print each file as it is processed")
 	)
 	flag.Parse()
@@ -109,6 +112,21 @@ func main() {
 		}
 		for _, w := range warnings {
 			fmt.Fprintf(os.Stderr, "%s: DEPRECATED: %s\n", w.Path, w.Message)
+		}
+	}
+
+	// ADR-0047 / B2-34 reachability check — opt-in via flag. The
+	// per-channel adapter outcomes are warnings; the lint exit
+	// code is unaffected. Operators reviewing a PR see the
+	// REACHABILITY: lines and decide whether to act.
+	if *checkChannelReachability {
+		ctx := context.Background()
+		registry := NewDefaultRegistry()
+		reachResults := CheckChannelReachability(ctx, owners, registry)
+		for _, r := range reachResults {
+			fmt.Fprintf(os.Stderr,
+				"%s: REACHABILITY: entity=%q category=%q channel=%q status=%s — %s\n",
+				*ownersPath, r.Entity, r.Category, r.Channel, r.Status, r.Reason)
 		}
 	}
 

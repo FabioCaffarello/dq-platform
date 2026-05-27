@@ -23,7 +23,7 @@ COMPOSE := docker compose -p $(COMPOSE_PROJECT_NAME)
 	lint-engine test-engine test-engine-integration test-engine-sandbox \
 	lint-tools test-tools test-tools-manifest-integration test-tools-manifest-sandbox \
 	test-sandbox \
-	lint-rules dry-run-rules \
+	lint-rules lint-reachability dry-run-rules \
 	sync-schema \
 	build-lint build-engine build-manifest build-engine-image \
 	build-dryrun build-migrate \
@@ -107,6 +107,9 @@ check-tag-scope: ## Validate that TAG=<workspace-v…> diffs cleanly against its
 
 lint-rules: build-lint ## Validate every rule YAML against the schema mirror (per ADR-0001).
 	@./bin/dq-lint -schema rules/_schema/v1.schema.json -rules rules
+
+lint-reachability: build-lint ## Probe per-channel substrate reachability via dq-lint per ADR-0047 + B2-34. Requires DQ_LINT_SLACK_TOKEN / DQ_LINT_PAGERDUTY_KEY env vars for the corresponding channel types (email uses DNS only); credentials skip cleanly when absent. Outcomes are warnings; exit code unaffected.
+	@./bin/dq-lint -rules rules -check-channel-reachability
 
 dry-run-rules: build-dryrun ## Dry-run every set-mode BigQuery rule via dq-dryrun (per ADR-0029 + B2-11). Requires `make up` to seed the local emulator.
 	@./bin/dq-dryrun -rules rules -bigquery-project dq-local -bigquery-emulator-host $${BIGQUERY_EMULATOR_HOST:-localhost:9050}
