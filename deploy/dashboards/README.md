@@ -148,22 +148,74 @@ behave identically.
 Foundation 05 §"Local development substrate posture"
 named "local Prometheus + Grafana + Jaeger via
 docker-compose" as the intended local-development
-stack. The current `docker-compose.yml` ships the
-substrate emulators (BigQuery, GCS, Pub/Sub, Kafka)
-but NOT the observability stack. To exercise this
-dashboard locally today, operators provision Grafana
-out of band (Docker Desktop's bundled Grafana, a
-laptop Homebrew install, a separate Compose project,
-etc.).
+stack. **B2-33 landed the Prometheus + Grafana
+half**: `make up` brings both services alongside the
+substrate emulators; the baseline dashboard is
+auto-provisioned via Grafana's file-provider; the
+Prometheus data source is auto-wired.
 
-Adding Prometheus + Grafana services to the
-platform's `docker-compose.yml` is committed as a
-separate B2 follow-up (registered alongside this
-slice's merge per ADR-0045 §"Local-development
-integration — deferred"). When that follow-up lands,
-`make up` brings the full observability stack and
-this dashboard works end-to-end without operator
-provisioning.
+Once the stack is up:
+
+- **Grafana**: `http://localhost:3000` — anonymous
+  Viewer access is enabled per
+  `docker-compose.yml`'s `GF_AUTH_ANONYMOUS_*` env
+  vars (admin/admin if you need write access for
+  in-UI tweaks). The dashboard is at
+  `http://localhost:3000/d/dq-baseline`.
+- **Prometheus**: `http://localhost:9090` — useful
+  for inspecting which targets are up and querying
+  the metrics directly. The `dq-engine` job is
+  configured to scrape `host.docker.internal:8080`
+  on the host; if the engine binary isn't running
+  the target reports `down` (panels 4-5 then show
+  "no data" because nothing has been scraped).
+
+Workflow:
+
+1. `make up` — brings substrate + observability stack
+   up.
+2. `make build-engine && ./bin/dq-engine` (or
+   `make demo-p6`) — starts the engine listening on
+   host port 8080; Prometheus scrapes immediately.
+3. Open Grafana, navigate to the baseline dashboard.
+   Panels 4-5 continue to render "no data" until
+   metric emission code lands per ADR-0039
+   §"deferred"; panels 1-3 (BigQuery) require a
+   configured BigQuery data source — see below.
+
+The **BigQuery data source is not auto-provisioned**
+in the local stack. The `grafana-bigquery-datasource`
+plugin is installed (Grafana startup auto-pulls it
+from `GF_INSTALL_PLUGINS`), but the data source's
+connection is unconfigured because the plugin's
+emulator support is best-effort (the SDK's auth flow
+the plugin uses doesn't faithfully terminate against
+the BigQuery emulator). Operators wire the data
+source manually in the Grafana UI:
+
+1. **Connections → Data sources → Add new data
+   source → BigQuery**.
+2. Either authenticate against a sandbox GCP project
+   (preferred, full fidelity) or attempt the
+   emulator path via service-account JSON pointing
+   at `tabular-store:9050` (best-effort; behaviour
+   varies by plugin version).
+3. Save the data source with UID `dq-bigquery` so
+   the dashboard panels resolve cleanly.
+
+Once the BigQuery data source is configured, panels
+1-3 light up the moment any rule produces results
+in `dq_executions` / `dq_check_results`.
+
+**Note on Jaeger**: foundation 05 named the trio
+(Prometheus + Grafana + Jaeger); only the first two
+ship at B2-33. Adding Jaeger lands if/when tracing
+emission code arrives in the engine; the
+log + metric + span three-channel obligation from
+ADR-0007 CC10 commits the span signal but
+implementation defers per `engine/internal/runner/runner.go`
+lines 15-27. No B2 row is registered for Jaeger at
+B2-33 — the slice lands when tracing emission does.
 
 ---
 
