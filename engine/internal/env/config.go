@@ -91,6 +91,20 @@ type EnvConfig struct {
 	// per-env value rather than hardcoding one. Per-env values:
 	// 1h / 6h / 24h for local / qa / prod.
 	SchedulerCatchupHorizon time.Duration
+
+	// OnboardingChannel is the env-level fixed channel target
+	// the alerting consumer routes to when an entity's
+	// `_owners.yaml.entities.<entity>.onboarding == true` (v3
+	// schema per ADR-0046). Empty disables the override —
+	// entity.channels routes normally per ADR-0006 CC7.
+	// The engine does NOT consume this field at any runtime
+	// path; it is exposed on EnvConfig so downstream alerting
+	// consumers can read it from a shared configuration
+	// source. Per-env values are operator-chosen; the
+	// recommended convention is
+	// `slack:#dq-onboarding-{local,qa,prod}` but operators
+	// substitute substrate-specific identifiers freely.
+	OnboardingChannel string
 }
 
 // EvidenceRetention carries the per-env results-table retention

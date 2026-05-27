@@ -170,6 +170,18 @@ This directory holds:
   registers the docker-compose extension that adds
   Prometheus + Grafana services so `make up`
   brings the full local observability stack).
+- `adr/0046` — onboarding-channel override
+  (resolves B2-25; per-entity `onboarding: bool`
+  on `_owners.yaml` v3 + env-level
+  `EnvConfig.OnboardingChannel` string +
+  consumer-side routing override — when both
+  signals fire, alerts route to OnboardingChannel
+  instead of `entity.channels`; replaces the
+  ADR-0040 procedural qa-prefix-rename workaround
+  with one boolean flip; consumer-side contract
+  only — engine never reads `_owners.yaml` per
+  ADR-0006; rules-side v3 schema only — no engine
+  mirror per ADR-0022 convention).
 - `glossary.md` — codebase-specific terminology (W3-P8a).
 - `governance.md` — review model and contribution-time
   flows (W3-P8b).

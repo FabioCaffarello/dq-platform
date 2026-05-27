@@ -30,11 +30,22 @@ func ownersSchemaV2Path(t *testing.T) string {
 	return p
 }
 
-// ownersSchemaSet builds an OwnersSchemaSet with both v1 and v2 owners
+// ownersSchemaV3Path returns the absolute path to the v3 _owners.yaml
+// schema mirror.
+func ownersSchemaV3Path(t *testing.T) string {
+	t.Helper()
+	p, err := filepath.Abs("../../rules/_schema/_owners.v3.schema.json")
+	if err != nil {
+		t.Fatalf("ownersSchemaV3Path: %v", err)
+	}
+	return p
+}
+
+// ownersSchemaSet builds an OwnersSchemaSet with v1, v2, and v3 owners
 // schemas loaded from the canonical mirror paths.
 func ownersSchemaSet(t *testing.T) *OwnersSchemaSet {
 	t.Helper()
-	set, err := LoadOwnersSchemaSet(ownersSchemaPath(t), ownersSchemaV2Path(t))
+	set, err := LoadOwnersSchemaSet(ownersSchemaPath(t), ownersSchemaV2Path(t), ownersSchemaV3Path(t))
 	if err != nil {
 		t.Fatalf("LoadOwnersSchemaSet: %v", err)
 	}
@@ -388,6 +399,78 @@ func TestLoadOwners_CapturesOwnerField(t *testing.T) {
 	acc := owners.Entities["account"]
 	if acc.Owner != "finance-data" {
 		t.Errorf("account.Owner = %q; want %q", acc.Owner, "finance-data")
+	}
+}
+
+// --- v3 owners (ADR-0046 / B2-25) ---
+
+func TestLoadOwners_V3_HappyPath(t *testing.T) {
+	set := ownersSchemaSet(t)
+	owners, valErrs, err := LoadOwners(set, "testdata/owners/v3/valid/with-onboarding.yaml")
+	if err != nil {
+		t.Fatalf("LoadOwners(v3 valid): %v", err)
+	}
+	if len(valErrs) != 0 {
+		t.Fatalf("LoadOwners(v3 valid) validation errors = %v; want none", valErrs)
+	}
+	if owners.SchemaVersion != 3 {
+		t.Errorf("SchemaVersion = %d; want 3", owners.SchemaVersion)
+	}
+	cases := map[string]bool{
+		"customer":          false, // onboarding: false explicit
+		"orders_stream":     true,  // onboarding: true
+		"experimental_feed": false, // onboarding absent — default false
+	}
+	for entity, wantOnboarding := range cases {
+		ent, ok := owners.Entities[entity]
+		if !ok {
+			t.Errorf("entity %q missing from loaded owners", entity)
+			continue
+		}
+		if ent.Onboarding != wantOnboarding {
+			t.Errorf("entity %q Onboarding = %v; want %v", entity, ent.Onboarding, wantOnboarding)
+		}
+	}
+}
+
+func TestLoadOwners_V3_RejectsBadOnboardingType(t *testing.T) {
+	set := ownersSchemaSet(t)
+	_, valErrs, err := LoadOwners(set, "testdata/owners/v3/invalid/onboarding-wrong-type.yaml")
+	if err != nil {
+		t.Fatalf("LoadOwners(v3 invalid) op error: %v", err)
+	}
+	if len(valErrs) == 0 {
+		t.Fatal("expected schema validation error for non-bool onboarding; got none")
+	}
+	combined := strings.ToLower(combineErrs(valErrs))
+	// JSON Schema's type-rejection error wording is "expected
+	// boolean, but got string" or similar — we just confirm the
+	// schema rejected the value (any error fires).
+	if !strings.Contains(combined, "boolean") && !strings.Contains(combined, "onboarding") {
+		t.Errorf("error should mention 'boolean' or 'onboarding'; got: %s", combined)
+	}
+}
+
+func TestLoadOwners_V2_StillAcceptedAlongsideV3(t *testing.T) {
+	// v2 owners files continue to validate against v2 even after
+	// the v3 schema is loaded into the SchemaSet — dispatch is
+	// driven by the file's schema_version field, not by the
+	// "latest loaded" schema.
+	set := ownersSchemaSet(t)
+	owners, valErrs, err := LoadOwners(set, "testdata/owners/valid/_owners.yaml")
+	if err != nil {
+		t.Fatalf("LoadOwners(v1): %v", err)
+	}
+	if len(valErrs) != 0 {
+		t.Fatalf("LoadOwners(v1) validation errors = %v; want none", valErrs)
+	}
+	if owners.SchemaVersion < 1 {
+		t.Errorf("SchemaVersion = %d; want >= 1", owners.SchemaVersion)
+	}
+	for _, ent := range owners.Entities {
+		if ent.Onboarding {
+			t.Errorf("Onboarding should be false for non-v3 owners (the field is v3-only); got true")
+		}
 	}
 }
 

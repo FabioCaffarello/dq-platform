@@ -55,4 +55,9 @@ var QA = EnvConfig{
 	// integration-run kicked off in the evening catches up
 	// cleanly the next morning.
 	SchedulerCatchupHorizon: 6 * time.Hour,
+	// ADR-0046 §"EnvConfig.OnboardingChannel" — qa default
+	// follows the placeholder convention; operators substitute
+	// substrate-specific identifiers per their Slack/email/PD
+	// posture.
+	OnboardingChannel: "slack:#dq-onboarding-qa-PLACEHOLDER",
 }

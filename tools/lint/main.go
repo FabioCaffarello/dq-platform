@@ -29,6 +29,8 @@ func main() {
 			"path to the v1 _owners.yaml JSON Schema (must be the rules mirror)")
 		ownersSchemaV2Path = flag.String("owners-schema-v2", "rules/_schema/_owners.v2.schema.json",
 			"path to the v2 _owners.yaml JSON Schema (must be the rules mirror); empty disables v2")
+		ownersSchemaV3Path = flag.String("owners-schema-v3", "rules/_schema/_owners.v3.schema.json",
+			"path to the v3 _owners.yaml JSON Schema (must be the rules mirror); empty disables v3 (B2-25 / ADR-0046)")
 		catalogPath = flag.String("catalog", "rules/_schema/catalog.v1.yaml",
 			"path to the v1 kind catalog (must be the rules mirror); consumed only by v2 cross-checks")
 		ownersPath = flag.String("owners", "rules/_owners.yaml",
@@ -49,7 +51,7 @@ func main() {
 		os.Exit(exitOperationalError)
 	}
 
-	ownersSchemaSet, err := LoadOwnersSchemaSet(*ownersSchemaPath, *ownersSchemaV2Path)
+	ownersSchemaSet, err := LoadOwnersSchemaSet(*ownersSchemaPath, *ownersSchemaV2Path, *ownersSchemaV3Path)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "dq-lint: failed to load owners schemas: %v\n", err)
 		os.Exit(exitOperationalError)

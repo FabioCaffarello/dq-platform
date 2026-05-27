@@ -44,4 +44,8 @@ var Local = EnvConfig{
 	// typically aren't worth catching up during single-developer
 	// iteration.
 	SchedulerCatchupHorizon: 1 * time.Hour,
+	// ADR-0046 §"EnvConfig.OnboardingChannel" — local default
+	// targets a local Slack channel; operators substitute
+	// substrate-specific identifiers in their own setups.
+	OnboardingChannel: "slack:#dq-onboarding-local",
 }
