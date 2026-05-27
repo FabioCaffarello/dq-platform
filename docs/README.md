@@ -182,6 +182,20 @@ This directory holds:
   only — engine never reads `_owners.yaml` per
   ADR-0006; rules-side v3 schema only — no engine
   mirror per ADR-0022 convention).
+- `adr/0047` — `dq-lint` substrate-access posture
+  (resolves B2-26; default-posture unchanged from
+  ADR-0034 §"unit-no-substrate"; opt-in extended
+  posture via `-check-channel-reachability` flag;
+  per-substrate adapter model — Slack
+  `conversations.info`, email DNS MX, PagerDuty
+  `/services/{id}`; credentials via `DQ_LINT_*`
+  env vars; adapters NEVER mutating; failure
+  semantics uniformly warnings (exit code
+  unaffected); CI-lane separation —
+  `lint-reachability.yml` workflow_dispatch
+  trigger; explicitly NOT gating the default PR
+  lane; implementation deferred to B2-34 paced by
+  concrete operator signal).
 - `glossary.md` — codebase-specific terminology (W3-P8a).
 - `governance.md` — review model and contribution-time
   flows (W3-P8b).
