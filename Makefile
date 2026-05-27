@@ -26,7 +26,7 @@ COMPOSE := docker compose -p $(COMPOSE_PROJECT_NAME)
 	lint-rules dry-run-rules \
 	sync-schema \
 	build-lint build-engine build-manifest build-engine-image \
-	build-dryrun \
+	build-dryrun build-migrate \
 	check-tag-scope \
 	up down \
 	smoke-substrate \
@@ -54,10 +54,12 @@ test-engine-sandbox: ## go test -tags sandbox across the engine module (ADR-0034
 lint-tools: ## go vet across every module under tools/.
 	@cd tools/lint && go vet ./...
 	@cd tools/manifest && go vet ./...
+	@cd tools/migrate && go vet ./...
 
 test-tools: ## go test across every module under tools/.
 	@cd tools/lint && go test ./...
 	@cd tools/manifest && go test ./...
+	@cd tools/migrate && go test ./...
 
 test-tools-manifest-integration: ## go test -tags integration on tools/manifest; requires `make up` first.
 	@cd tools/manifest && go test -tags integration ./...
@@ -82,6 +84,10 @@ build-manifest: ## Build the dq-manifest binary at bin/dq-manifest.
 build-dryrun: ## Build the dq-dryrun binary at bin/dq-dryrun.
 	@mkdir -p bin
 	@cd tools/dryrun && go build -o ../../bin/dq-dryrun .
+
+build-migrate: ## Build the dq-migrate binary at bin/dq-migrate (rule-schema migrator per ADR-0035 + B2-23).
+	@mkdir -p bin
+	@cd tools/migrate && go build -o ../../bin/dq-migrate .
 
 # Image tag derivation per ADR-0042 Clause 3: stripping the
 # `engine-v` prefix from a git tag yields the image tag (e.g.,
