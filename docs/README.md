@@ -154,6 +154,22 @@ This directory holds:
   three independent brakes; no rule-schema bump
   needed (additive within catalog v1);
   implementation deferred to B2-32 slice).
+- `adr/0045` — baseline-dashboard substrate (resolves
+  B2-24; Grafana-compatible JSON as the dashboard
+  artefact format; `deploy/dashboards/` placement
+  under the existing `deploy/` workspace per
+  ADR-0019; ships the five foundation-05-committed
+  panels — three BigQuery-driven and live, two
+  Prometheus-driven and "no data" until metric
+  emission lands per ADR-0039 §"deferred";
+  operator-side Grafana provisioning is NOT
+  committed — the artefact is a static JSON file
+  importable into any Grafana instance, with the
+  Kubernetes-ConfigMap sidecar path documented as
+  one option among three; a new B2-33 follow-up
+  registers the docker-compose extension that adds
+  Prometheus + Grafana services so `make up`
+  brings the full local observability stack).
 - `glossary.md` — codebase-specific terminology (W3-P8a).
 - `governance.md` — review model and contribution-time
   flows (W3-P8b).
