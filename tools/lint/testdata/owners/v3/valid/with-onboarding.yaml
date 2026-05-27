@@ -1,0 +1,28 @@
+# path: tools/lint/testdata/owners/v3/valid/with-onboarding.yaml
+# v3 owners file with both onboarding-true and onboarding-false
+# entries plus one entry where onboarding is absent (default false).
+schema_version: 3
+entities:
+  customer:
+    owner: data-platform
+    mode: set
+    onboarding: false
+    channels:
+      data_quality:
+        - slack:#dq-customer
+      operational:
+        - email:oncall@example.com
+  orders_stream:
+    owner: orders-team
+    mode: record
+    onboarding: true
+    channels:
+      data_quality:
+        - slack:#dq-orders
+  experimental_feed:
+    owner: data-platform
+    mode: set
+    # onboarding absent — default false per schema
+    channels:
+      data_quality:
+        - slack:#dq-experimental

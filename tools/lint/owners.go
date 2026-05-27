@@ -36,18 +36,20 @@ func LoadOwnersSchema(schemaPath string) (*jsonschema.Schema, error) {
 	return sch, nil
 }
 
-// OwnersSchemaSet holds the v1 and v2 _owners schemas the linter
-// dispatches between, keyed by the `schema_version` field in the
-// _owners.yaml file. Either may be nil; the dispatcher reports a
-// clear error if the loaded file requires a missing schema.
+// OwnersSchemaSet holds the v1, v2, and v3 _owners schemas the
+// linter dispatches between, keyed by the `schema_version` field
+// in the _owners.yaml file. Each may be nil; the dispatcher reports
+// a clear error if the loaded file requires a missing schema.
 type OwnersSchemaSet struct {
 	V1 *jsonschema.Schema
 	V2 *jsonschema.Schema
+	V3 *jsonschema.Schema
 }
 
-// LoadOwnersSchemaSet loads both v1 and v2 owners schemas. Either
-// path may be empty.
-func LoadOwnersSchemaSet(v1Path, v2Path string) (*OwnersSchemaSet, error) {
+// LoadOwnersSchemaSet loads v1, v2, and v3 owners schemas. Any path
+// may be empty (the corresponding schema field stays nil; the
+// dispatcher reports a clear error if a file requires it).
+func LoadOwnersSchemaSet(v1Path, v2Path, v3Path string) (*OwnersSchemaSet, error) {
 	set := &OwnersSchemaSet{}
 	if v1Path != "" {
 		sch, err := LoadOwnersSchema(v1Path)
@@ -63,27 +65,45 @@ func LoadOwnersSchemaSet(v1Path, v2Path string) (*OwnersSchemaSet, error) {
 		}
 		set.V2 = sch
 	}
+	if v3Path != "" {
+		sch, err := LoadOwnersSchema(v3Path)
+		if err != nil {
+			return nil, fmt.Errorf("v3 owners schema: %w", err)
+		}
+		set.V3 = sch
+	}
 	return set, nil
 }
 
 // OwnerEntity is the reduced in-memory descriptor for one entity
 // in _owners.yaml. The linter retains only what is needed for
 // cross-checks: the entity is declared (presence), its mode
-// (for v2 cross-check #3), and its owner identifier (for the
-// CODEOWNERS-group membership check per ADR-0037). Channels and
-// severity overrides are consumed by the alerting layer per
-// ADR-0006 CC3, not by the linter, so they are intentionally
-// not retained here.
+// (for v2 cross-check #3), its owner identifier (for the
+// CODEOWNERS-group membership check per ADR-0037), and the v3
+// onboarding flag (for downstream consumer-side routing per
+// ADR-0046; not enforced by the linter itself but retained so
+// consumers reading the parsed Owners can resolve overrides).
+// Channels and severity overrides are consumed by the alerting
+// layer per ADR-0006 CC3, not by the linter, so they are
+// intentionally not retained here.
 type OwnerEntity struct {
-	// Mode is "set" or "record" for v2 owners; empty string for
-	// v1 owners (which had no mode field). Cross-check #3 only
-	// fires when both the rule and the owners entry carry a mode.
+	// Mode is "set" or "record" for v2/v3 owners; empty string
+	// for v1 owners (which had no mode field). Cross-check #3
+	// only fires when both the rule and the owners entry carry
+	// a mode.
 	Mode string
 
 	// Owner is the literal `owner:` value from _owners.yaml. The
 	// CODEOWNERS-group cross-check (CheckOwnersGroupMembership)
 	// compares this against the loaded CodeOwnersGroups inventory.
 	Owner string
+
+	// Onboarding mirrors the v3 `onboarding` flag per ADR-0046.
+	// Always false for v1/v2 owners (the field is v3-only).
+	// Consumer-side routing reads this and substitutes
+	// env.OnboardingChannel when true AND OnboardingChannel is
+	// non-empty.
+	Onboarding bool
 }
 
 // Owners is the in-memory representation of a loaded _owners.yaml.
@@ -145,6 +165,11 @@ func LoadOwners(set *OwnersSchemaSet, ownersPath string) (*Owners, []ValidationE
 		if schema == nil {
 			return nil, []ValidationError{{Message: "_owners.yaml declares schema_version 2 but no v2 owners schema is loaded"}}, nil
 		}
+	case 3:
+		schema = set.V3
+		if schema == nil {
+			return nil, []ValidationError{{Message: "_owners.yaml declares schema_version 3 but no v3 owners schema is loaded"}}, nil
+		}
 	default:
 		return nil, []ValidationError{{Message: fmt.Sprintf("_owners.yaml declares unsupported schema_version %d", version)}}, nil
 	}
@@ -171,6 +196,9 @@ func LoadOwners(set *OwnersSchemaSet, ownersPath string) (*Owners, []ValidationE
 					}
 					if owner, ok := entMap["owner"].(string); ok {
 						ent.Owner = owner
+					}
+					if onboarding, ok := entMap["onboarding"].(bool); ok {
+						ent.Onboarding = onboarding
 					}
 				}
 				owners.Entities[name] = ent

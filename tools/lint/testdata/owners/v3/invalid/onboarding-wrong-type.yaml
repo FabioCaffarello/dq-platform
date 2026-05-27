@@ -1,0 +1,12 @@
+# path: tools/lint/testdata/owners/v3/invalid/onboarding-wrong-type.yaml
+# v3 schema declares onboarding as a boolean. A string value must
+# be rejected.
+schema_version: 3
+entities:
+  customer:
+    owner: data-platform
+    mode: set
+    onboarding: "yes"
+    channels:
+      data_quality:
+        - slack:#dq-customer

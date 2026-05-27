@@ -55,4 +55,8 @@ var Prod = EnvConfig{
 	// recovery and would benefit from an explicit backfill
 	// posture instead.
 	SchedulerCatchupHorizon: 24 * time.Hour,
+	// ADR-0046 §"EnvConfig.OnboardingChannel" — prod default
+	// follows the placeholder convention; operators substitute
+	// substrate-specific identifiers.
+	OnboardingChannel: "slack:#dq-onboarding-prod-PLACEHOLDER",
 }
