@@ -307,13 +307,34 @@ manifest publish. The
 `SchemaCompatibility` map updates byte-equivalently in the
 same PR as the ADR amendment.
 
-A future `tools/migrate` binary (registered as B2-23) may
-land to automate field renames + structural transforms,
-emitting the migrated YAML for `tools/migrate -from=v(N)
--to=v(N+1) rules/<path>.yaml`. Until then, rule authors
-update YAML manually per this guide's field map. The
-escape hatch via engine pinning makes the manual approach
-operationally workable.
+The `dq-migrate` binary (B2-23, `tools/migrate/`) automates
+field renames + structural transforms. At v1 of the binary
+the only supported pair is v1 → v2:
+
+```sh
+make build-migrate
+
+./bin/dq-migrate -from=v1 -to=v2 \
+  -bigquery-project=<id> -bigquery-dataset=<id> -bigquery-table=<id> \
+  rules/<entity>.yaml > rules/<entity>.yaml.v2
+```
+
+The bigquery flags supply the v2 `source` descriptor's
+fields per ADR-0023 — v1 had no source block, so the
+operator owns the substrate binding decision (lift values
+from `engine/internal/env/{local,qa,prod}.go` or the
+deploy overlay's ConfigMap). Output goes to stdout; the
+operator review-redirects to the target file. The binary
+does NOT overwrite the input in place — operator review
+before mutation is the operating convention.
+
+Future v(N) → v(N+1) deltas land additively as new
+`-from`/`-to` value pairs inside `tools/migrate/`. Until
+each new delta lands in the binary, rule authors fall back
+to manual YAML edits per this guide's field map. The
+engine-pinning escape hatch makes the manual approach
+operationally workable when a delta hasn't yet been
+automated.
 
 ---
 

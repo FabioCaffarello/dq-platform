@@ -1,0 +1,8 @@
+# path: tools/migrate/testdata/v1/customer.yaml
+version: 1
+entity: customer
+description: First onboarded entity end-to-end (W3-P6d).
+checks:
+  - check_id: row_count_positive
+    kind: row_count_positive
+    description: Verifies the source table has at least one row.

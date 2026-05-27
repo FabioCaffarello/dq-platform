@@ -7,5 +7,6 @@ use (
 	./tools/dryrun
 	./tools/lint
 	./tools/manifest
+	./tools/migrate
 	./tools/pathsafe
 )
