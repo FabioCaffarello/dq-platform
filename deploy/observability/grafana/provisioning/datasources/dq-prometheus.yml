@@ -1,0 +1,37 @@
+# path: deploy/observability/grafana/provisioning/datasources/dq-prometheus.yml
+#
+# Grafana auto-provisioning for the Prometheus data source the
+# B2-24 baseline dashboard reads (ADR-0045 §"Data sources"). The
+# UID `dq-prometheus` matches the `datasource.uid` strings in
+# `deploy/dashboards/baseline.json`'s Prometheus-driven panels
+# (panels 4 + 5 — alerting volume and scheduler health).
+#
+# The Prometheus instance is in-compose at `prometheus:9090`
+# (service name reachable within Compose's default network).
+#
+# BigQuery is NOT auto-provisioned here — per ADR-0045 §"Data
+# sources", the BigQuery panels query through the
+# `grafana-bigquery-datasource` plugin against real GCP. The
+# local-dev stack installs the plugin (via the Grafana
+# container's `GF_INSTALL_PLUGINS` env var) but leaves the data
+# source connection unconfigured; operators wire it manually in
+# the Grafana UI pointing at a sandbox GCP project. Auto-
+# provisioning against the BigQuery emulator (`tabular-store:9050`)
+# is uncertain — the plugin uses the SDK's auth flow which the
+# emulator does not faithfully implement; the safer path is
+# operator-configured.
+
+apiVersion: 1
+
+datasources:
+  - name: dq-prometheus
+    uid: dq-prometheus
+    type: prometheus
+    access: proxy
+    # Reachable on Compose's default network at the service name.
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true
+    jsonData:
+      timeInterval: 15s
+      httpMethod: GET

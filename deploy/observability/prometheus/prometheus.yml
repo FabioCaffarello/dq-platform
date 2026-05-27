@@ -1,0 +1,47 @@
+# path: deploy/observability/prometheus/prometheus.yml
+#
+# Prometheus scrape config for the local-development stack
+# (B2-33; ADR-0045 §"Local-development integration"). Targets the
+# engine binary running on the host at port 8080 — Compose's
+# `host.docker.internal` resolves to the host from inside the
+# Prometheus container; the engine binary listens on
+# `engine/internal/env/local.go`'s `HTTPAddr: ":8080"`.
+#
+# The scrape target's `/metrics` path comes from ADR-0039
+# §"Metric contract". Until metric emission lands per ADR-0039
+# §"Baseline-dashboard implementation — deferred" the scrape
+# succeeds but returns an empty body; dashboards that read these
+# metrics render "no data" as documented by ADR-0045 §"Panel
+# inventory".
+#
+# Substrate readiness: the engine is NOT in docker-compose — it
+# runs on the host or in a separate cluster. Prometheus scrapes
+# whatever is listening on host port 8080. Start the engine via
+# `make build-engine && ./bin/dq-engine` (or whatever the
+# operator's local startup invocation is) before consuming the
+# dashboard.
+
+global:
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  evaluation_interval: 15s
+
+# No rule files at v1. Alerting rules (Prometheus-side, not the
+# platform's ADR-0006 alert routing) would land here if/when
+# concrete operator signal demonstrates the need.
+rule_files: []
+
+scrape_configs:
+  - job_name: dq-engine
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - host.docker.internal:8080
+        labels:
+          # The `env` label disambiguates scrape sources when the
+          # operator runs multiple engine processes against
+          # different env-configs. The local-dev default is
+          # `local`; operators set `DQ_ENV=qa` etc. set this
+          # label via the static-config override or by templating
+          # this file in their overlay.
+          env: local
