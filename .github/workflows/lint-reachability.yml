@@ -1,0 +1,82 @@
+# path: .github/workflows/lint-reachability.yml
+#
+# Channel-reachability lint lane per ADR-0047 §"CI-lane
+# separation" + B2-34. Runs `dq-lint -check-channel-reachability`
+# against the rules workspace; each `_owners.yaml` channel
+# reference is probed for substrate reachability (Slack via
+# conversations.info, email via DNS MX, PagerDuty via
+# /services/{id}). Outcomes are warnings, never validation
+# errors — the linter exit code is unaffected by reachability.
+#
+# # Trigger posture (ADR-0047 §"CI-lane separation")
+#
+# Deliberately NOT wired to `pull_request` or `push`. ADR-0047
+# committed two grounds for the separation:
+#
+# - **Substrate quota.** Slack and PagerDuty rate-limit API
+#   calls. Gating every PR on per-channel HTTP lookups
+#   multiplies quota consumption for no operational benefit
+#   (most PRs do not touch owners).
+# - **Flake risk.** Network calls fail transiently; gating the
+#   default PR lane on substrate availability amplifies CI
+#   flakiness.
+#
+# Two trigger modes are committed:
+#
+# - **workflow_dispatch** — operators trigger from the Actions
+#   UI when reviewing a PR that touches `rules/_owners.yaml`.
+#   This is the v1 primary trigger.
+# - **schedule** (commented out at v1) — weekly drift catcher.
+#   Uncomment after the reachability lane stabilises against
+#   the platform's first real onboarding cycle.
+#
+# # Credential gating
+#
+# The job's `if:` condition checks for the presence of either a
+# repository variable (`vars.LINT_REACHABILITY_ENABLED == 'true'`)
+# or the Slack token secret. Until administrators configure
+# them, the job is skipped with a clear "not configured"
+# status. The workflow definition stays green while the
+# platform waits for the first reachability lane invocation.
+#
+# Once configured:
+#
+# - `secrets.DQ_LINT_SLACK_TOKEN` → exported to the env;
+#   Slack adapter uses it.
+# - `secrets.DQ_LINT_PAGERDUTY_KEY` → exported; PagerDuty
+#   adapter uses it.
+# - (Email checks use only DNS; no credential.)
+
+name: lint-reachability
+
+on:
+  workflow_dispatch:
+  # schedule:
+  #   # Weekly drift catcher. Uncomment after the reachability
+  #   # lane stabilises with the first real onboarding cycle.
+  #   - cron: '0 7 * * 1'  # Mondays at 07:00 UTC
+
+jobs:
+  lint-reachability:
+    name: make lint-reachability
+    runs-on: ubuntu-latest
+    # Gate on either the LINT_REACHABILITY_ENABLED var or the
+    # Slack token secret presence. Until either is configured
+    # the job is skipped — the workflow definition stays green
+    # awaiting the platform's first invocation.
+    if: ${{ vars.LINT_REACHABILITY_ENABLED == 'true' || secrets.DQ_LINT_SLACK_TOKEN != '' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/lint/go.mod
+          cache: true
+
+      - name: Run lint-reachability
+        env:
+          DQ_LINT_SLACK_TOKEN: ${{ secrets.DQ_LINT_SLACK_TOKEN }}
+          DQ_LINT_PAGERDUTY_KEY: ${{ secrets.DQ_LINT_PAGERDUTY_KEY }}
+        run: make lint-reachability

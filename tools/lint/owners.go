@@ -76,16 +76,14 @@ func LoadOwnersSchemaSet(v1Path, v2Path, v3Path string) (*OwnersSchemaSet, error
 }
 
 // OwnerEntity is the reduced in-memory descriptor for one entity
-// in _owners.yaml. The linter retains only what is needed for
-// cross-checks: the entity is declared (presence), its mode
-// (for v2 cross-check #3), its owner identifier (for the
-// CODEOWNERS-group membership check per ADR-0037), and the v3
-// onboarding flag (for downstream consumer-side routing per
-// ADR-0046; not enforced by the linter itself but retained so
-// consumers reading the parsed Owners can resolve overrides).
-// Channels and severity overrides are consumed by the alerting
-// layer per ADR-0006 CC3, not by the linter, so they are
-// intentionally not retained here.
+// in _owners.yaml. The linter retains the cross-check inputs —
+// presence, mode (for v2 cross-check #3), owner identifier
+// (CODEOWNERS-group membership per ADR-0037), the v3 onboarding
+// flag (consumer-side routing per ADR-0046), and the per-category
+// channel inventory (per-channel-type reachability check per
+// ADR-0047 / B2-34, opt-in). Severity overrides remain consumed
+// by the alerting layer per ADR-0006 CC3 only and are intentionally
+// not retained here.
 type OwnerEntity struct {
 	// Mode is "set" or "record" for v2/v3 owners; empty string
 	// for v1 owners (which had no mode field). Cross-check #3
@@ -104,6 +102,16 @@ type OwnerEntity struct {
 	// env.OnboardingChannel when true AND OnboardingChannel is
 	// non-empty.
 	Onboarding bool
+
+	// Channels keyed by category (data_quality / operational);
+	// each value is the per-category list of `<type>:<id>`
+	// channel-reference strings per ADR-0006. Retained so the
+	// reachability checker (CheckChannelReachability per
+	// ADR-0047 / B2-34) can walk per-channel inventory without
+	// re-parsing the YAML. The default lint pass (without the
+	// `-check-channel-reachability` flag) does not consume the
+	// field; the schema validator handles per-channel format.
+	Channels map[string][]string
 }
 
 // Owners is the in-memory representation of a loaded _owners.yaml.
@@ -199,6 +207,25 @@ func LoadOwners(set *OwnersSchemaSet, ownersPath string) (*Owners, []ValidationE
 					}
 					if onboarding, ok := entMap["onboarding"].(bool); ok {
 						ent.Onboarding = onboarding
+					}
+					if chAny, ok := entMap["channels"].(map[string]any); ok {
+						channels := map[string][]string{}
+						for cat, listAny := range chAny {
+							listSlice, ok := listAny.([]any)
+							if !ok {
+								continue
+							}
+							refs := make([]string, 0, len(listSlice))
+							for _, refAny := range listSlice {
+								if ref, ok := refAny.(string); ok {
+									refs = append(refs, ref)
+								}
+							}
+							channels[cat] = refs
+						}
+						if len(channels) > 0 {
+							ent.Channels = channels
+						}
 					}
 				}
 				owners.Entities[name] = ent
