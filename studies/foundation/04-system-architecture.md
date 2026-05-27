@@ -10,7 +10,7 @@
 - Audience: platform engineers, architects, future maintainers, AI
   agents.
 - Status: draft
-- Last updated: 2026-05-20
+- Last updated: 2026-05-27
 - Promotion target: `docs/architecture/overview.md`,
   `docs/architecture/components.md`,
   `docs/architecture/data-flow.md`, and several ADRs during Wave 3.
@@ -21,6 +21,19 @@
 
 The platform is organized as five layers. Each layer has a clear
 responsibility and a clear set of things it must not do.
+
+The architecture is **multi-mode**. Every check executes in one of two
+modes — `set` over a BigQuery-backed bounded row set, or `record` over a
+Kafka-backed stream window — and the choice of mode is declared on the
+rule and the entity. These are the runtime-level names for the same two
+primitives the charter defines as **set-oriented mode** and
+**record-oriented mode**; the architecture uses the shorter `set-mode`
+and `record-mode` forms throughout. The layers below describe behavior
+common to both modes; per-mode divergence is called out explicitly where
+it matters. See
+[`01-charter-and-principles.md`](./01-charter-and-principles.md)
+("Capability Modes") for the principle-level statement, and the **Wave-S
+ADRs** (0020–0027) for the founding wave.
 
 ### Layer 1 — Authoring
 
@@ -39,6 +52,13 @@ responsibility and a clear set of things it must not do.
 - contain environment-specific credentials or deployment
   configuration;
 - contain hidden transforms that mutate author intent after merge.
+
+**Per-mode behavior.** Each rule declares `mode: set` or
+`mode: record`; the entity declares its own mode and the linter
+rejects rule/entity mismatches. Kind names carry the mode prefix
+(`set.*` or `record.*`) and the source declaration must match
+(BigQuery for set, Kafka topic + consumer group for record). See
+ADR-0021 (mode primitive) and ADR-0023 (sources schema).
 
 ### Layer 2 — Control
 
@@ -59,6 +79,13 @@ responsibility and a clear set of things it must not do.
 This layer exists to make runtime deterministic. The engine consumes
 curated, validated artifacts — never raw repository state.
 
+**Per-mode behavior.** Control is mode-agnostic. The manifest carries
+mode-tagged rules but distribution, atomic publication, and refresh
+semantics are identical across modes. Scheduler catch-up behavior is
+unified (ADR-0033). The kind catalog
+(`engine/internal/dsl/catalog/v1.yaml`, ADR-0022) is a co-versioned
+artifact that travels with the schema and is validated alongside it.
+
 ### Layer 3 — Execution
 
 **Lives in:** `engine/`
@@ -69,8 +96,11 @@ curated, validated artifacts — never raw repository state.
 - schedule resolution;
 - rule loading from the active manifest;
 - scheduler lifecycle reconciliation;
-- compilation of declarative rules to safe BigQuery queries;
-- query execution and result capture;
+- compilation of declarative rules to safe BigQuery queries
+  (set-mode);
+- bounded consumption from Kafka topics under a tumbling watermark
+  window (record-mode);
+- query / window execution and result capture;
 - retry and failure semantics;
 - concurrency and cost control.
 
@@ -82,6 +112,15 @@ curated, validated artifacts — never raw repository state.
 
 This is the operational heart of the platform. It must stay
 platform-centric and refuse domain-specific shortcuts.
+
+**Per-mode behavior.** A single runner dispatches by mode (ADR-0025).
+Set-mode invokes the BigQuery handler over the rule's declared
+partition window. Record-mode invokes the Kafka handler over the
+declared tumbling window in `source.type: kafka` and aggregates
+per-record outcomes inside the kind handler at window close
+(ADR-0024, ADR-0026). The `execution_id` formula is unchanged across
+modes; record-mode commits the window endpoints declared by the rule
+into the formula (ADR-0024).
 
 ### Layer 4 — Reporting
 
@@ -101,6 +140,16 @@ platform-centric and refuse domain-specific shortcuts.
 
 Reporting is not a side effect. It is part of the platform contract.
 
+**Per-mode behavior.** Both modes write to the same `dq_executions`
+and `dq_check_results` tables under the same `execution_id` formula
+(ADR-0003, ADR-0041). An additive `mode` column distinguishes the
+two. Window endpoints are not yet first-class columns; they are
+reconstructed from the rule version pinned in `dq_executions` and
+will be promoted to first-class columns in a later T1 extension
+(ADR-0041). Per-mode evidence shapes differ: set-mode samples
+violating rows; record-mode samples violating records with bounded
+sample size per cost guardrails (ADR-0027, ADR-0031).
+
 ### Layer 5 — Alerting
 
 **Lives in:** `engine/` (event emission) with routing data from `rules/`
@@ -119,6 +168,12 @@ Reporting is not a side effect. It is part of the platform contract.
 
 Routing policy is data-driven wherever possible. The engine never
 embeds team-specific conditionals.
+
+**Per-mode behavior.** The routing contract (ADR-0006) is identical
+across modes; per-mode differences are payload-only (evidence shape).
+The onboarding-channel override (ADR-0046) applies uniformly. Alert
+egress remains Pub/Sub for both modes — Kafka is a source substrate,
+not an egress substrate.
 
 ---
 
@@ -157,13 +212,24 @@ embeds team-specific conditionals.
 8. Alerting consumers fan out the events to Slack, PagerDuty, or
    other destinations based on `_owners.yaml`.
 
+The same flow applies to both modes. The only divergences are at
+step 4: in set-mode the compiler emits a BigQuery query that the
+runner executes against the declared partition window; in record-mode
+the runner consumes from the rule's Kafka topic within the declared
+tumbling watermark window and aggregates per-record outcomes inside
+the kind handler at window close (ADR-0024, ADR-0025, ADR-0026).
+Every other step — plan persistence, result write, event emission,
+fan-out — is mode-agnostic.
+
 ### Evolution Flow
 
-Checks marked `stream_compatible` in their YAML declaration become
-candidates for future materialization in a Kafka-backed stream runner.
-The semantic model (entity, check identity, severity, result shape)
-stays the same; only the runtime substrate changes. The reporting
-schema accommodates both modes through aggregated time-window rows.
+Stream evaluation is no longer a future direction: record-mode is a
+declared capability backed by a Kafka source substrate (ADR-0023,
+ADR-0028) and a unified runner with per-mode switch (ADR-0025). New
+kinds and new modes evolve under the same contract-driven discipline
+(P5): kinds enter through the catalog (ADR-0022) with schema
+co-versioning, and any new mode would arrive as another value of the
+`mode` discriminator under a schema-version bump.
 
 ---
 
@@ -202,6 +268,11 @@ silent skipping.
 This pattern is the foundation of runtime trust. If the ruleset
 loaded, it loaded completely and correctly.
 
+The kind catalog (`engine/internal/dsl/catalog/v1.yaml`, ADR-0022) is
+co-loaded with the manifest and rules; an unknown kind, a missing
+catalog entry, or a kind/mode-prefix mismatch is a fail-fast load
+error. Refusal-to-swap applies identically to both modes.
+
 ### PAT-2 — Lifecycle-aware scheduler integration
 
 The scheduler integration is not a single "create cron" call. It is a
@@ -220,6 +291,11 @@ lifecycle:
 This lifecycle is owned by a single subsystem inside `engine/`, with
 admin endpoints for manual invocation and a periodic reconciliation
 loop for drift correction.
+
+The scheduler is mode-agnostic: cadence lives on the rule YAML and
+applies uniformly to set-mode and record-mode rules (ADR-0033). The
+catch-up horizon and missed-trigger detection are likewise mode-
+neutral.
 
 ### PAT-3 — Fixture-driven compiler testing
 
@@ -240,6 +316,12 @@ This pattern catches regressions in SQL generation immediately and
 makes it possible to review a compiler change by reading the fixture
 diff.
 
+Per-mode fixtures partition the testdata tree under `set/` and
+`record/` subtrees (target shape per ADR-0022 / ADR-0023). Set-mode
+scenarios compare generated SQL; record-mode scenarios compare
+per-record outcomes against synthetic Kafka inputs plus the
+aggregated window result.
+
 ### PAT-4 — Typed multi-environment configuration
 
 The engine runs in multiple environments (local, qa, prod, possibly
@@ -255,6 +337,14 @@ If a new field is added to one environment, the build fails until it
 is added to all environments. This forces deliberate decisions and
 makes drift impossible.
 
+`EnvConfig` carries the per-mode cost guardrails: `SetModeCost`
+(MaxBytesScannedPerRun, MaxWindowDuration, MaxConcurrentEvaluations,
+MaxEvidenceSampleSize, RefreshFailureEscalationN — ADR-0029) and
+`RecordModeCost` (consumer lag, late-drop rate, dead-letter rate,
+evidence sample size, writer-queue saturation, throughput —
+ADR-0027). It also carries `OnboardingChannel` for the
+onboarding-channel override (ADR-0046).
+
 ### PAT-5 — Modular logging contract
 
 Logging supports a global default level plus per-package overrides
@@ -269,7 +359,75 @@ flooding logs globally — especially useful when debugging compilers,
 scheduler reconciliation, manifest loading, or alert emission.
 
 The implementation is a small layer over Go's `slog` standard library
-package. It is intentionally minimal.
+package. It is intentionally minimal. The `DQ_LOG_LEVELS` grammar
+(`PACKAGE:LEVEL`, comma-separated, case-insensitive) is fixed by
+ADR-0043.
+
+### PAT-6 — Capability discriminator
+
+Mode (`set` or `record`) is the first-class architectural
+discriminator. It is declared on the rule and the entity, it appears
+as a prefix on every kind name (`set.*` / `record.*`), and it
+constrains the shape of the source declaration.
+
+The linter cross-checks mode-consistency across four artifacts:
+
+- the rule's `mode` field;
+- the entity's `mode` field;
+- the kind name's prefix and the kind catalog's `mode` column;
+- the source declaration (BigQuery for `set`, Kafka topic + consumer
+  group for `record`).
+
+Any mismatch fails lint before the engine ever sees the rule. This
+pattern is what keeps the unified runner (PAT-7) safe: every rule
+that reaches the engine has its mode locked at the YAML layer.
+
+Cite ADR-0021 and ADR-0022.
+
+### PAT-7 — Per-mode runner switch
+
+A single `Runner` component dispatches by mode. There is no parallel
+set-runner and record-runner — there is one runner with a per-mode
+handler.
+
+- **Set-mode handler.** Invokes the compiled BigQuery query over the
+  declared partition window; result is one row per check.
+- **Record-mode handler.** Consumes from the rule's Kafka topic
+  inside the declared tumbling watermark window; per-record outcomes
+  are aggregated inside the kind handler at window close per the
+  rule's threshold or override (`params.aggregation`); result is one
+  row per check per window.
+
+The unified-runner shape is committed by ADR-0025 with an objective
+criterion for future revisits. Aggregation lives inside the kind
+handler in both cases — implicitly in set-mode (the SQL itself
+aggregates), explicitly in record-mode (the handler tallies per-
+record outcomes and maps the violation rate to the ADR-0004 enum
+per ADR-0026).
+
+Cite ADR-0025 and ADR-0026.
+
+### PAT-8 — Kafka stream substrate
+
+Record-mode sources are Kafka topics with explicit consumer groups
+declared in `source.type: kafka`. Window semantics are tumbling and
+watermark-bounded; window endpoints are declared by the rule and
+committed into the `execution_id` formula (ADR-0024). Partition
+offsets drive deterministic replay — a rerun of the same window
+reads the same records.
+
+The substrate capability matrix (ADR-0010, amended by ADR-0028)
+carries Kafka rows alongside the existing BigQuery / GCS / Pub/Sub
+rows: publish/subscribe and consumer groups are **Yes** under the
+local emulator and the sandbox; per-partition offset tracking is
+**Yes**; watermark/lateness is **Partial** (full fidelity requires
+the sandbox tier).
+
+Pub/Sub remains the alert and result-event egress substrate (Layer
+5). The asymmetry is intentional and is explained in the charter
+under "Capability Modes → Stream substrate".
+
+Cite ADR-0023, ADR-0024, and ADR-0028.
 
 ---
 
@@ -289,8 +447,11 @@ Owns the scheduled trigger lifecycle. Implements PAT-2.
 
 ### `Trigger API`
 
-HTTP handler for `/runs`. Validates OIDC, parses request, enqueues
-plan.
+HTTP handler for `/v1/trigger`. Validates OIDC, parses request with a
+strict decoder (UTF-8, no-pipe, RFC 3339 for timestamps), enqueues
+plan. Accepts `trigger_source` distinguishing scheduler from manual
+invocation. Returns a DTO distinct from the persistence shape. Owns
+`/healthz` and `/readyz`. Contract per ADR-0014.
 
 ### `Coordinator`
 
@@ -304,9 +465,13 @@ queries. Implement PAT-3.
 
 ### `Runner`
 
-Executes compiled queries against BigQuery. Captures results,
-including sample violating rows up to configured limits. Honors
-concurrency budgets.
+Unified runner with per-mode switch (PAT-7). Set-mode handler
+executes compiled queries against BigQuery and captures sample
+violating rows; record-mode handler consumes from Kafka inside the
+declared tumbling watermark window and aggregates per-record
+outcomes at window close. Captures bounded evidence under the
+per-mode cost guardrails in `EnvConfig` (PAT-4). Honors concurrency
+budgets.
 
 ### `Reporter`
 
@@ -375,13 +540,23 @@ This is what makes incident analysis possible.
 
 ### G5. Stream evolution preserves conceptual continuity
 
-When the stream runner is built, it reuses:
+Stream evaluation is realized, not future: record-mode is a declared
+capability backed by a Kafka source substrate (ADR-0023, ADR-0028)
+and a unified runner with per-mode switch (ADR-0025). Conceptual
+continuity is the constraint that keeps it safe to operate alongside
+set-mode:
 
-- the same entity concept;
-- the same check identifiers;
-- the same severity semantics;
-- a reporting shape compatible with batch results (aggregated by
-  time window).
+- the same entity concept across both modes;
+- the same check identifiers (kind names differ only by mode prefix);
+- the same severity semantics and ADR-0004 outcome enum, with
+  per-record outcomes mapped to that enum via aggregation
+  (ADR-0026);
+- the same `dq_executions` / `dq_check_results` tables and the same
+  `execution_id` formula, with an additive `mode` column
+  (ADR-0003, ADR-0041);
+- the same alert routing contract (ADR-0006).
+
+Any future mode must enter under the same continuity rule.
 
 ### G6. Internal patterns are described in our own terms
 
@@ -404,7 +579,13 @@ caught in code review:
 - "temporary" check types implemented as a special case in one
   compiler;
 - direct engine-to-rule-file access bypassing the manifest;
-- environment-specific behavior changes not declared in `env/`.
+- environment-specific behavior changes not declared in `env/`;
+- treating record-mode as a parallel pipeline. The two modes share
+  the same control plane, manifest semantics, kind catalog, result
+  store, alert routing, and `execution_id` formula. A change that
+  would only apply to one mode is a signal to rethink — it usually
+  belongs inside the kind handler, not at the runner or reporting
+  layer.
 
 Catching these in review is significantly cheaper than removing them
 later.

@@ -10,7 +10,7 @@
 - Audience: every contributor, reviewer, maintainer, and AI agent that
   touches this repository.
 - Status: draft
-- Last updated: 2026-05-20
+- Last updated: 2026-05-27
 - Promotion target: `docs/charter.md` and `docs/principles.md`
   during Wave 3.
 
@@ -275,6 +275,57 @@ spans workspaces.
 
 **Must reject:** workspace-internal documentation that should live
 inside that workspace, duplicated content that creates drift.
+
+## Capability Modes
+
+The platform evaluates data quality through two architectural
+primitives, each tied to the shape of the source it consumes:
+
+- **Set-oriented mode** — a check operates over a bounded set of rows
+  read from a partitioned BigQuery table or view. Aggregation is
+  implicit in the set semantics; one execution produces one result
+  per check over the declared window.
+- **Record-oriented mode** — a check operates on individual records
+  consumed from a Kafka topic, bounded by a tumbling watermark
+  window. Per-record outcomes are aggregated inside the kind handler
+  at window close and produce a single result per check per window.
+
+Mode is declared explicitly on both the rule and the entity
+(`mode: set` or `mode: record`). Kind names carry the mode as a
+prefix (`set.*` / `record.*`) and the linter enforces consistency
+across rule, entity, kind catalog, and source declaration. This is
+what P6 ("Borrow patterns, not baggage") looks like in the
+data-quality domain: the modes capture the real shape of the data,
+not the lineage of any prior tool.
+
+### Stream substrate
+
+Record-oriented checks consume from **Kafka** — not Pub/Sub. Pub/Sub
+remains the engine's alert and result-event egress; it is not a
+source substrate. The asymmetry is deliberate: Kafka's consumer-group
+and partition-offset model gives the engine deterministic replay and
+window-bounded reads that a fan-out broker cannot offer. Alert egress
+has different invariants (at-least-once fan-out to subscribers) and
+is served well by Pub/Sub.
+
+### Origin in the ADR record
+
+The mode primitive and its execution shape are defined by the Wave-S
+ADRs:
+
+- ADR-0020 — Wave-S launch
+- ADR-0021 — mode as primitive
+- ADR-0022 — kind catalog
+- ADR-0023 — sources schema (Kafka selected as record substrate)
+- ADR-0024 — window semantics
+- ADR-0025 — aggregation and unified runner shape
+- ADR-0026 — failure scope aggregated
+- ADR-0027 — record-mode cost guardrails
+
+These ADRs supersede earlier wording that described stream evolution
+as a future direction (see `Mission`, fourth bullet) — that future
+has arrived as a declared mode, not as a retrofit of the set-oriented
+runtime.
 
 ## Closing Position
 

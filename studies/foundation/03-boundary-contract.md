@@ -12,7 +12,7 @@
   maintainers.
 - Status: draft (subject to refinement when the corresponding B0
   decision is resolved in `studies/decisions/`).
-- Last updated: 2026-05-20
+- Last updated: 2026-05-27
 - Promotion target: `docs/contracts/boundary.md` and an ADR during
   Wave 3.
 
@@ -68,12 +68,21 @@ and what the rules workspace must produce.
 
 ```
 engine/internal/dsl/schema/v1.schema.json     # source of truth
+engine/internal/dsl/catalog/v1.yaml           # co-versioned kind catalog
 rules/_schema/v1.schema.json                  # mirror, kept in sync by CI
 ```
 
 The schema **source of truth** lives in `engine/`. The mirror in
 `rules/` exists so that the rules workspace can be validated without
 depending on engine internals at lint time.
+
+The **kind catalog** (`engine/internal/dsl/catalog/v1.yaml`,
+ADR-0022) is a co-versioned artifact alongside the schema. It
+enumerates every supported kind with its mode, source mode,
+`params_schema`, and description, and it advances under the same
+versioning model as the schema. Linter and engine both consult it; a
+kind missing from the catalog is invalid even if it parses against
+the schema.
 
 ### How it is kept in sync
 
@@ -125,8 +134,15 @@ When `v2` is introduced:
 - after the compatibility window, support for `v1` is removed in a
   major engine release (not before).
 
-The exact length of the compatibility window is a Wave 1 decision
-(see [`06-decision-log.md`](./06-decision-log.md)).
+Schema **v2 is the inaugural use of this protocol**: it carries the
+mode primitive (`mode: set|record` on rule + entity, ADR-0021), the
+kind-prefix grammar (`^(set|record)\..+$`), and the top-level
+`source` block (ADR-0023). The kind catalog version-tracks the
+schema (v1 → v2 catalog), so a v1 rule resolving a v2-only kind is
+caught by the linter at the catalog cross-check, not at the schema
+layer.
+
+The exact length of the compatibility window is fixed by ADR-0035.
 
 ---
 
@@ -170,6 +186,13 @@ version.
   time, against the same schema. The linter and the engine share the
   schema artifact; they do not share validation code paths beyond the
   shared schema. This is intentional — defense in depth.
+
+The linter additionally resolves and inlines **bounded external
+artifact references** (`_ref` suffix on structured-data params, per
+ADR-0044): the publisher and linter dereference the external artifact
+(e.g. a JSON Schema document, a reference table) and inline it into
+the manifest, so the engine consumes a self-contained artifact.
+External references never reach the runtime.
 
 ### Why the linter and the engine validate independently
 
@@ -302,12 +325,14 @@ The rules workspace commits to:
 
 ### The compatibility window
 
-The default window for supporting a deprecated schema version is a
-**fixed period after the successor is released** — exact duration
-under discussion in Wave 1. The window exists to give domain teams
-time to migrate without panic, and to give the platform team
-confidence that the next version is stable before retiring the old
-one.
+The compatibility window is fixed by ADR-0035: the engine supports
+the current schema plus the immediately prior version (**N-1
+baseline**), and a **90-day calendar-time floor** applies before the
+prior version may be dropped. Additive-within-major remains
+unrestricted under the non-breaking-change protocol below. The
+window exists to give domain teams time to migrate without panic,
+and to give the platform team confidence that the next version is
+stable before retiring the old one.
 
 ### Breaking-change protocol
 
@@ -341,13 +366,20 @@ unknown values), or a relaxed constraint:
 
 ## Open Topics
 
-Tracked in [`06-decision-log.md`](./06-decision-log.md):
+Tracked in [`06-decision-log.md`](./06-decision-log.md). Items
+previously listed here that have since been resolved:
 
-- exact duration of the schema compatibility window;
+- duration of the schema compatibility window — resolved by ADR-0035
+  (N-1 baseline + 90-day calendar floor);
+- whether the manifest carries a cryptographic signature beyond
+  checksums — resolved by ADR-0030 (no additional signature layer;
+  existing content addressing, CAS, substrate IAM, audit log, and
+  CODEOWNERS together meet the threat model).
+
+Remaining open:
+
 - exact format of `engine_compatibility` (semver range syntax, custom
   syntax, etc.);
-- whether the manifest carries a cryptographic signature beyond
-  checksums;
 - whether the engine caches loaded rulesets across restarts or always
   re-fetches;
 - how the manifest interacts with multi-environment isolation (one
