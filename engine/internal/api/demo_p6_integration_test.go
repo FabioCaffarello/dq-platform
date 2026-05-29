@@ -149,14 +149,23 @@ func TestIntegration_DemoP6_EndToEnd(t *testing.T) {
 
 	// Write the rule YAML into the GCS emulator at a content-
 	// addressed path. The test stores the same body the
-	// manifest publisher would have written.
-	yamlBody := []byte(`version: 1
+	// manifest publisher would have written. Per ADR-0023 the
+	// BigQuery target lives on the rule's `source:` descriptor,
+	// so the body interpolates the dynamically-generated source
+	// dataset name.
+	yamlBody := []byte(fmt.Sprintf(`version: 2
 entity: customer
+mode: set
 description: P6d integration test.
+source:
+  type: bigquery
+  project_id: %s
+  dataset_id: %s
+  table_id: customer
 checks:
   - check_id: row_count_positive
-    kind: row_count_positive
-`)
+    kind: set.row_count_positive
+`, demoProjectID, sourceDS))
 	const yamlPath = "yamls/by-hash/sha256-demo-p6-fixture.yaml"
 	demoWriteYAML(t, gcsCli, yamlPath, yamlBody)
 
@@ -178,11 +187,18 @@ checks:
 		t.Fatalf("EnsureSchema: %v", err)
 	}
 
-	// Evaluator + runner.
+	// Evaluator + runner. Per ADR-0023 the per-rule source
+	// descriptor (parsed from the YAML body above) carries the
+	// BigQuery target; the evaluator no longer pins a
+	// deployment-wide source. ResultsProject / ResultsDataset
+	// locate dq_executions + dq_check_results for the baseline
+	// framework (ADR-0032) — set here for parity with main.go's
+	// wiring even though set.row_count_positive does not consume
+	// them.
 	evaluator, err := eval.New(eval.Config{
-		Client:        bqCli,
-		SourceProject: demoProjectID,
-		SourceDataset: sourceDS,
+		Client:         bqCli,
+		ResultsProject: demoProjectID,
+		ResultsDataset: resultsDS,
 	})
 	if err != nil {
 		t.Fatalf("eval.New: %v", err)
