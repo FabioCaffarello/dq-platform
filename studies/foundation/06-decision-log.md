@@ -234,18 +234,20 @@ B3 launches an evolutionary lane for capability extensions that
 after Wave-S record-oriented capability launched. Scope is restricted
 to three families: kind family extensions, capability mode extensions,
 tooling extensions. Launch study at
-[`studies/decisions/2026-05-27-b3-evolutionary-launch.md`](../decisions/2026-05-27-b3-evolutionary-launch.md)
-→ ADR-0049 (provisional; slot may shift). Pacing is demand-driven —
-B3-N rows are enumerated when concrete demand surfaces and resolved
-on demand under the same study → critique → promotion protocol that
-governed Waves 1, 2, 3, and Wave-S. The eligibility criterion that
-distinguishes B3 from B2, amendment, and descartado, and the
-out-of-scope candidates (substrates, performance, API evolution),
-are fixed by the launch study §Recommendation.
+[`studies/decisions/2026-05-27-b3-evolutionary-launch.md`](../decisions/2026-05-27-b3-evolutionary-launch.md),
+promoted to [ADR-0049](../../docs/adr/0049-b3-evolutionary-launch.md)
+on 2026-05-29. Pacing is demand-driven — B3-N rows are enumerated
+when concrete demand surfaces and resolved on demand under the same
+study → critique → promotion protocol that governed Waves 1, 2, 3,
+and Wave-S. The eligibility criterion that distinguishes B3 from B2,
+amendment, and rejected, and the out-of-scope candidates (substrates,
+performance, API evolution), are fixed by
+[ADR-0049](../../docs/adr/0049-b3-evolutionary-launch.md) §(a) and
+§(b).
 
 | # | Topic | Status | Key Question | Why It Matters | Expected Output |
 |---|---|---|---|---|---|
-| B3-launch | Evolutionary launch | [resolved-study](../decisions/2026-05-27-b3-evolutionary-launch.md) | When does a proposed capability extension qualify as B3 vs B2 vs amendment vs descartado, and which families fall in/out of B3 scope? | Without an eligibility filter, evolutionary work accumulates substrate, performance, or API-evolution items that should be new waves, not B3. | Launch study + ADR-0049 (provisional) governing future B3-N entries |
+| B3-launch | Evolutionary launch | [resolved-study](../decisions/2026-05-27-b3-evolutionary-launch.md) → [resolved-adr](../../docs/adr/0049-b3-evolutionary-launch.md) | When does a proposed capability extension qualify as B3 vs B2 vs amendment vs descartado, and which families fall in/out of B3 scope? | Without an eligibility filter, evolutionary work accumulates substrate, performance, or API-evolution items that should be new waves, not B3. | Launch study + ADR-0049 governing future B3-N entries |
 
 ---
 
