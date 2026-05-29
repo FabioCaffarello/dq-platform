@@ -18,11 +18,15 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
+	"reflect"
+	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -82,6 +86,10 @@ func main() {
 	flag.Parse()
 	cfg, err := readEnv()
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "dq-engine: %v\n", err)
+		os.Exit(2)
+	}
+	if err := validateNoPlaceholders(cfg); err != nil {
 		fmt.Fprintf(os.Stderr, "dq-engine: %v\n", err)
 		os.Exit(2)
 	}
@@ -444,6 +452,75 @@ func readEnv() (startupConfig, error) {
 		StorageEmulatorHost:  os.Getenv("STORAGE_EMULATOR_HOST"),
 		BigQueryEmulatorHost: os.Getenv("BIGQUERY_EMULATOR_HOST"),
 	}, nil
+}
+
+// placeholderMarker is the substring the qa.go / prod.go declarations
+// embed in every value that needs to be replaced by the operational
+// session that provisions the real GCP project (see the file-level
+// doc comments on engine/internal/env/qa.go and prod.go). The
+// exhaustiveness test in env_test.go treats placeholder values as
+// populated (non-zero strings) so the package compiles — this
+// validator is the missing second gate that keeps the binary from
+// reaching the GCP SDKs with values that cannot resolve.
+const placeholderMarker = "PLACEHOLDER"
+
+// validateNoPlaceholders rejects a qa or prod startup whose EnvConfig
+// still carries placeholder strings. Local is exempt by design: the
+// substring is reserved as a marker, and local declarations may use
+// it freely without tripping the boot gate.
+//
+// The walk is reflection-based and recursive so a future string field
+// added to a nested EnvConfig sub-struct (e.g., RecordModeCost) is
+// covered without further edits. Emulator-host overrides on
+// startupConfig are env-var-driven and out of scope; the walk only
+// visits cfg.EnvConfig.
+//
+// Every offending field is collected before the error is built — the
+// operator gets the full punch list in one boot-failure log line
+// instead of one field per redeploy.
+func validateNoPlaceholders(cfg startupConfig) error {
+	if cfg.Name == env.NameLocal {
+		return nil
+	}
+	var offenders []string
+	walkPlaceholderFields(reflect.ValueOf(cfg.EnvConfig), "", &offenders)
+	if len(offenders) == 0 {
+		return nil
+	}
+	sort.Strings(offenders)
+	var b strings.Builder
+	fmt.Fprintf(&b, "env %q: PLACEHOLDER substring found in config field(s):\n", cfg.Name)
+	for _, o := range offenders {
+		fmt.Fprintf(&b, "  %s\n", o)
+	}
+	fmt.Fprintf(&b, "replace these in engine/internal/env/%s.go before deploying", cfg.Name)
+	return errors.New(b.String())
+}
+
+// walkPlaceholderFields recurses through v, appending one
+// "<path> = <quoted-value>" string per offending field to offenders.
+// path is the dotted accessor from the root struct (e.g.,
+// "RecordModeCost.SomeFutureStringField"); the top-level call passes
+// "" and the walker uses bare field names at depth 0.
+func walkPlaceholderFields(v reflect.Value, path string, offenders *[]string) {
+	t := v.Type()
+	for i := 0; i < v.NumField(); i++ {
+		field := t.Field(i)
+		fv := v.Field(i)
+		name := field.Name
+		if path != "" {
+			name = path + "." + name
+		}
+		switch fv.Kind() {
+		case reflect.String:
+			s := fv.String()
+			if strings.Contains(s, placeholderMarker) {
+				*offenders = append(*offenders, fmt.Sprintf("%s = %q", name, s))
+			}
+		case reflect.Struct:
+			walkPlaceholderFields(fv, name, offenders)
+		}
+	}
 }
 
 func newGCSClient(ctx context.Context, cfg startupConfig) (*storage.Client, error) {
