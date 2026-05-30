@@ -8,7 +8,8 @@
 - Status: draft
 - **Classification: Amendment to [ADR-0015](../../docs/adr/0015-codeowners.md) per [ADR-0049](../../docs/adr/0049-b3-evolutionary-launch.md) §(a)** — this proposal modifies what ADR-0015 decided (the asymmetric review model backed by GitHub-org team groups). Not B3 (Condition 1, P-B3.1, fails: this is rewrite, not expansion). Not Flow 6 (substantive contract change, not factual refresh). The standalone-amendment idiom from `adr-writing` skill A4 applies: the promotion ADR carries `Status: accepted (amends ADR-0015)`; ADR-0015 itself stays accepted with its Status line updated to record the amendment relationship.
 - Promotion target: [`docs/adr/0057-single-user-codeowners-amendment.md`](../../docs/adr/0057-single-user-codeowners-amendment.md) (provisional; operator reserves at promotion time per [ADR-0051](../../docs/adr/0051-claude-tooling-postwave3.md) Clause 7; subject to the same numbering caveat per `adr-writing` A8).
-- Critique rounds: pending (this is the pre-critique draft).
+- Critique rounds:
+  - Round 1 — [capture](../critiques/2026-05-30-amendment-adr-0015-single-user-codeowners-critique-1.md) (0 blocking / 3 important / 5 minor); 3 important applied in this revision (AC-10 vacuous-satisfaction note added to Consequence #9; Consequence #6 Flow 5 refresh path committed as Flow 6 with PR-shape pushed to new OQ-5; OQ-1 recommendation header reframed as `Author's recommendation (NOT pre-decided; surfaced for operator ratification...): STAYS`); 5 minor deferred under the two-round cap.
 
 ---
 
@@ -384,10 +385,20 @@ hidden in the prose**.
    today reads as if the reviewer is somebody other than the
    author (mechanism-enforced via CODEOWNERS). The amendment
    triggers a one-line refresh of Flow 5 making explicit that
-   under the single-user model the `[H]` step is operator-as-
-   person discipline. This refresh is a Flow-6-shape doc edit
-   that lands with the amendment ADR's implementation slice
-   (or in a same-PR R4 collapse if the operator authorizes).
+   under the single-user model the `[H]` step is
+   operator-as-person discipline. **The refresh rides Flow 6
+   (factual clarification), not amendment to ADR-0051 or
+   ADR-0009** — the substance of Flow 5's `[H]` gate is
+   unchanged (operator-as-person was already the default for
+   every prior `[H]` gate in this session's precedents — B3-4,
+   B3-5, Wave-S declaration); the refresh just names the
+   substrate explicitly under single-user. Flow 6's scope
+   covers *"tight clarifications of existing rules or
+   principles whose substance is unchanged"* — that fits
+   exactly. Whether the Flow 6 refresh rides in the same PR
+   as the amendment-promotion ADR (R4 collapse, precedent
+   ADR-0054/0055/0056) or ships as a separate Flow 6 PR is
+   surfaced as OQ-5 below.
 
 7. **The `gh pr merge` deny block in `.claude/settings.json`
    keeps its open question** (see §Open Questions OQ-1).
@@ -406,11 +417,21 @@ hidden in the prose**.
 
 9. **No B-row is opened.** Amendments live under the
    originating ADR's supersession chain per ADR-0049 §(a)
-   "Amendment" branch, never under B3 or B2. The
-   amendment-promotion session adds an "Earlier update"
-   entry to the decision log noting the amendment, mirroring
-   precedent ADR-0054 (B2-36 → amendment to ADR-0042) — but
-   no new B-row is registered.
+   "Amendment" branch, never under B3 or B2. This amendment
+   was initiated by operator session prompt without an
+   originating B-row (unlike B2-36 → ADR-0054 where the
+   existing B2 row provided the anchor; here, there was no
+   such row). The amendment-promotion session adds an "Earlier
+   update" entry to the decision log noting the amendment per
+   the precedent shape used by the Wave-S full-gate
+   declaration (PR #116) for governance-event records without
+   a B-row. **AC-10 from `acceptance-criteria.md` is satisfied
+   vacuously** — there is no B-row to update to `resolved-study`
+   because no B-row exists for this amendment; the literal
+   AC-10 pattern is moot for amendments initiated without an
+   originating B-row anchor, and the decision-log update
+   lands at promotion-session close, not at this study
+   session's close.
 
 10. **Future-org migration remains available.** If the
     operator's situation ever changes and the repository
@@ -457,24 +478,28 @@ hidden in the prose**.
     asymmetry "agent never merges" was originally a corollary
     of the asymmetric review model; once asymmetric review
     collapses, the corollary might too.
-  - **My recommendation: STAYS.** The two surfaces are
-    independent. The deny block guards the *agent*, not the
-    *review model*. The operator merging their own PR
-    happens in the GitHub UI (or in their own non-agent
-    shell); neither is affected by a deny block on the
-    agent's `Bash(gh pr merge *)` invocation. The deny block
-    enforces a stronger version of CONTRIBUTING.md Flow 5's
-    *"agent never calls `gh pr merge`"* clause, and that
-    clause is independent of CODEOWNERS enforcement. The
-    counter-argument's "awkward scripting" concern is real
-    but operator-resolvable by invoking the merge outside
-    the agent's Bash sandbox (which is the intended workflow
-    today regardless).
-  - **The recommendation is mine to write; the ratification
-    is the operator's** per CONTRIBUTING.md Flow 5
-    §"Operator-side responsibilities". This OQ is the
-    explicit author-equals-reviewer surface where `/critique`
-    cannot self-ratify (ADR-0051 §Consequence 7).
+  - **Author's recommendation (NOT pre-decided; surfaced for
+    operator ratification per CONTRIBUTING.md Flow 5
+    §"Operator-side responsibilities"): STAYS.** The two
+    surfaces are independent. The deny block guards the
+    *agent*, not the *review model*. The operator merging
+    their own PR happens in the GitHub UI (or in their own
+    non-agent shell); neither is affected by a deny block on
+    the agent's `Bash(gh pr merge *)` invocation. The deny
+    block enforces a stronger version of CONTRIBUTING.md
+    Flow 5's *"agent never calls `gh pr merge`"* clause, and
+    that clause is independent of CODEOWNERS enforcement.
+    The counter-argument's "awkward scripting" concern is
+    real but operator-resolvable by invoking the merge
+    outside the agent's Bash sandbox (which is the intended
+    workflow today regardless).
+  - This OQ is the explicit author-equals-reviewer surface
+    where `/critique` cannot self-ratify (ADR-0051
+    §Consequence 7). The recommendation above is the author's
+    reading; the operator settles it at merge act (per
+    CONTRIBUTING.md Flow 5 *"otherwise implicitly resolved
+    by the merge act"*) or by explicit mid-PR ratification
+    (precedent B3-4 / B3-5 / Wave-S declaration).
 
 - **OQ-2: future-org migration trigger** — when (if ever)
   the operator's situation changes such that the repository
@@ -499,6 +524,21 @@ hidden in the prose**.
   amendments collapsed). **Out-of-scope for current cycle
   resolution** — operator-decision at promotion time, not
   for this study to commit.
+
+- **OQ-5: CONTRIBUTING.md Flow 5 refresh PR-shape** — the
+  Flow 6 clarification committed in Consequence #6 can
+  either ride the amendment-promotion PR (R4 collapse,
+  precedent ADR-0054/0055/0056) or ship as a standalone
+  Flow 6 PR. R4 collapse is consistent with recent
+  precedent but the Flow 5 refresh is a CONTRIBUTING.md
+  surface edit (operator-facing process documentation),
+  which historically rides Flow 6 standalone. **Out-of-scope
+  for current cycle resolution** — operator-decision at
+  promotion time, paired with OQ-4 (the
+  CODEOWNERS/_owners.yaml substitution timing). The
+  refresh-text scope is *one clause-block in Flow 5
+  §"[H] reviewer"*, not a sentence and not the entire Flow 5
+  section.
 
 ---
 
