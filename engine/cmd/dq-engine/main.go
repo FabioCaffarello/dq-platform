@@ -222,13 +222,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Evaluator (W3-P6c, extended to Wave-S sub-slice α). The
-	// evaluator dispatches on CheckSpec.Kind via the handler
-	// registry; New() registers set.row_count_positive (real
-	// handler) and record.schema_conformance (stub until Wave-S
-	// sub-slice β). Per ADR-0023 the rule's source descriptor
-	// carries the BigQuery target; the evaluator no longer pins
-	// a deployment-wide source.
+	// Evaluator (W3-P6c, extended through Wave-S). The evaluator
+	// dispatches on CheckSpec.Kind via the handler registry;
+	// New() registers set.row_count_positive (set-mode) and
+	// record.schema_conformance (record-mode production handler
+	// per ADR-0026 — compiles each rule's JSON Schema, validates
+	// per-window records, and aggregates per-record outcomes via
+	// the threshold function). Per ADR-0023 the rule's source
+	// descriptor carries the BigQuery target; the evaluator no
+	// longer pins a deployment-wide source.
 	evaluator, err := eval.New(eval.Config{
 		Client:           bqClient,
 		Logger:           evalLogger,
