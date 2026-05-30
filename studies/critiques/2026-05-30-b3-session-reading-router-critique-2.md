@@ -157,3 +157,28 @@ operator dispositions the round-2 trailer.
 Two-round cap reached. Round-2 dispositions land in the
 next commit on this branch; the study moves to
 `resolved-study` after the decision-log row update.
+
+---
+
+### D0 ratification (operator-side, post-PR-#101-merge)
+
+**2026-05-30, merge commit `4477c8b`:** the operator
+ratified the D0 borderline readings on ADR-0049 §(a)
+Conditions 1 (P-B3.1, expands not rewrites) and 4
+(additive-maintenance threshold) by merging PR #101 along
+the "ratify the borderline readings" disposition path
+explicitly listed in the PR body. The merge is the
+ratification artifact; this trailer line records it per
+[ADR-0048](../../docs/adr/0048-critique-rounds-preservation.md)
+preservation contract and per
+[`CONTRIBUTING.md`](../../CONTRIBUTING.md) Flow 5
+§"Operator-side responsibilities" (eligibility ratification
+for borderline B3-N readings is operator-side, recorded in
+the round-2 critique trailer, carried forward to the
+promoted ADR as a new-contribution-requires-review marker
+per R5). The author-equals-reviewer circularity
+(`/critique` cannot self-ratify its own eligibility
+reading) is satisfied: the ratification is operator-emitted,
+not critique-emitted. Carry-forward to ADR-0052 lands in
+the promotion commit per A7 of
+[`.claude/skills/adr-writing/SKILL.md`](../../.claude/skills/adr-writing/SKILL.md).
