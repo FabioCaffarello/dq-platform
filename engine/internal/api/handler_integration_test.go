@@ -100,7 +100,7 @@ func startTestServer(t *testing.T, r *runner.Runner, m *loader.Manifest) (string
 	if err != nil {
 		t.Fatalf("NewHandler: %v", err)
 	}
-	srv := NewServer(":0", h, nil)
+	srv := NewServer(":0", h, nil, nil)
 	ts := httptest.NewServer(srv.server.Handler)
 	return ts.URL, complete, ts.Close
 }

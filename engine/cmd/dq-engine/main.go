@@ -45,6 +45,7 @@ import (
 	"dq-platform/engine/internal/eval"
 	"dq-platform/engine/internal/loader"
 	"dq-platform/engine/internal/logging"
+	"dq-platform/engine/internal/metrics"
 	"dq-platform/engine/internal/orphan"
 	"dq-platform/engine/internal/results"
 	"dq-platform/engine/internal/runner"
@@ -140,6 +141,13 @@ func main() {
 	resultsLogger := logger.With("component", "engine.results")
 	runnerLogger := logger.With("component", "engine.runner")
 
+	// ADR-0055 §Clause 3: a single *metrics.Registry owns every
+	// metric handle the engine binary exposes at GET /metrics.
+	// Consuming packages (loader, runner) take their typed
+	// Metrics struct via Config. Constructed before any consumer
+	// so per-package wiring below can inject directly.
+	metricsReg := metrics.New()
+
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
 
@@ -182,6 +190,7 @@ func main() {
 	ldr, err := loader.New(gcsStore, loader.Config{
 		EngineVersion:           cfg.EngineVersion,
 		SupportedSchemaVersions: []int{1, 2},
+		Metrics:                 metricsReg.Loader,
 	})
 	if err != nil {
 		logger.Error("new loader", "error", err.Error())
@@ -259,6 +268,7 @@ func main() {
 		RulesetVersion: initial.RulesetVersion,
 		Logger:         runnerLogger,
 		Publisher:      publisher,
+		Metrics:        metricsReg.Runner,
 	})
 	if err != nil {
 		logger.Error("new runner", "error", err.Error())
@@ -343,7 +353,7 @@ func main() {
 		logger.Error("new api handler", "error", err.Error())
 		os.Exit(1)
 	}
-	httpServer := api.NewServer(cfg.HTTPAddr, apiHandler, apiLogger)
+	httpServer := api.NewServer(cfg.HTTPAddr, apiHandler, apiLogger, metricsReg.Handler())
 
 	// Record-mode runners per ADR-0024. For each record-mode
 	// rule in the manifest, the engine starts a FranzConsumer-

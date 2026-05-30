@@ -249,7 +249,7 @@ checks:
 	if err != nil {
 		t.Fatalf("NewHandler: %v", err)
 	}
-	srv := NewServer(":0", h, nil)
+	srv := NewServer(":0", h, nil, nil)
 	ts := httptest.NewServer(srv.server.Handler)
 	defer ts.Close()
 

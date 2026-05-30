@@ -12,19 +12,20 @@
 // gRPC handler. Phase 4c exercises the runner via Go tests
 // directly.
 //
-// # Observability emission (ADR-0007 CC14)
+// # Observability emission (ADR-0007 §12)
 //
-// Phase 4c emits the log signal via slog.Info / slog.Warn at
-// every failure path (pre-check absent, evaluator error,
-// terminal finalization). The metric and span signals
-// committed by ADR-0007 CC14 are deferred to a Phase-4c
-// follow-up that wires an otelslog-style slog handler mirroring
-// attributes to OpenTelemetry counters and spans. The same
-// handler will pick up emissions from the loader (W3-P4a) and
-// orphan detector (W3-P4d) without source changes here. This
-// gap follows the honest-gap pattern set by B1-11 and the
-// ADR-0010 lazy-view Partial row: the contract surface is
-// committed; the underlying signals land additively.
+// The runner emits log + metric signals at every terminal
+// transition and at every per-check evaluation. Logs go through
+// slog.Info / slog.Warn at the same paths they always have; the
+// metric channel went live with ADR-0055, which wires the
+// engine/internal/metrics package's RunnerMetrics through
+// Config and emits five of ADR-0039's eight inventory metrics
+// (dq_runs_total, dq_run_duration_seconds,
+// dq_checks_evaluated_total, dq_check_duration_seconds,
+// dq_bytes_scanned) at the call sites named in ADR-0055
+// §Clause 4. The span / tracing channel from ADR-0007 §12
+// remains a separate scope (B3-4 OQ-2; lands in a follow-on
+// session).
 package runner
 
 import (
@@ -38,6 +39,7 @@ import (
 	"github.com/Masterminds/semver/v3"
 
 	"dq-platform/engine/internal/alerts"
+	"dq-platform/engine/internal/metrics"
 	"dq-platform/engine/internal/results"
 )
 
@@ -165,7 +167,8 @@ type RuleWindow struct {
 // Config configures a Runner. Required fields: Store,
 // EngineVersion, RulesetVersion. Optional fields default to safe
 // values (no-op precheck, no-op evaluator, uuid-based attempt
-// IDs, time.Now clock, discarding logger, no-op publisher).
+// IDs, time.Now clock, discarding logger, no-op publisher,
+// no-op metrics).
 type Config struct {
 	Store          results.Store
 	Precheck       EntityPrecheck
@@ -180,6 +183,14 @@ type Config struct {
 	// The engine binary wires a real PubSubPublisher; tests
 	// inject a capturing publisher to assert emission.
 	Publisher alerts.Publisher
+	// Metrics is the per-package RunnerMetrics handle set per
+	// ADR-0055 §Clause 3 + §Clause 4. The engine binary wires
+	// the Registry's RunnerMetrics here; tests use
+	// metrics.NoopRunnerMetrics() (the zero value's nil handles
+	// would nil-deref). All five handles are required when
+	// non-zero — the runner does not check for nil at emission
+	// time.
+	Metrics metrics.RunnerMetrics
 }
 
 // Runner orchestrates one execution at a time. Multiple goroutines
@@ -195,6 +206,7 @@ type Runner struct {
 	now            func() time.Time
 	logger         *slog.Logger
 	publisher      alerts.Publisher
+	metrics        metrics.RunnerMetrics
 }
 
 // New validates the Config and returns a Runner. Returns an error
@@ -238,6 +250,10 @@ func New(cfg Config) (*Runner, error) {
 	if publisher == nil {
 		publisher = alerts.NoopPublisher{}
 	}
+	runnerMetrics := cfg.Metrics
+	if runnerMetrics.RunsTotal == nil {
+		runnerMetrics = metrics.NoopRunnerMetrics()
+	}
 
 	return &Runner{
 		store:          cfg.Store,
@@ -249,6 +265,7 @@ func New(cfg Config) (*Runner, error) {
 		now:            clock,
 		logger:         logger,
 		publisher:      publisher,
+		metrics:        runnerMetrics,
 	}, nil
 }
 
@@ -352,7 +369,9 @@ func (r *Runner) Run(ctx context.Context, trigger TriggerRequest) (*results.Exec
 		default:
 		}
 
+		checkStarted := r.now()
 		eval, evalErr := r.evaluator.Evaluate(ctx, spec, trigger)
+		checkElapsed := r.now().Sub(checkStarted).Seconds()
 		if evalErr != nil {
 			// ADR-0004 CC1: evaluator errors map to ResultError,
 			// not a Run-level failure. The runner records the
@@ -381,6 +400,19 @@ func (r *Runner) Run(ctx context.Context, trigger TriggerRequest) (*results.Exec
 		if err := r.store.WriteCheckResultRow(ctx, row); err != nil {
 			return nil, fmt.Errorf("write check_result row for %s: %w", spec.CheckID, err)
 		}
+
+		// ADR-0055 §Clause 4: emit dq_checks_evaluated_total +
+		// dq_check_duration_seconds + dq_bytes_scanned after the
+		// check_result row is durable. Mode comes from the
+		// spec; falls back to triggerMode for v1 callers that
+		// leave it empty.
+		checkMode := spec.Mode
+		if checkMode == "" {
+			checkMode = string(triggerMode(trigger))
+		}
+		r.metrics.ChecksEvaluatedTotal.WithLabelValues(trigger.Entity, spec.CheckID, string(eval.Result), checkMode).Inc()
+		r.metrics.CheckDurationSeconds.WithLabelValues(trigger.Entity, spec.CheckID, checkMode).Observe(checkElapsed)
+		r.metrics.BytesScanned.WithLabelValues(trigger.Entity, spec.CheckID).Set(bytesScannedOrZero(eval.EvidenceSummary))
 
 		// ADR-0006 CC4: emit check-level event after the row is
 		// durable. Publish failures are warning-logged, not
@@ -541,6 +573,7 @@ func (r *Runner) writePreCheckErrorRow(ctx context.Context, dedup *alerts.Attemp
 		"entity", trigger.Entity,
 		"adr_reference", "ADR-0007 CC8",
 	)
+	r.emitRunMetrics(trigger, results.StatusError, startedAt, now)
 	r.emitExecutionEvent(ctx, dedup, executionID, attemptID, trigger.Entity, results.StatusError, now, summary)
 	return &row, nil
 }
@@ -580,8 +613,58 @@ func (r *Runner) writeTerminalRow(ctx context.Context, dedup *alerts.AttemptDedu
 		"status", string(terminalStatus),
 		"adr_reference", "ADR-0004 CC2",
 	)
+	r.emitRunMetrics(trigger, terminalStatus, startedAt, now)
 	r.emitExecutionEvent(ctx, dedup, executionID, attemptID, trigger.Entity, terminalStatus, now, errorSummary)
 	return &row, nil
+}
+
+// emitRunMetrics increments dq_runs_total and observes
+// dq_run_duration_seconds per ADR-0055 §Clause 4. Called after
+// every durable terminal-row write (both writeTerminalRow and
+// writePreCheckErrorRow). Emit-after-write is load-bearing —
+// a Store-write failure must not produce a metric without its
+// backing row.
+func (r *Runner) emitRunMetrics(trigger TriggerRequest, status results.ExecutionStatus, startedAt, completedAt time.Time) {
+	mode := string(triggerMode(trigger))
+	durSec := completedAt.Sub(startedAt).Seconds()
+	r.metrics.RunsTotal.WithLabelValues(trigger.Entity, string(status), string(trigger.TriggerSource), mode).Inc()
+	r.metrics.RunDurationSeconds.WithLabelValues(trigger.Entity, string(status), mode).Observe(durSec)
+}
+
+// bytesScannedOrZero extracts the evidence_summary.bytes_scanned
+// sub-field as a float64, falling back to zero per ADR-0055
+// §Clause 4 OQ-6 resolution. Zero preserves the time-series
+// continuity that "skip emission" would break; the absent-vs-real-
+// zero distinction is left to the operator's panel range.
+//
+// Accepts the numeric types JSON-decoded evidence summaries
+// typically carry (float64 from encoding/json; int / int64 from
+// direct Go construction). Non-numeric values resolve to zero.
+func bytesScannedOrZero(evidence map[string]any) float64 {
+	v, ok := evidence["bytes_scanned"]
+	if !ok {
+		return 0
+	}
+	switch n := v.(type) {
+	case float64:
+		return n
+	case float32:
+		return float64(n)
+	case int:
+		return float64(n)
+	case int32:
+		return float64(n)
+	case int64:
+		return float64(n)
+	case uint:
+		return float64(n)
+	case uint32:
+		return float64(n)
+	case uint64:
+		return float64(n)
+	default:
+		return 0
+	}
 }
 
 // emitCheckEvent constructs and publishes a check-level alert

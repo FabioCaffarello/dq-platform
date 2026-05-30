@@ -352,7 +352,7 @@ func TestHandleTrigger_ManifestUnavailable_Returns503(t *testing.T) {
 
 func TestServer_MuxRoutes(t *testing.T) {
 	h, _, _, _ := testHandler(t)
-	srv := NewServer(":0", h, nil)
+	srv := NewServer(":0", h, nil, nil)
 	// Drive the server through httptest by serving its underlying handler.
 	cases := []struct {
 		method   string
@@ -365,6 +365,7 @@ func TestServer_MuxRoutes(t *testing.T) {
 		{http.MethodGet, "/healthz", nil, http.StatusOK},
 		{http.MethodGet, "/readyz", nil, http.StatusOK},
 		{http.MethodGet, "/does-not-exist", nil, http.StatusNotFound},
+		{http.MethodGet, "/metrics", nil, http.StatusNotFound}, // ADR-0055 §Clause 2: absent when metricsHandler is nil
 	}
 	for _, tc := range cases {
 		req := httptest.NewRequest(tc.method, tc.path, tc.body)
@@ -373,6 +374,36 @@ func TestServer_MuxRoutes(t *testing.T) {
 		if w.Code != tc.wantCode {
 			t.Errorf("%s %s -> %d; want %d", tc.method, tc.path, w.Code, tc.wantCode)
 		}
+	}
+}
+
+// TestServer_MetricsRouteWired asserts that when a metricsHandler
+// is supplied, GET /metrics serves it (ADR-0055 §Clause 2). The
+// route is method-bound — any other method on /metrics returns
+// 405, matching the other routes' shape.
+func TestServer_MetricsRouteWired(t *testing.T) {
+	h, _, _, _ := testHandler(t)
+	probe := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
+		_, _ = w.Write([]byte("# probe\ndq_runs_total{entity=\"x\",mode=\"set\",status=\"success\",trigger_source=\"scheduler\"} 0\n"))
+	})
+	srv := NewServer(":0", h, nil, probe)
+
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	w := httptest.NewRecorder()
+	srv.server.Handler.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET /metrics: status %d, want 200", w.Code)
+	}
+	if got := w.Body.String(); !strings.Contains(got, "dq_runs_total") {
+		t.Errorf("GET /metrics body missing probe content:\n%s", got)
+	}
+
+	req2 := httptest.NewRequest(http.MethodPost, "/metrics", nil)
+	w2 := httptest.NewRecorder()
+	srv.server.Handler.ServeHTTP(w2, req2)
+	if w2.Code != http.StatusMethodNotAllowed {
+		t.Errorf("POST /metrics: status %d, want 405", w2.Code)
 	}
 }
 

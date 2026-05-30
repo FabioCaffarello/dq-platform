@@ -18,6 +18,20 @@ import (
 	"strings"
 
 	"github.com/Masterminds/semver/v3"
+
+	"dq-platform/engine/internal/metrics"
+)
+
+// ADR-0055 §Clause 5 error_class enum values for
+// dq_loader_refresh_failures_total. Concretized from ADR-0007 §1's
+// enumerated failure surface; closed-but-additive per ADR-0039's
+// evolution rules.
+const (
+	errorClassPointerRead           = "pointer_read"
+	errorClassBodyFetch             = "body_fetch"
+	errorClassHashMismatch          = "hash_mismatch"
+	errorClassParseError            = "parse_error"
+	errorClassCompatibilityContract = "compatibility_contract"
 )
 
 // ErrHashMismatch wraps the failure mode where the fetched manifest
@@ -54,6 +68,13 @@ type Config struct {
 	// manifest bodies. Defaults to "manifests/by-hash/" per
 	// ADR-0005 §1.
 	BodyPrefix string
+
+	// Metrics is the per-package LoaderMetrics handle set per
+	// ADR-0055 §Clause 3 + §Clause 5. The engine binary wires the
+	// Registry's LoaderMetrics here; tests use
+	// metrics.NoopLoaderMetrics() (the zero value's nil handles
+	// would nil-deref).
+	Metrics metrics.LoaderMetrics
 }
 
 // Loader reads and verifies manifests from an object Store.
@@ -64,6 +85,7 @@ type Loader struct {
 	supportedSV   []int
 	pointerKey    string
 	bodyPrefix    string
+	metrics       metrics.LoaderMetrics
 }
 
 // hashHexRE matches a lowercase 64-char hex string (sha256 output).
@@ -95,6 +117,10 @@ func New(store Store, cfg Config) (*Loader, error) {
 	if bodyPrefix == "" {
 		bodyPrefix = "manifests/by-hash/"
 	}
+	loaderMetrics := cfg.Metrics
+	if loaderMetrics.RefreshFailuresTotal == nil {
+		loaderMetrics = metrics.NoopLoaderMetrics()
+	}
 	return &Loader{
 		store:         store,
 		engineVersion: ev,
@@ -102,6 +128,7 @@ func New(store Store, cfg Config) (*Loader, error) {
 		supportedSV:   cfg.SupportedSchemaVersions,
 		pointerKey:    pointerKey,
 		bodyPrefix:    bodyPrefix,
+		metrics:       loaderMetrics,
 	}, nil
 }
 
@@ -128,7 +155,7 @@ func (l *Loader) Load(ctx context.Context) (*Manifest, error) {
 	return l.fetchAndVerify(ctx, pointer)
 }
 
-// Refresh executes the refresh-mode reload per ADR-0007 CC9:
+// Refresh executes the refresh-mode reload per ADR-0007 §4:
 //
 //   - Read the pointer file.
 //   - If the pointer's manifest_hash equals the caller's currentHash,
@@ -136,8 +163,10 @@ func (l *Loader) Load(ctx context.Context) (*Manifest, error) {
 //     occurred; the caller continues with its current manifest.
 //   - Otherwise fetch and verify the new manifest body and return
 //     (newManifest, true, nil).
-//   - On any error, return (nil, false, err); per ADR-0007 CC2 the
+//   - On any error, return (nil, false, err); per ADR-0007 §2 the
 //     caller honors refuse-swap by retaining its current manifest.
+//     On every error path, emit dq_loader_refresh_failures_total
+//     with the matching error_class label per ADR-0055 §Clause 5.
 //
 // currentHash is the 64-char lowercase hex (no "sha256:" prefix) of
 // the manifest currently held by the caller. The Manifest.Hash field
@@ -145,21 +174,53 @@ func (l *Loader) Load(ctx context.Context) (*Manifest, error) {
 func (l *Loader) Refresh(ctx context.Context, currentHash string) (*Manifest, bool, error) {
 	pointer, err := l.readPointer(ctx)
 	if err != nil {
+		l.metrics.RefreshFailuresTotal.WithLabelValues(errorClassPointerRead).Inc()
 		return nil, false, fmt.Errorf("read pointer: %w", err)
 	}
 	pointerHex, err := stripSha256Prefix(pointer.ManifestHash)
 	if err != nil {
+		l.metrics.RefreshFailuresTotal.WithLabelValues(errorClassPointerRead).Inc()
 		return nil, false, fmt.Errorf("validate pointer manifest_hash: %w", err)
 	}
 	if pointerHex == currentHash {
-		// Hash short-circuit per ADR-0007 CC9: no body fetch.
+		// Hash short-circuit per ADR-0007 §4: no body fetch.
 		return nil, false, nil
 	}
 	m, err := l.fetchAndVerify(ctx, pointer)
 	if err != nil {
+		l.metrics.RefreshFailuresTotal.WithLabelValues(classifyFetchAndVerifyError(err)).Inc()
 		return nil, false, err
 	}
 	return m, true, nil
+}
+
+// classifyFetchAndVerifyError maps fetchAndVerify's wrapped error
+// to one of ADR-0055 §Clause 5's error_class enum values. The
+// wrapped error chain distinguishes body fetch from hash mismatch
+// (errors.Is on ErrHashMismatch) from parse error from compat-
+// contract failure; anything else is reported as
+// compatibility_contract by elimination so the metric series
+// stays defined.
+func classifyFetchAndVerifyError(err error) string {
+	if err == nil {
+		return errorClassCompatibilityContract
+	}
+	if errors.Is(err, ErrHashMismatch) {
+		return errorClassHashMismatch
+	}
+	msg := err.Error()
+	switch {
+	case strings.HasPrefix(msg, "fetch manifest body "):
+		return errorClassBodyFetch
+	case strings.HasPrefix(msg, "parse manifest JSON: "):
+		return errorClassParseError
+	default:
+		// runContractChecks errors, stripSha256Prefix on the body
+		// path, and any other compat-contract failure mode flow
+		// through here. ADR-0001 / PAT-1 fail-fast checks count as
+		// compatibility_contract per ADR-0055 §Clause 5.
+		return errorClassCompatibilityContract
+	}
 }
 
 func (l *Loader) readPointer(ctx context.Context) (*Pointer, error) {
