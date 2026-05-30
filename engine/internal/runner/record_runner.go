@@ -33,16 +33,26 @@ type RecordSource struct {
 // wires a franz-go-backed implementation; tests inject a fake.
 //
 // PollFetches blocks until at least one fetch is available or
-// ctx is cancelled. The implementation is expected to track
-// consumer-group offsets internally; the runner consumes the
-// surfaced records and trusts the implementation to commit
-// offsets after the runner returns from PollFetches without
-// error (typical franz-go pattern with disabled auto-commit).
+// ctx is cancelled. The runner — not the consumer — is the sole
+// commit authority. PollFetches must not commit offsets; the
+// runner calls Commit after each successful dispatcher return
+// per ADR-0058 §Clause 2.
+//
+// Commit advances the consumer-group committed offset to cover
+// the passed records (high-water mark per partition). Called by
+// the runner exclusively after dispatcher.Run returns nil for a
+// closed window, passing that window's records. Per ADR-0058
+// §Clause 3, the production implementation translates each
+// record to the underlying client's commit-records primitive.
+// Commit failures are warning-logged by the runner; the next
+// successful dispatch in the same partition commits the
+// uncommitted records transitively.
 //
 // Close releases any underlying resources; the runner calls it
 // once at shutdown.
 type RecordConsumer interface {
 	PollFetches(ctx context.Context) ([]FetchedRecord, error)
+	Commit(ctx context.Context, records []FetchedRecord) error
 	Close()
 }
 
@@ -130,10 +140,18 @@ type entityState struct {
 // window at a time; the runner closes the active window before
 // opening a new one when a record arrives past the watermark
 // boundary.
+//
+// fetched carries the same records in their FetchedRecord shape
+// (with the Topic that Record drops) for the Commit RPC per
+// ADR-0058 §Clause 2. The parallel field keeps Record-shaped
+// TriggerRequest.Records untouched per ADR-0026 evidence
+// contract — reshaping Record would ripple into per-kind
+// evaluators outside the slice's scope.
 type recordWindow struct {
 	start   time.Time
 	end     time.Time
 	records []Record
+	fetched []FetchedRecord
 }
 
 // NewRecordRunner validates the config and returns a runner.
@@ -307,6 +325,7 @@ func (r *RecordRunner) handleFetched(ctx context.Context, f FetchedRecord) {
 		Timestamp: f.Timestamp,
 		Body:      f.Body,
 	})
+	state.active.fetched = append(state.active.fetched, f)
 
 	// Post-append close check: did this record's timestamp push
 	// the watermark past active.end + lateness_tolerance?
@@ -317,10 +336,21 @@ func (r *RecordRunner) handleFetched(ctx context.Context, f FetchedRecord) {
 
 // closeAndDispatch finalizes the active window: emits a
 // TriggerRequest with the accumulated records, invokes the
-// dispatcher, and resets the per-entity state. Per-attempt
-// dispatch failures are warning-logged; the per-window outcome
-// is the dispatcher's concern (it writes the dq_executions /
-// dq_check_results rows).
+// dispatcher, and resets the per-entity state. Per ADR-0058
+// §Clause 2, the consumer-group offset commit fires only after
+// dispatcher.Run returns nil for this window — passing the
+// window's FetchedRecord slice to consumer.Commit. On dispatch
+// failure the commit is skipped; the records remain uncommitted
+// in the broker; on engine restart they re-flow and re-populate
+// the same window deterministically per ADR-0024, with
+// canonical-view collapse on the dq_executions side per
+// ADR-0003 §2 absorbing any spurious second attempt at the
+// consumer-visible layer.
+//
+// Commit failures are warning-logged and do not propagate; the
+// next successful dispatch in the same partition commits the
+// uncommitted records transitively via high-water-mark
+// monotonicity.
 //
 // After dispatch, state.active is cleared and state.lateDropped
 // is reset to 0 — the next window starts fresh.
@@ -352,6 +382,17 @@ func (r *RecordRunner) closeAndDispatch(ctx context.Context, state *entityState)
 			"entity", state.source.Entity,
 			"window_start", w.start.UTC(),
 			"error", err.Error(),
+		)
+		state.active = nil
+		state.lateDropped = 0
+		return
+	}
+	if err := r.consumer.Commit(ctx, w.fetched); err != nil {
+		r.logger.Warn("record window commit failed",
+			"entity", state.source.Entity,
+			"window_start", w.start.UTC(),
+			"error", err.Error(),
+			"adr_reference", "ADR-0058",
 		)
 	}
 	state.active = nil

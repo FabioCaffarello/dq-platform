@@ -14,12 +14,14 @@ import (
 // binary wires in production. Tests use the fakeConsumer in
 // record_runner_test.go; the production wiring uses this type.
 //
-// Auto-commit is disabled; the runner is responsible for
-// committing offsets once a window's records have been
-// dispatched (per ADR-0024 per-attempt re-read semantics; the
-// commit happens here when the dispatcher returns nil). Per-
-// attempt re-reads are deferred to a future slice; β commits
-// after each successful Run.
+// Auto-commit is disabled; the runner is the sole commit
+// authority per ADR-0058 §Clause 3. PollFetches returns records
+// without committing; the runner calls Commit after each
+// successful dispatcher return per ADR-0058 §Clause 2. The
+// composed delivery semantic is at-least-once with canonical-
+// view collapse at the execution_id boundary per ADR-0003 §1
+// (append-only writes) + §2 (`dq_executions_current` collapses
+// attempts per execution_id to the latest recorded_at).
 type FranzConsumer struct {
 	client *kgo.Client
 }
@@ -59,10 +61,8 @@ func NewFranzConsumer(cfg FranzConsumerConfig) (*FranzConsumer, error) {
 		kgo.SeedBrokers(cfg.Brokers...),
 		kgo.ConsumerGroup(cfg.ConsumerGroup),
 		kgo.ConsumeTopics(cfg.Topics...),
-		// Disable auto-commit; the dispatcher controls when
-		// offsets are committed per ADR-0024 per-attempt
-		// semantics. β commits after each successful dispatch
-		// via PollFetches's natural at-most-once flow.
+		// Auto-commit disabled; the runner is the sole commit
+		// authority per ADR-0058 §Clause 3.
 		kgo.DisableAutoCommit(),
 	}
 	cli, err := kgo.NewClient(opts...)
@@ -75,7 +75,9 @@ func NewFranzConsumer(cfg FranzConsumerConfig) (*FranzConsumer, error) {
 // PollFetches blocks until the underlying client returns a
 // non-empty fetch (or ctx is cancelled). Returns the records
 // flattened across topics + partitions. Iterator errors are
-// surfaced as a single aggregated error.
+// surfaced as a single aggregated error. Per ADR-0058 §Clause 3,
+// PollFetches does NOT commit offsets; the runner calls Commit
+// after each successful dispatcher return.
 func (c *FranzConsumer) PollFetches(ctx context.Context) ([]FetchedRecord, error) {
 	fetches := c.client.PollFetches(ctx)
 	if err := fetches.Err0(); err != nil {
@@ -91,16 +93,34 @@ func (c *FranzConsumer) PollFetches(ctx context.Context) ([]FetchedRecord, error
 			Body:      rec.Value,
 		})
 	})
-	// Commit consumed offsets back to the broker. β semantics:
-	// commit-after-fetch (at-most-once on a crash mid-dispatch).
-	// Per-attempt re-read of offset ranges (ADR-0024) is a
-	// future slice; that future slice replaces this with a
-	// commit-after-dispatch flow keyed on the trigger's
-	// successful return.
-	if err := c.client.CommitUncommittedOffsets(ctx); err != nil {
-		return out, fmt.Errorf("kafka commit: %w", err)
-	}
 	return out, nil
+}
+
+// Commit advances the consumer-group committed offset to cover
+// the passed records (high-water mark per partition) per
+// ADR-0058 §Clause 3. The implementation translates each
+// FetchedRecord to a *kgo.Record carrying topic/partition/offset,
+// calls MarkCommitRecords (the client tracks the high-water mark
+// per partition internally), then CommitMarkedOffsets (flushes
+// to the broker synchronously). Empty input returns nil without
+// an RPC.
+func (c *FranzConsumer) Commit(ctx context.Context, records []FetchedRecord) error {
+	if len(records) == 0 {
+		return nil
+	}
+	kgoRecs := make([]*kgo.Record, 0, len(records))
+	for _, r := range records {
+		kgoRecs = append(kgoRecs, &kgo.Record{
+			Topic:     r.Topic,
+			Partition: r.Partition,
+			Offset:    r.Offset,
+		})
+	}
+	c.client.MarkCommitRecords(kgoRecs...)
+	if err := c.client.CommitMarkedOffsets(ctx); err != nil {
+		return fmt.Errorf("kafka commit: %w", err)
+	}
+	return nil
 }
 
 // Close releases the underlying client.
