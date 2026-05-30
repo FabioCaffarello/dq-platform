@@ -381,17 +381,20 @@ consequences":
   the amendment treats them separately.
 
 **Deny-block independence carry-forward per OQ-1 ratification.**
-Per memory `harness-deny-blocks-independent-of-review-model.md`
-+ the operator-ratified OQ-1 disposition at PR #117 merge:
-the `.claude/settings.json` deny block on
-`Bash(gh pr merge *)` is independent of the CODEOWNERS
-enforcement surface this amendment collapses. The deny block
-guards the *agent's* autonomy bound; CODEOWNERS guards the
-*review model*. The two surfaces are independent — and when
-the review model weakens (as it does under single-user), the
-deny block becomes **more** load-bearing, not less. The
-amendment does NOT touch `.claude/settings.json`; the deny
-block stays.
+The `.claude/settings.json` deny block on `Bash(gh pr merge *)`
+is independent of the CODEOWNERS enforcement surface this
+amendment collapses. The deny block guards the *agent's*
+autonomy bound; CODEOWNERS guards the *review model*. The two
+surfaces are independent — and when the review model weakens
+(as it does under single-user), the deny block becomes **more**
+load-bearing, not less, because it is the last mechanical
+guard backing `CONTRIBUTING.md` Flow 5's *"agent never calls
+`gh pr merge`"* clause once author/reviewer separation no
+longer mechanizes. The amendment does NOT touch
+`.claude/settings.json`; the deny block stays. This reading
+was operator-ratified at the originating amendment's PR merge
+(per OQ-1 disposition in that PR's body) and is recorded here
+as **new contribution requiring review** per R5 + A7.
 
 **Branch-protection precondition (Consequence #7) audit
 surface.** The deployment precondition that *"Require review
@@ -406,12 +409,17 @@ the audit surface per A7 — future readers landing on this
 ADR see the precondition explicitly.
 
 **Critique rounds.** This ADR's Decision survived one
-`/critique` round in the promotion session (round-1
-disposition recorded in the PR body's Critique result
-table). The originating amendment study survived one round
-(1 = 0 blocking / 3 important / 5 minor with the three
-importants applied at study time). The implementation code
-in this PR (the substitution + Flow 5 refresh) is
+`/critique` round in the promotion session: 0 blocking / 2
+important / 5 minor; both important findings applied (the
+dangling memory-file pointer in this Notes section's
+deny-block paragraph replaced with inline principle; ADR-0015
+Status-line update tightened from "amended by" to "amended in
+part by" matching the ADR-0010 precedent more rigorously);
+5 minor deferred under the two-round cap. The originating
+amendment study survived one round (1 = 0 blocking / 3
+important / 5 minor with the three importants applied at
+study time). The implementation code in this PR (the
+substitution + Flow 5 refresh + golden-test update) is
 self-verified against AC-W3-3 + AC-W3-7 per ADR-0052 §6.4
 row 6 close-gates and ADR-0048 §"Skip" path for code-only
 `/critique` rounds.
