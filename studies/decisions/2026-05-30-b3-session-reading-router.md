@@ -12,11 +12,16 @@
   [ADR-0051](../../docs/adr/0051-claude-tooling-postwave3.md)
   Clause 1 — this study reuses that precedent, it does not
   open a new expansive reading).
-- **Status:** draft (B3-2, session 1; post-round-2-critique;
-  two-round cap reached per
+- **Status:** resolved-study (B3-2; closed 2026-05-30 at the
+  merge of PR #101, merge commit `4477c8b`; two-round
+  critique cap reached per
   [`.claude/playbooks/wave-1-session-loop.md`](../../.claude/playbooks/wave-1-session-loop.md)
-  step 7; ready to move to `resolved-study` after
-  decision-log row update lands).
+  step 7; D0 borderline readings on ADR-0049 §(a)
+  Conditions 1 and 4 operator-ratified at the same merge —
+  PR #101's body listed three D0 dispositions and the merge
+  ratifies the "proceed to resolved-study" path; the
+  ratification carries forward to ADR-0052 as a
+  new-contribution-requires-review marker per R5).
 - **Last updated:** 2026-05-30.
 - **Upstream resolved:**
   [ADR-0049](../../docs/adr/0049-b3-evolutionary-launch.md) (B3
