@@ -1,13 +1,17 @@
 # path: .github/workflows/engine-image.yml
 #
 # Builds the dq-engine container image on every pull request and
-# every push to main per ADR-0042 §"Clause 1" + B2-28's slice. The
-# workflow validates that the Dockerfile + Make target work
-# end-to-end in CI; it does NOT push the image to any registry
-# because the registry choice is still TBD per ADR-0042 OQ-1
-# (depends on the ADR-0008 host-primitive follow-up). When the
-# registry lands, this workflow gains a push step in the same
-# operational session that substitutes PLACEHOLDER-org/.
+# every push to main per ADR-0042 §"Clause 1" + B2-28's slice, and
+# publishes it to Docker Hub on every `engine-v*` git tag push per
+# ADR-0054 §"Clause 3 — Push-step behavioral contract" (the
+# amendment to ADR-0042 that closed Consequence 10 §OQ-1 by
+# committing Docker Hub `fabiocaffarello` as the registry).
+#
+# The build + inspect steps run on every PR + main push and do not
+# consume any secret — they validate the Dockerfile + Make target
+# end-to-end. The push step is conditional on `engine-v*` tag
+# events; it consumes two operator-provisioned repository secrets
+# (DOCKERHUB_USERNAME, DOCKERHUB_TOKEN) per ADR-0054 Clause 5.
 #
 # Required-check candidate for branch protection.
 
@@ -18,6 +22,7 @@ on:
     branches: [main]
   push:
     branches: [main]
+    tags: ['engine-v*']
 
 jobs:
   build:
@@ -34,6 +39,7 @@ jobs:
         run: make build-engine-image
 
       - name: Inspect image
+        id: inspect
         run: |
           # Resolve the same tag the Makefile's build-engine-image
           # target produced. Piping `git describe` through `sed`
@@ -58,3 +64,44 @@ jobs:
             echo "::error::image user is $actual; want nonroot:nonroot per ADR-0042 Clause 1"
             exit 1
           fi
+          # Surface the resolved tag for the conditional push step
+          # below. Outputs are how step results flow forward in
+          # GitHub Actions; emitting `tag` here keeps the push step
+          # free of git-describe duplication.
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      # --- Push step (ADR-0054 §"Clause 3") ---------------------
+      # Activates only on `engine-v*` tag events per Clause 3 item
+      # 3 (tagged-build-only activation). PRs and main pushes
+      # remain build-only; their inspect step above already
+      # validated the image shape.
+      - name: Log in to Docker Hub
+        if: github.ref_type == 'tag' && startsWith(github.ref_name, 'engine-v')
+        uses: docker/login-action@v3
+        with:
+          # ADR-0054 Clause 5 + Notes "CI secret names" pin these
+          # two secret names. Operator provisions both directly in
+          # the repository's secrets store; missing secrets fail
+          # this step loudly (no silent skip).
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Push dq-engine image to Docker Hub
+        if: github.ref_type == 'tag' && startsWith(github.ref_name, 'engine-v')
+        run: |
+          set -euo pipefail
+          tag="${{ steps.inspect.outputs.tag }}"
+          published="docker.io/fabiocaffarello/dq-engine:$tag"
+          docker tag "dq-engine:$tag" "$published"
+          docker push "$published"
+          # Surface the pushed image's digest per ADR-0054 Clause 3
+          # item 4. Reproducibility for deploy/overlays/ that pin
+          # by digest depends on this line being readable in the
+          # workflow run summary.
+          digest="$(docker inspect "$published" --format '{{index .RepoDigests 0}}')"
+          {
+            echo "## ADR-0054 push step"
+            echo ""
+            echo "- Tag: \`$published\`"
+            echo "- Digest: \`$digest\`"
+          } >> "$GITHUB_STEP_SUMMARY"
