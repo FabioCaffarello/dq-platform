@@ -13,8 +13,11 @@
   Clause 1 — this study reuses the precedent, it does not
   open a new expansive reading; ADR-0052 confirmed the
   precedent remains active for harness extensions).
-- **Status:** draft (B3-3, session 1; post-round-1-critique,
-  pre-round-2).
+- **Status:** draft (B3-3, session 1; post-round-2-critique;
+  two-round cap reached per
+  [`.claude/playbooks/wave-1-session-loop.md`](../../.claude/playbooks/wave-1-session-loop.md)
+  step 7; ready to move to `resolved-study` after
+  decision-log row update lands).
 - **Last updated:** 2026-05-30.
 - **Upstream resolved:**
   [ADR-0049](../../docs/adr/0049-b3-evolutionary-launch.md) (B3
@@ -161,7 +164,12 @@
   round 1 preserved
   ([`studies/critiques/2026-05-30-b3-record-mode-skill-critique-1.md`](../critiques/2026-05-30-b3-record-mode-skill-critique-1.md)) —
   0 blocking / 3 important / 4 minor; all dispositioned in
-  the Operator Response trailer per
+  the Operator Response trailer;
+  round 2 preserved
+  ([`studies/critiques/2026-05-30-b3-record-mode-skill-critique-2.md`](../critiques/2026-05-30-b3-record-mode-skill-critique-2.md)) —
+  0 blocking / 1 important / 3 minor; the important
+  finding (R5 scope-note framing) applied in this
+  revision; three minor findings accepted-as-is per
   [ADR-0048](../../docs/adr/0048-critique-rounds-preservation.md)
   §"Skip" grammar.
 - **Promotion target:**
@@ -483,20 +491,23 @@ merged main as of this study.
 **Scope note on library naming.** Two conventions below
 (S1, S2) name `franz-go` and its `kgo` types package as
 the Kafka client library the production code uses. The
-naming is **descriptive of the environment**, not
-prescriptive of the pattern: `franz-go` is the library
-the runner is wired to in production today, much as
-`BigQuery` is the set-mode substrate and `Kafka` is the
-record-mode substrate the environment binds to. Per
+naming is **descriptive** of what the code does, not
+prescriptive of a pattern source. Per
 [`CLAUDE.md`](../../CLAUDE.md) §3 R5 ("we use X" is
-fine; "we are doing Y because X does Y" is not), the
-naming sits inside the environment-exempt scope —
-substrate-adjacent client libraries are part of what the
-runner code is structurally adapted to, not a pattern
-borrowed because franz-go prescribes it. The
-substrate-agnostic boundary in S1 is the project's
-chosen pattern; franz-go is one implementation behind
-that boundary.
+fine; "we are doing Y because X does Y" is not), R5 is
+satisfied because S1 / S2 describe the code's existing
+shape — the substrate-agnostic boundary in S1 is the
+project's chosen pattern, and S2 documents the β-commit
+posture the project chose for the franz-go client wiring
+— neither convention is borrowed *because franz-go
+prescribes it*. Whether R5's enumerated exemption list
+("BigQuery, Kafka, GCS, … and equivalents") extends to a
+third-party Go client library like franz-go is
+interpretive and is not pre-committed here; either
+reading reaches the same outcome (the naming is allowed
+because it is descriptive). The promotion session can
+land a tighter or looser reading if the reviewer
+prefers.
 
 **S1 — Substrate-agnostic consumer boundary.**
 
