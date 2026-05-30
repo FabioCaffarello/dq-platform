@@ -15,11 +15,17 @@ Read, in this order, before producing anything:
 1. [`/CLAUDE.md`](../CLAUDE.md) — primary contract.
 2. Every playbook in
    [`/.claude/playbooks/`](../.claude/playbooks/) — operational
-   protocol for Wave 1 / Wave 3 sessions.
-3. [`/studies/foundation/`](../studies/foundation/) — numbered
+   protocol. Waves 1–3 are closed; the current operational loop is
+   `post-wave3-session-loop.md` (B2 follow-ups, B3 evolutionary
+   entries, ADR amendments, ADR promotions). The Wave 1 and Wave 3
+   loops remain as historical references.
+3. [`/CONTRIBUTING.md`](../CONTRIBUTING.md) Flow 5 — upstream
+   authority for PR-flow in the post-Wave-3 lane.
+4. [`/studies/foundation/`](../studies/foundation/) — numbered
    foundation documents, read in order.
-4. [`/studies/foundation/06-decision-log.md`](../studies/foundation/06-decision-log.md)
-   — current state of every decision.
+5. [`/studies/foundation/06-decision-log.md`](../studies/foundation/06-decision-log.md)
+   — current state of every B-row and ADR, including Wave-S partial
+   / full gate status and B3 lane activity.
 
 This file introduces no new rules. It is a pointer maintained
 by the `/sync-agents` skill; rule authorship flows from
