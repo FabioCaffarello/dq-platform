@@ -13,11 +13,13 @@
   Clause 1 — this study reuses the precedent, it does not
   open a new expansive reading; ADR-0052 confirmed the
   precedent remains active for harness extensions).
-- **Status:** draft (B3-3, session 1; post-round-2-critique;
-  two-round cap reached per
+- **Status:** resolved-study (B3-3; closed 2026-05-30 at the
+  merge of PR #104, merge commit `e6efd99`; two-round
+  critique cap reached per
   [`.claude/playbooks/wave-1-session-loop.md`](../../.claude/playbooks/wave-1-session-loop.md)
-  step 7; ready to move to `resolved-study` after
-  decision-log row update lands).
+  step 7; no D0 ratification needed — eligibility under
+  ADR-0049 §(a) passed all four conditions cleanly without
+  borderlines per the Metadata block's eligibility check).
 - **Last updated:** 2026-05-30.
 - **Upstream resolved:**
   [ADR-0049](../../docs/adr/0049-b3-evolutionary-launch.md) (B3
