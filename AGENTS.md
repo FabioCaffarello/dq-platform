@@ -34,10 +34,13 @@ Wave-S and B3 are structural peers of the original waves, not a
   `W2-5`) closed 2026-05-21 and promoted to ADRs 0008–0012 + 0015–0019.
 - **Wave 3 — closed.** Workspace scaffolding (`W3-P0`…`W3-P8`) closed
   2026-05-23.
-- **Wave-S — partial gate met.** Launched 2026-05-23 via ADR-0020;
-  the record-mode partial gate (B0-S1 / B0-S2 / B0-S3) was met
-  2026-05-24, unblocking record-mode code. Full-gate criteria remain
-  in ADR-0020.
+- **Wave-S — full gate met.** Launched 2026-05-23 via ADR-0020;
+  the partial gate (B0-S1 / B0-S2 / B0-S3) was met 2026-05-24
+  unblocking record-mode code; **the full gate (all seven B0-S
+  items at `resolved-adr` per ADR-0020 §"Full Wave-S gate") was
+  met as of 2026-05-25** with ADR-0027 the last to land. Per
+  ADR-0049 §(a), record-mode items surfacing from 2026-05-25
+  onward are B3 (post-shipping against a closed wave), not B2-S.
 - **B3 — open.** Demand-driven evolutionary lane opened 2026-05-29
   via ADR-0049, restricted to kind / capability-mode / tooling
   extensions and filtered by the four-condition eligibility test in
