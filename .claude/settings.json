@@ -1,0 +1,38 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git checkout *)",
+      "Bash(git pull *)",
+      "Bash(git fetch *)",
+      "Bash(git switch *)",
+      "Bash(git branch --show-current)",
+      "Bash(git rev-parse --abbrev-ref HEAD)",
+      "Bash(git log main..HEAD *)",
+      "Bash(git status --short)",
+      "Bash(go vet *)",
+      "Bash(go test *)",
+      "Bash(make up *)",
+      "Bash(make down *)",
+      "Bash(make lint *)",
+      "Bash(make test-engine-integration *)",
+      "Bash(make test-engine-sandbox *)",
+      "Bash(make test-tools *)",
+      "Bash(make validate-deploy *)",
+      "Bash(make demo-p6 *)",
+      "Bash(make lint-rules *)",
+      "Bash(gh pr create *)",
+      "Bash(gh pr view *)",
+      "Bash(gh pr list *)",
+      "Bash(gh pr diff *)",
+      "Bash(gh pr checks *)",
+      "Bash(echo \"vet exit: $?\")",
+      "Bash(echo \"test exit: $?\")",
+      "Bash(echo \"lint exit: $?\")"
+    ],
+    "deny": [
+      "Bash(gh pr merge *)",
+      "Bash(git commit --no-verify*)",
+      "Bash(git push --no-verify*)"
+    ]
+  }
+}

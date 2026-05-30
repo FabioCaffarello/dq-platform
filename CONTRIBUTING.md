@@ -315,6 +315,114 @@ Direct-to-`main` commits ended at the Phase-4 sub-phase split
 
 ---
 
+## Flow 5 — Close a post-Wave-3 session loop
+
+Once Wave 3 closed, ongoing platform work flows through the
+**post-Wave-3 evolutionary lane**: B2 follow-ups, B3 evolutionary
+extensions per
+[ADR-0049](docs/adr/0049-b3-evolutionary-launch.md), ADR
+amendments, and ADR promotions. Flow 5 generalizes the PR-flow
+contract of Flow 4 to that lane.
+
+The 10-step loop for these sessions is documented in
+[`.claude/playbooks/post-wave3-session-loop.md`](.claude/playbooks/post-wave3-session-loop.md);
+it mirrors the Wave-1 loop in shape and inherits the same
+acceptance criteria
+([`.claude/playbooks/acceptance-criteria.md`](.claude/playbooks/acceptance-criteria.md)).
+
+Short summary:
+
+1. Fresh session, `/clear`.
+2. Run `/check-decision-backlog`. For a B3 entry, additionally
+   confirm the proposed work clears the
+   [ADR-0049](docs/adr/0049-b3-evolutionary-launch.md) §(a)
+   eligibility filter (all four conditions hold); for a B2
+   entry, confirm the originating wave's gate is still met.
+3. **[H]** Choose one B-item from the decision log. Stay inside
+   one topic per session (R4).
+4. Draft the study (if applicable) or plan the change. For
+   non-study work, enter plan mode and list every cited
+   upstream, every file to create or modify, every applicable
+   gate, and explicit out-of-scope deferrals.
+5. **[H]** Approve the plan or ask the agent to re-scope.
+6. Implement. Path header on every markdown file (R6);
+   English-only identifiers and comments (R7); R5 hygiene on
+   every produced artifact.
+7. Self-verify against the applicable acceptance criteria. Run
+   the local gates that exist for the surface (`make lint`,
+   `make test-engine`, `make test-tools`, `make lint-rules`,
+   `make validate-deploy` if `deploy/` is touched, `make demo-p6`
+   for end-to-end smoke).
+8. Run `/critique` against the produced artifacts. Address every
+   `blocking` finding in the artifact. Max two rounds per
+   [`.claude/playbooks/wave-1-session-loop.md`](.claude/playbooks/wave-1-session-loop.md)
+   step 7. Critique rounds are preserved per
+   [ADR-0048](docs/adr/0048-critique-rounds-preservation.md)
+   when the operator captures (operator-side; the agent emits
+   stdout only).
+9. **[H]** Walk the diff. TODO / FIXME / `_TBD` markers must
+   each carry an out-of-scope-for-current-cycle reason or be
+   resolved.
+10. Open a PR via `gh pr create --base main`. The PR body lists
+    the citation map (ADR / B-row references), the critique
+    result (round counts, what was addressed), and a test plan
+    (local gates run, manual verification steps, reviewer
+    concurrence points). Once CI is green and the **[H]**
+    reviewer approves, merge via the GitHub UI. **The agent
+    never calls `gh pr merge`.**
+
+### Branch naming for post-Wave-3 sessions
+
+The Wave-3 convention `wave-3/<phase>-<topic-slug>` (Flow 4)
+applied to scaffolding sessions only. Post-Wave-3 sessions have
+not yet committed a single canonical convention; in practice
+the slug prefixes operators have been passing are:
+
+- `chore/` — tooling, CI, scripts, housekeeping that does not
+  ship a study or an ADR;
+- `feat/` — implementation slices that ship new artifacts
+  committed by a prior ADR;
+- `docs/decision/` — drafting or revising a study under
+  `studies/decisions/`;
+- `docs/adr/` — promoting a study to an ADR under `docs/adr/`.
+
+These four slug prefixes are **new contribution proposed here,
+requires review** (R5). They are recorded here so the harness
+has a documented surface to defer to; reviewer concurrence is
+the gate for fixing them as a canonical convention. The agent
+does not invent new slug prefixes — it uses the slug provided
+by the operator for the session, or asks if none is provided.
+
+### Operator-side responsibilities
+
+Two responsibilities sit explicitly with the operator (the
+human contributor) and are not delegated to the agent:
+
+- **ADR-number reservation under parallel PRs.** When two
+  sessions might both promote a study around the same time,
+  the operator tracks which `<NNNN>` numbers are reserved
+  in-session and confirms when an agent's
+  [`/promote-to-adr`](.claude/commands/promote-to-adr.md)
+  proposes a number. The reservation is operator-side
+  bookkeeping; the command makes the step explicit so it
+  cannot be skipped silently.
+- **Eligibility ratification for borderline B3-N readings.**
+  When a B3-N session's eligibility under
+  [ADR-0049](docs/adr/0049-b3-evolutionary-launch.md) §(a) is
+  borderline (e.g., the family fit relies on an expansive
+  reading of "adjacent tooling" or a similar clause), the
+  operator ratifies the reading explicitly rather than
+  absorbing it into the `/critique` output silently — the
+  author and the reviewer share a session identity, and a
+  critique-emitted eligibility ruling is structurally
+  circular. The ratification is recorded in the round-2
+  critique trailer (per
+  [ADR-0048](docs/adr/0048-critique-rounds-preservation.md)
+  preservation) and carries forward to the promoted ADR as a
+  new-contribution marker per R5.
+
+---
+
 ## What review will look like
 
 Reviewers cite a rule (R1–R8), platform principle (P1–P6), or
