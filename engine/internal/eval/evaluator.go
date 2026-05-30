@@ -29,9 +29,10 @@ const (
 
 // Handler is the per-kind evaluation function the registry
 // dispatches into. The signature mirrors CheckEvaluator.Evaluate
-// so that switching from a switch-on-kind to a map-on-kind is
-// behavior-preserving for set-mode kinds and forward-compatible
-// for record-mode kinds added in Wave-S sub-slice β.
+// so the same map-on-kind dispatch serves both set-mode handlers
+// (e.g. set.row_count_positive) and record-mode handlers
+// (e.g. record.schema_conformance, the production handler
+// shipped in Wave-S sub-slice β).
 type Handler func(ctx context.Context, evalCtx *Evaluator, spec runner.CheckSpec, trigger runner.TriggerRequest) (runner.Evaluation, error)
 
 // Config configures an Evaluator. Client is required; the other
@@ -84,20 +85,21 @@ type Evaluator struct {
 //
 // Handlers registered at construction time:
 //
-//   - set.row_count_positive — full set-mode implementation
+//   - set.row_count_positive — set-mode implementation
 //     (evaluateRowCountPositive in row_count_positive.go).
-//   - record.schema_conformance — stub returning ResultError with
-//     a "record-mode runtime not yet wired" diagnostic. Replaced
-//     by the real implementation in Wave-S sub-slice β alongside
-//     the record-mode runner.
+//   - record.schema_conformance — record-mode implementation
+//     (recordSchemaConformanceHandler in
+//     record_schema_conformance.go) per ADR-0026: compiles each
+//     rule's JSON Schema, validates per-window records delivered
+//     via TriggerRequest.Records, and aggregates per-record
+//     outcomes into one CheckResult using the threshold function.
 //
-// The stub keeps the dispatcher startup invariant satisfiable at
-// sub-slice α (catalog declares record.schema_conformance; the
-// engine has a registered handler for it) without shipping the
-// runtime that consumes it. Record-mode rules that arrive at
-// sub-slice α land on the stub and surface ResultError; in
-// practice no record-mode rules exist at α (the rule migration
-// stays set-only until β).
+// Registering every catalog kind at construction time satisfies
+// the dispatcher startup invariant per ADR-0022 §C-B0S2.3: the
+// engine binary's verifyHandlerRegistryAgainstCatalog
+// (cmd/dq-engine/main.go) cross-checks that every kind declared
+// in the embedded catalog has a registered handler here and
+// fails the boot otherwise.
 func New(cfg Config) (*Evaluator, error) {
 	if cfg.Client == nil {
 		return nil, errors.New("eval: Client is required")
@@ -177,7 +179,8 @@ func setRowCountPositiveHandler(ctx context.Context, e *Evaluator, spec runner.C
 }
 
 // recordSchemaConformanceHandler is registered above and
-// implemented in record_schema_conformance.go. Wave-S sub-slice
-// β wires the real handler that consumes per-window records
-// from the record-mode runner via TriggerRequest.Records and
-// applies the threshold aggregation per ADR-0026.
+// implemented in record_schema_conformance.go. It is the
+// production handler shipped in Wave-S sub-slice β: it consumes
+// per-window records from the record-mode runner via
+// TriggerRequest.Records and applies the threshold aggregation
+// per ADR-0026.
