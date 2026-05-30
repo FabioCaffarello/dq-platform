@@ -68,14 +68,21 @@ real content.
   2026-05-23. `engine/`, `rules/`, `tools/`, `deploy/`, and `docs/`
   now carry real content.
 
-### 2.2 Wave-S — record-mode capability (partial gate met)
+### 2.2 Wave-S — record-mode capability (full gate met)
 
 Launched 2026-05-23 via [ADR-0020](docs/adr/0020-wave-s-launch.md)
 as a wave-shaped extension that opens the record-oriented evaluation
 axis alongside set-mode. The partial gate (B0-S1 / B0-S2 / B0-S3 —
 mode primitive, kind catalog, sources schema) was met 2026-05-24,
-which unblocked record-mode code shipping. The full-gate criteria
-remain in ADR-0020.
+which unblocked record-mode code shipping. **The full gate (all
+seven B0-S items at `resolved-adr` per ADR-0020 §"Full Wave-S
+gate") was met as of 2026-05-25** with ADR-0027 — B0-S7 promotion —
+the last to land. The platform now carries a complete
+record-oriented capability parallel in completeness to the
+set-oriented capability Wave 3 closed. Per
+[ADR-0049](docs/adr/0049-b3-evolutionary-launch.md) §(a),
+record-mode items surfacing from 2026-05-25 onward are **B3**
+(post-shipping against a closed wave), not B2-S.
 
 ### 2.3 B3 — evolutionary lane (open)
 
