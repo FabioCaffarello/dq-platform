@@ -12,7 +12,10 @@
   [ADR-0050](../../docs/adr/0050-v1-retirement-engine-release.md)'s
   B2-20 v1-retirement amendment).
 - **Status:** draft (B2-36 amendment, session 1;
-  post-round-1-critique, pre-round-2).
+  post-round-2-critique; two-round cap reached per
+  [`.claude/playbooks/wave-1-session-loop.md`](../../.claude/playbooks/wave-1-session-loop.md)
+  step 7; ready to move to `resolved-study` after
+  decision-log row update lands).
 - **Last updated:** 2026-05-30.
 - **Upstream resolved:**
   [ADR-0042](../../docs/adr/0042-release-engineering-invariants.md)
@@ -161,7 +164,13 @@
   round 1 preserved
   ([`studies/critiques/2026-05-30-amendment-engine-image-registry-critique-1.md`](../critiques/2026-05-30-amendment-engine-image-registry-critique-1.md)) —
   0 blocking / 4 important / 4 minor; all dispositioned in
-  the Operator Response trailer per
+  the Operator Response trailer;
+  round 2 preserved
+  ([`studies/critiques/2026-05-30-amendment-engine-image-registry-critique-2.md`](../critiques/2026-05-30-amendment-engine-image-registry-critique-2.md)) —
+  0 blocking / 1 important / 3 minor; the important
+  finding (push-step contract item 4 cited wrong
+  property) applied in this revision; two minor applied,
+  one accepted-as-is per
   [ADR-0048](../../docs/adr/0048-critique-rounds-preservation.md)
   §"Skip" grammar.
 - **Promotion target:**
@@ -311,10 +320,12 @@ the deployment manifest) is not this amendment's work.
 If a future session re-opens the registry choice (for any
 reason — operational signal, cost change, security
 posture shift), §Considered Options provides a documented
-option-space starting point. The future session reads the
-four options and either confirms Docker Hub or shifts to
-a different substrate via its own amendment ADR; this
-study does not anticipate the triggering signal.
+option-space starting point. The future session may
+confirm Docker Hub, shift to one of the other three
+substrates already documented, or expand the option space
+(a fifth substrate not enumerated today). This study does
+not anticipate the triggering signal or pre-commit the
+option enumeration as exhaustive across time.
 
 ---
 
@@ -540,11 +551,19 @@ wording) is the B-row's decision:
    The pushed image's digest is surfaced in the workflow
    summary so the
    [`deploy/base/deployment.yaml`](../../deploy/base/deployment.yaml)
-   flip can pin by digest for the prod overlay,
-   preserving ADR-0042 Clause 1's readOnlyRootFilesystem
-   + non-root posture even if a tag is later
-   overwritten upstream. The B-row picks the
-   summary-emission mechanism.
+   flip can pin by digest for the prod overlay. The
+   load-bearing property digest pinning preserves is
+   **reproducibility**: the deployment manifest pins to
+   the exact image bytes the CI lane built, so a
+   tag-overwrite at the registry layer cannot silently
+   swap the image under the deployment. ADR-0042
+   Clause 1's runtime posture (non-root,
+   readOnlyRootFilesystem, RuntimeDefault seccomp,
+   dropped capabilities) is enforced by the pod's
+   `securityContext` independently of the digest and
+   remains intact whether or not the deployment pins by
+   digest. The B-row picks the summary-emission
+   mechanism.
 
 PAT rotation is **operator-side discipline**. The
 follow-on B-row documents a recommended cadence and
@@ -757,9 +776,16 @@ amended surface.
   namespace forces image-pull-secret distribution to
   every consuming Kubernetes cluster. The amendment
   ADR does not pre-commit; the operator chooses at
-  the time of the follow-on B-row's PAT setup. If
-  private is chosen, the follow-on B-row also lands
-  the image-pull-secret distribution discipline.
+  the time of the follow-on B-row's PAT setup.
+  **Default assumption: public** (the operator
+  pre-declared the `fabiocaffarello` namespace without
+  specifying visibility; public is the lighter-weight
+  default that requires no image-pull-secret
+  distribution and is the natural fit for an
+  open-source-style namespace). If the operator
+  declares private at B-row time, the follow-on B-row
+  also lands the image-pull-secret distribution
+  discipline.
   *Out-of-scope for current cycle:* deferred to the
   follow-on B-row.
 
