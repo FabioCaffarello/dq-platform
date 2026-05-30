@@ -4,9 +4,10 @@
 
 This guide is for contributors landing on the repository for the
 first time and for returning contributors who need a refresher on
-the four practical flows: adding a rule, running the local
-end-to-end demo, opening a backlog decision, and closing a
-Wave 3 session loop.
+the six practical flows: adding a rule, running the local end-to-end
+demo, opening a backlog decision, closing a Wave 3 session loop,
+closing a post-Wave-3 session loop, and landing operator-authorized
+direct edits to the process documents.
 
 The companion documents:
 
@@ -420,6 +421,59 @@ human contributor) and are not delegated to the agent:
   [ADR-0048](docs/adr/0048-critique-rounds-preservation.md)
   preservation) and carries forward to the promoted ADR as a
   new-contribution marker per R5.
+
+---
+
+## Flow 6 — Operator-authorized direct edits to process documents
+
+Maintenance of the primary process documents — `CLAUDE.md`,
+`AGENTS.md`, and `.codex/AGENTS.md` — may land as
+**operator-authorized direct edits** without a B-row, distinct
+from B3 evolutionary work. This recognizes that keeping the
+constitutional documents accurate is contract maintenance, not
+tooling evolution: forcing it through B3 stretches the ADR-0049
+§(a) "adjacent tooling" reading and inflates the audit trail for
+work that does not need it.
+
+**Scope — what qualifies.**
+
+- Factual refreshes: phase status, playbook/command/skill lists,
+  pointers to live state, dated closure notes.
+- Tight clarifications of existing rules or principles whose
+  substance is unchanged (e.g., scoping R6 to markdown files
+  only, naming the file types already implicit in "markdown
+  file").
+- Cross-document propagation of an already-promoted ADR's
+  contract that the process documents missed (the satellite
+  catching up to the source of truth).
+
+**Scope — what does NOT qualify.** Substantive changes to any
+rule R1–R8 or principle P1–P6 follow the ADR route — open a
+B-row, draft a study, run `/critique`, promote to ADR. The
+direct-edit lane exists to refresh and clarify, not to amend
+the contract. If a reviewer is uncertain whether a proposed
+edit is a refresh or an amendment, default to the ADR route
+and let the critique surface the answer.
+
+**PR-flow.** Same as Flow 5: dedicated branch (no fixed slug
+convention — propose one on the PR), applicable local gates
+(`make lint`, `make test-*`, `make lint-rules`,
+`make validate-deploy` if `deploy/` is touched), single coherent
+commit per edit set, `gh pr create --base main` (or `/open-pr`),
+operator merges after CI + review. No `--no-verify`, no
+`gh pr merge` from the agent.
+
+**Audit trail.** Since there is no B-row and no ADR, the PR body
+is the only durable record of the meta-decision. It must cover:
+why this is a direct edit and not an ADR; what the edit set is
+by section; any factual verification rooted in real commands;
+and any precedent considerations for the next direct edit.
+
+**Status.** This flow is **new contribution proposed here,
+requires review** (R5). The first direct edit using this flow
+is the 2026-05-30 refresh of `CLAUDE.md` for the post-Wave-3
+operating state; that PR is the load-bearing example until the
+review settles the pattern.
 
 ---
 
