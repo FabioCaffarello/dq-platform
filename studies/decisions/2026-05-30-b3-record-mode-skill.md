@@ -13,7 +13,8 @@
   Clause 1 — this study reuses the precedent, it does not
   open a new expansive reading; ADR-0052 confirmed the
   precedent remains active for harness extensions).
-- **Status:** draft (B3-3, session 1; pre-critique).
+- **Status:** draft (B3-3, session 1; post-round-1-critique,
+  pre-round-2).
 - **Last updated:** 2026-05-30.
 - **Upstream resolved:**
   [ADR-0049](../../docs/adr/0049-b3-evolutionary-launch.md) (B3
@@ -135,23 +136,34 @@
     actual skill files (`.claude/skills/record-mode-conventions/SKILL.md`
     + `reference/conventions.md`) land in the follow-on
     implementation slice.
-  - **P-B3RM.5** — **Pre-positioning for Track C** is the
-    forcing function. Track C is the operator-stated next
-    milestone (scope and definition deferred to its own
-    session). The skill exists so a Track C PR has a
-    discoverable convention surface to respect, **not** so
-    Track C can use the skill to add new conventions —
-    that would be a follow-up B3-N entry after Track C
-    surfaces concrete needs.
+  - **P-B3RM.5** — The **load-bearing motivation is
+    today's discoverability gap** for record-mode PRs.
+    The seven conventions live in scattered doc comments
+    across five files; every record-mode PR opened today
+    pays the cost of re-deriving them. Consolidating the
+    conventions under a discoverable skill surface
+    delivers the benefit immediately, independent of
+    future scope. **Pre-positioning for Track C is a
+    bonus**, not the load-bearing rationale: Track C is
+    the operator-stated next milestone (scope and
+    definition deferred to its own session); the skill
+    happens to be useful when Track C lands, but the
+    discoverability cost has already accumulated and the
+    skill answers it now. New conventions Track C may
+    surface ride their own B3-N entries; this study does
+    not anticipate them.
 - **Downstream open:** none enumerated. If `/critique`
   surfaces a blocking finding that requires an eighth
   convention or removing one of S1–S7, it is registered
   in §Open Questions and the study re-scopes — it does
   not silently grow.
-- **Critique rounds:** none yet — round 1 follows draft
-  per
-  [`.claude/playbooks/post-wave3-session-loop.md`](../../.claude/playbooks/post-wave3-session-loop.md)
-  step 6.
+- **Critique rounds:**
+  round 1 preserved
+  ([`studies/critiques/2026-05-30-b3-record-mode-skill-critique-1.md`](../critiques/2026-05-30-b3-record-mode-skill-critique-1.md)) —
+  0 blocking / 3 important / 4 minor; all dispositioned in
+  the Operator Response trailer per
+  [ADR-0048](../../docs/adr/0048-critique-rounds-preservation.md)
+  §"Skip" grammar.
 - **Promotion target:**
   `docs/adr/0053-record-mode-skill.md` — provisionally
   the next available number at the time of writing (last
@@ -252,18 +264,33 @@ trace-to-`file:line` per the
 shape, so the next contributor — and the next agent — has
 a contract to read against.
 
-**Why now: pre-positioning for Track C.** Track C is the
-operator-stated next milestone. Track C's scope and
-definition are deferred to its own session, but the
-record-mode surface is where Track C will land. Pre-
-positioning the harness with a `record-mode-conventions`
-skill means a Track C PR has a discoverable convention
-surface to respect from session one, rather than re-
-deriving the conventions from code each session. This is
-exactly the structural-position justification that
+**Why now: the discoverability gap exists today.** Every
+record-mode PR opened against the current main pays the
+cost of re-deriving the seven conventions from doc
+comments scattered across five files
+(`record_runner.go`, `kafka_consumer.go`,
+`check_evaluator.go`, `engine/cmd/dq-engine/main.go`'s
+`buildRecordRunners`, and `struct_mirror_test.go`). The
+cost has already accumulated since sub-slice β shipped;
+consolidating the conventions under a discoverable skill
+surface delivers the benefit immediately, independent of
+any future milestone. The
 [ADR-0051](../../docs/adr/0051-claude-tooling-postwave3.md)
-Clause 3 committed for the `session-governance` skill via
-B3-1.
+Clause 3 precedent (the
+[`session-governance`](../../.claude/skills/session-governance/SKILL.md)
+skill, committed via B3-1) committed a skill that
+consolidates existing discipline into a discoverable
+contract surface; this study reuses that shape.
+
+**Pre-positioning for Track C is a bonus.** Track C is
+the operator-stated next milestone, and the record-mode
+surface is where it will land — so a Track C PR will
+benefit from the skill on day one. But Track C's scope
+and definition are deferred, and this study does not
+hang its eligibility on Track C's needs: the immediate
+discoverability benefit stands on its own. If Track C
+were postponed indefinitely, the skill would still pay
+for itself.
 
 The principles bearing on this decision are **P5**
 (evolution must be contract-driven — the skill is itself
@@ -453,6 +480,24 @@ encode in the new skill, with their pre-validated
 citations. Each cites the exact `file:line` range in the
 merged main as of this study.
 
+**Scope note on library naming.** Two conventions below
+(S1, S2) name `franz-go` and its `kgo` types package as
+the Kafka client library the production code uses. The
+naming is **descriptive of the environment**, not
+prescriptive of the pattern: `franz-go` is the library
+the runner is wired to in production today, much as
+`BigQuery` is the set-mode substrate and `Kafka` is the
+record-mode substrate the environment binds to. Per
+[`CLAUDE.md`](../../CLAUDE.md) §3 R5 ("we use X" is
+fine; "we are doing Y because X does Y" is not), the
+naming sits inside the environment-exempt scope —
+substrate-adjacent client libraries are part of what the
+runner code is structurally adapted to, not a pattern
+borrowed because franz-go prescribes it. The
+substrate-agnostic boundary in S1 is the project's
+chosen pattern; franz-go is one implementation behind
+that boundary.
+
 **S1 — Substrate-agnostic consumer boundary.**
 
 `RecordConsumer` is a duck-typed interface declared
@@ -495,17 +540,28 @@ not in the runner package; guarded by a reflect-based
 struct-mirror test in an external test package.**
 
 The runner package deliberately does not import `dsl/spec`
-— the engine binary `buildRecordRunners` reads the spec
-shape and constructs `runner.RecordSource` values at
-boot. The duplication is protected by a reflection sweep
-in `runner_test` (external test package, chosen to dodge
-the import cycle) that fails CI if any field on one side
-is missing from the other.
+— the engine binary's `buildRecordRunners` reads the spec
+shape, calls `RuleSpec.ToCheckSpecs()` (defined in
+`dsl/spec`) to produce the `[]runner.CheckSpec` the
+runner consumes, and constructs `runner.RecordSource`
+values at boot. The duplication of the `Source` shape on
+both sides of the boundary is protected by a reflection
+sweep in `runner_test` (external test package, chosen to
+dodge the import cycle that an internal test would
+close) that fails CI if any field on one side is missing
+from the other.
 
 - Translation comment on `RecordSource`:
   [`engine/internal/runner/record_runner.go:18-21`](../../engine/internal/runner/record_runner.go).
-- Translation site:
-  [`engine/cmd/dq-engine/main.go:624-703`](../../engine/cmd/dq-engine/main.go).
+- Translation method on `RuleSpec`:
+  [`engine/internal/dsl/spec/spec.go:114-127`](../../engine/internal/dsl/spec/spec.go)
+  (`ToCheckSpecs` produces the `runner.CheckSpec` slice
+  the runner consumes via `TriggerRequest`).
+- Translation call site in the engine binary:
+  [`engine/cmd/dq-engine/main.go:624-703`](../../engine/cmd/dq-engine/main.go)
+  (`buildRecordRunners` parses the rule body, calls
+  `parsed.ToCheckSpecs()`, and passes the result through
+  `RecordRunnerConfig.Sources[].Checks`).
 - Struct-mirror test rationale + assertion:
   [`engine/internal/runner/struct_mirror_test.go:1-60`](../../engine/internal/runner/struct_mirror_test.go).
 
@@ -565,12 +621,21 @@ The per-entity state map is initialized in
 and `closeAndDispatch`, both called from `Start`. A
 future code path that calls these from a different
 goroutine breaks the invariant — the doc comment is the
-load-bearing reviewer surface.
+load-bearing reviewer surface, and a `sync` import
+sentinel makes the absence of mutex-protected fields
+visible at compile time.
 
 - Invariant declaration:
   [`engine/internal/runner/record_runner.go:110-115`](../../engine/internal/runner/record_runner.go).
 - Single poll loop:
   [`engine/internal/runner/record_runner.go:193-227`](../../engine/internal/runner/record_runner.go).
+- `sync`-import sentinel documenting the deliberate
+  absence:
+  [`engine/internal/runner/record_runner.go:399-403`](../../engine/internal/runner/record_runner.go)
+  (the `var _ = sync.Mutex{}` reference keeps the
+  import explicit so a future PR that adds
+  mutex-protected fields does not need to re-add the
+  import — surfacing the addition in the diff).
 
 **S7 — `CheckEvaluator` boundary + colocated test
 doubles: interface declared in `check_evaluator.go`
@@ -816,10 +881,15 @@ fuller form, mirroring
   a `doc.go`. Whether to add one is a separate question
   from this study's scope; if added, it should cite the
   skill rather than duplicate it.
-  *Out-of-scope for current cycle:* a follow-up B2 entry
-  (implementation-phase scaffolding) for the doc.go
-  addition; the skill is the load-bearing surface
-  proposed here.
+  *Out-of-scope for current cycle:* the likely lane is
+  an **implementation slice** per
+  [ADR-0052](../../docs/adr/0052-session-reading-router.md)
+  §6.2 row 6 landing under whichever Wave-3 runner
+  closure the package traces to (the runner package was
+  scaffolded as part of Wave 3 P4); if the doc.go work
+  surfaces new harness conventions instead of
+  documenting existing ones, the lane is a follow-up
+  B3-N entry. The choice is made when OQ-4 is taken up.
 
 ---
 
