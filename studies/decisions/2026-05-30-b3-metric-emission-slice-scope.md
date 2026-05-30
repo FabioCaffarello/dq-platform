@@ -9,7 +9,8 @@
 - Decision-log row: B3-4 (tooling family)
 - Promotion target: [`docs/adr/0055-metric-emission-slice-scope.md`](../../docs/adr/0055-metric-emission-slice-scope.md)
 - Critique rounds:
-  - Round 1 — [capture](../critiques/2026-05-30-b3-metric-emission-slice-scope-critique-1.md) (0 blocking / 3 important / 5 minor); 3 important applied in this revision; minors deferred under the two-round cap unless surfaced again in round 2.
+  - Round 1 — [capture](../critiques/2026-05-30-b3-metric-emission-slice-scope-critique-1.md) (0 blocking / 3 important / 5 minor); 3 important applied in the revision; minors deferred under the two-round cap.
+  - Round 2 — [capture](../critiques/2026-05-30-b3-metric-emission-slice-scope-critique-2.md) (0 blocking / 0 important / 0 minor) — ratification-trailer round, no fresh adversarial pass. Operator ratified the D0 borderline reading on ADR-0049 §(a) Condition 2 mid-PR-#111 per CONTRIBUTING.md Flow 5; the reading carries forward to ADR-0055 as new-contribution-requires-review per R5.
 
 ---
 
@@ -73,13 +74,16 @@ step 2 for a B3-N entry; all four conditions must hold.
 | # | Condition | Resolution |
 |---|---|---|
 | 1 | P-B3.1 — expands not rewrites | **Passes.** Slice satisfies the ADR-0039 contract surface where today nothing emits; no contract column / metric / label is changed. |
-| 2 | P-B3.4 — in-scope family (kind / capability mode / tooling extensions) | **Borderline.** Routes through the tooling-extensions family via ADR-0049 §"Per-family scope" → "Tooling extensions" → "Captures … the engine dispatcher, and adjacent tooling that extend contract coverage without changing the contract shape." Engine-runtime emission is adjacent-tooling-shaped at this reading but stretches the family boundary past the lint-extension canonical example. Surfaced explicitly for operator ratification per [`CONTRIBUTING.md`](../../CONTRIBUTING.md) Flow 5 §"Operator-side responsibilities" — author-equals-reviewer circularity (ADR-0051 §Consequence 7) means `/critique` cannot ratify on its own. |
+| 2 | P-B3.4 — in-scope family (kind / capability mode / tooling extensions) | **Borderline — operator-ratified mid-PR-#111 on 2026-05-30** per [`CONTRIBUTING.md`](../../CONTRIBUTING.md) Flow 5 §"Operator-side responsibilities" (trailer captured in [`studies/critiques/2026-05-30-b3-metric-emission-slice-scope-critique-2.md`](../critiques/2026-05-30-b3-metric-emission-slice-scope-critique-2.md)). Routes through the Tooling-extensions family via ADR-0049 §"Per-family scope" → "Tooling extensions" → "Captures … the engine dispatcher, and adjacent tooling that extend contract coverage without changing the contract shape." Engine-runtime emission is adjacent-tooling-shaped at this reading and stretches past the lint-extension canonical example, but does not open any new expansive reading beyond what ADR-0051 Clause 1's adjacent-tooling precedent already authorizes. The reading carries forward to the promotion ADR (ADR-0055) as new-contribution-requires-review per R5. |
 | 3 | P-B3.2 — conforms to ADR-0020/0021/0022/0023 envelope | **Passes.** Slice honors `mode` as a label per ADR-0021 (mode-as-primitive); no envelope ADR is reshaped. |
 | 4 | Additive-maintenance threshold — materially novel vs incremental | **Passes.** Introduces a direct external library dependency on a metrics client, a new HTTP route (`/metrics`), a new operator-facing failure class (cardinality / scrape pressure beyond ADR-0010's substrate-collector limit), and crosses the platform from one-channel (log only) to two-channel (log + metric) observability. |
 
 Conditions 1, 3, 4 clear cleanly. Condition 2's borderline reading
-is the only D0 surface; it carries forward to the promotion ADR as
-**new contribution proposed here, requires review** (R5).
+was the only D0 surface; the operator ratified it mid-PR-#111 on
+2026-05-30 per [`CONTRIBUTING.md`](../../CONTRIBUTING.md) Flow 5
+§"Operator-side responsibilities". The reading carries forward to
+the promotion ADR (ADR-0055) as **new contribution proposed here,
+requires review** (R5).
 
 The temporal-classification test (B2 = pre-shipping against
 in-flight wave; B3 = post-shipping against closed wave per ADR-0049
