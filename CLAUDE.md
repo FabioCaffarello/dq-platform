@@ -256,38 +256,135 @@ They must not be eroded by any output produced here.
 
 ## 6. Required reading at session start
 
-Two reading layers govern session-start grounding. Both are short.
-Read them at the start of every session, alongside the foundation
-documents.
+The required-reading set is **session-type-aware**. The canonical
+contract is committed by
+[ADR-0052](docs/adr/0052-session-reading-router.md); this section
+is the operative instruction. A session reads the always-on floor
+(§6.1) plus the minimal playbook subset declared for its session
+type in the router table (§6.2).
 
-**Playbooks (operational protocol)** under `.claude/playbooks/`:
+The router governs **only the playbook layer**. R1–R8 in §3 and
+P1–P6 in §4 are read by every session **unconditionally** — §1's
+"read this entire file before producing any output" mandate covers
+them before §6 even applies. The router can never drop a rule or
+a principle. A session that drops a rule citing the router is in
+violation of §1.
 
-- **`wave-1-session-loop.md`** — the 10-step loop for resolving one
-  B0 decision. Includes explicit human decision points. Historical
-  reference now that Wave 1 has closed.
-- **`wave-3-session-loop.md`** — the loop for one Wave 3 scaffolding
-  unit. Historical reference now that Wave 3 has closed.
-- **`post-wave3-session-loop.md`** — the 10-step loop for one B2
-  follow-up, B3 evolutionary entry, ADR amendment, or ADR promotion
-  in the post-Wave-3 lane. The current operational loop.
-- **`acceptance-criteria.md`** — the binary, verifiable criteria a
-  decision study must meet before it can be marked `resolved-study`.
-- **`wave-3-acceptance-criteria.md`** — the analogous criteria for
-  Wave 3 scaffolding artifacts.
-- **`feedback-protocol.md`** — how feedback on a draft is given
+### 6.1 Always-on floor
+
+Every session reads, regardless of type:
+
+- This file (`CLAUDE.md`) §1–8 in full — including this router
+  as an intentional self-reference: every session reads §6 to
+  find its own row.
+- `AGENTS.md` — cross-agent convention file; rebinds the rules
+  to non-Claude agents.
+- `CONTRIBUTING.md` — PR-flow contract, authoritative per
+  [ADR-0051](docs/adr/0051-claude-tooling-postwave3.md) Clause 2.
+  Flow 5 is the post-Wave-3 PR-flow; Flow 6 is the
+  operator-authorized direct-edit lane.
+- `studies/foundation/06-decision-log.md` — live state surface
+  for every B-row, ADR status, and Wave-S gate status.
+
+### 6.2 The router — session type → minimal playbook reading
+
+Six session types operate in the post-Wave-3 lane. Each row
+names the minimal playbook subset for sessions of that type,
+**beyond the always-on floor**. Three boundary cases (B-row
+triage, study revival, ADR supersession) collapse into the six
+rows per [ADR-0052](docs/adr/0052-session-reading-router.md)
+Clause 2 — they do not get their own rows.
+
+| # | Session type | When this applies (trigger) | Minimal playbook reading (beyond §6.1) |
+|---|---|---|---|
+| 1 | **B2 follow-up** | A B-row marked `B2` in the decision log; resolves an implementation-phase decision against an in-flight wave. | `post-wave3-session-loop.md` (step 2's wave-gate confirmation); `acceptance-criteria.md` (AC-1…AC-10; B2 studies inherit B0 study shape per [ADR-0051](docs/adr/0051-claude-tooling-postwave3.md) Notes OQ-1); `feedback-protocol.md`. |
+| 2 | **B3 entry** | A B-row marked `B3-N` in the decision log; [ADR-0049](docs/adr/0049-b3-evolutionary-launch.md) §(a) eligibility filter must clear before drafting. | `post-wave3-session-loop.md` (step 2's eligibility-check sub-step); `acceptance-criteria.md`; `feedback-protocol.md`; [ADR-0049](docs/adr/0049-b3-evolutionary-launch.md) §(a) and §(b). |
+| 3 | **ADR amendment** | In-place edit to an existing ADR — structured-data row amendment or Amendment-log subsection per [ADR-0050](docs/adr/0050-v1-retirement-engine-release.md) §Consequence 4. No decision rewrite. | `post-wave3-session-loop.md` step 10 (PR-flow close); `feedback-protocol.md`; the originating ADR; [ADR-0050](docs/adr/0050-v1-retirement-engine-release.md) §Consequence 4. `acceptance-criteria.md` optional — only if the amendment produces a study. |
+| 4 | **ADR promotion** | A `resolved-study` is being promoted via `/promote-to-adr`. | `post-wave3-session-loop.md` step 10; `acceptance-criteria.md` (source study must have cleared AC-1…AC-10); `feedback-protocol.md` (the promotion may surface critique-style feedback on the proposed ADR text); the `/promote-to-adr` command spec. |
+| 5 | **Flow 6 process edit** | Operator-authorized direct edit to `CLAUDE.md` / `AGENTS.md` / `.codex/AGENTS.md` per `CONTRIBUTING.md` Flow 6. | `CONTRIBUTING.md` Flow 6 (scope-and-gate; Flow 6 explicitly inherits Flow 5 PR-flow); `post-wave3-session-loop.md` step 10 (load-bearing playbook content for PR-flow close). `feedback-protocol.md` optional — **load-bearing if `/critique` is run** (the `/critique` command grounds on it). |
+| 6 | **Implementation slice landing under a closed B-row** | A code or scaffold slice that lands the artifacts committed by a closed B-row's ADR (e.g., an [ADR-0051](docs/adr/0051-claude-tooling-postwave3.md) follow-on slice; a Wave-3 capability-matrix row landing under a Wave-3 closure). | `post-wave3-session-loop.md` (close-discipline); `wave-3-acceptance-criteria.md` (AC-W3-3 — citation discipline; AC-W3-7 — local build / lint / test gates; both scaffold-shaped semantics apply to any post-Wave-3 slice); `feedback-protocol.md`. `acceptance-criteria.md` optional — only if the slice produces a follow-up study. |
+
+The trigger column is the concrete classification test. The
+minimal-reading column is the load-bearing subset for that type
+beyond §6.1.
+
+### 6.3 Default-up safety rule
+
+If a session does not cleanly match one row — e.g., a borderline
+materiality call between Flow 6 and B3 — **read up, not down**.
+Pick the next-larger reading set. Reading extra is never a
+violation; reading too little may under-read a load-bearing
+playbook. The router narrows confidently-classified sessions;
+uncertain classification reverts to the universal-prescription
+behavior for that one session.
+
+### 6.4 Output-artifact tie-breaker
+
+When two rows could plausibly apply (canonical case: a B2
+follow-up that ships an implementation slice), disambiguate by
+the session's **output artifact**:
+
+- **Study or ADR document** → rows 1 / 2 / 3 / 4 (B2 follow-up,
+  B3 entry, ADR amendment, ADR promotion). Close-gate is
+  AC-1…AC-10 from `acceptance-criteria.md`.
+- **Code or scaffold** → row 6 (Implementation slice). Close-gates
+  are AC-W3-3 and AC-W3-7 from `wave-3-acceptance-criteria.md`.
+- **Edit to a process document** (`CLAUDE.md` / `AGENTS.md` /
+  `.codex/AGENTS.md`) → row 5 (Flow 6 process edit). Close-gate
+  is the Flow 6 scope clause in `CONTRIBUTING.md`.
+
+A B2 follow-up that both produces a study *and* lands an
+implementation slice runs as **two separate sessions** per R4
+(one topic per session). The tie-breaker resolves to one of the
+six §6.2 rows in every case — it is a disambiguation between
+rows, not an independent behavior axis.
+
+### 6.5 Historical-skim set
+
+Two playbooks are explicitly historical. They are preserved
+verbatim on disk and are **not load-bearing** for any session
+type in §6.2. Skim only when explicitly reading prior sessions
+for shape-reference context:
+
+- `wave-1-session-loop.md` — Wave 1 closed 2026-05-21. Shape
+  reference for `post-wave3-session-loop.md`'s ten-step
+  structure.
+- `wave-3-session-loop.md` — Wave 3 closed 2026-05-23. Shape
+  reference for the PR-flow discipline now authoritative in
+  `CONTRIBUTING.md` Flow 5.
+
+`wave-3-acceptance-criteria.md` is **not** in the
+historical-skim set — its AC-W3-3 and AC-W3-7 rows remain
+load-bearing for the Implementation slice row (§6.2 row 6).
+
+### 6.6 Playbook inventory
+
+One-line descriptions for every playbook under
+`.claude/playbooks/`. The router (§6.2) declares which subset a
+given session reads; this inventory exists so a contributor
+scanning §6 knows what each playbook is, without opening it.
+
+- `post-wave3-session-loop.md` — the 10-step loop for one B2
+  follow-up, B3 evolutionary entry, ADR amendment, or ADR
+  promotion in the post-Wave-3 lane. The current operational
+  loop.
+- `acceptance-criteria.md` — the binary, verifiable criteria
+  (AC-1…AC-10) a decision study must meet before it can be
+  marked `resolved-study`.
+- `wave-3-acceptance-criteria.md` — the analogous criteria
+  (AC-W3-1…AC-W3-10) for Wave 3-era scaffolding artifacts;
+  still load-bearing for any post-Wave-3 implementation slice
+  per §6.2 row 6.
+- `feedback-protocol.md` — how feedback on a draft is given
   (always citing R/P/AC labels, never personal).
+- `wave-1-session-loop.md` — historical (Wave 1 closed); shape
+  reference for the post-Wave-3 loop.
+- `wave-3-session-loop.md` — historical (Wave 3 closed); shape
+  reference for the PR-flow discipline now in `CONTRIBUTING.md`
+  Flow 5.
 
-**Contributor contract:**
-
-- **`CONTRIBUTING.md`** Flow 5 — the upstream authority for PR-flow
-  in the post-Wave-3 lane (committed by
-  [ADR-0051](docs/adr/0051-claude-tooling-postwave3.md) Clause 2).
-  The `.claude/` playbooks and skills defer to it; read it directly
-  to find the canonical branch / commit / PR discipline.
-
-These playbooks are operational, not architectural. When a playbook
-turns out to be wrong, update the playbook — do not silently
-diverge.
+When a playbook turns out to be wrong, update the playbook — do
+not silently diverge.
 
 ---
 
