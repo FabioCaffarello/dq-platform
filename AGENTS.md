@@ -50,19 +50,36 @@ the decisions resolved in the earlier waves.
 
 Read, in this order, before producing anything:
 
-1. `CLAUDE.md`
-2. Every playbook in `.claude/playbooks/` (operational protocol),
-   including the current `post-wave3-session-loop.md`,
-   `acceptance-criteria.md`, `wave-3-acceptance-criteria.md`, and
-   `feedback-protocol.md`.
-3. `CONTRIBUTING.md` Flow 5 — the upstream authority for PR-flow in
-   the post-Wave-3 lane.
+1. `CLAUDE.md` — primary contract, including §6's session reading
+   router (committed by
+   [ADR-0052](./docs/adr/0052-session-reading-router.md)) that
+   maps your session type to the minimal playbook subset.
+2. The playbook subset declared by `CLAUDE.md` §6.2 for your
+   session type — six types: B2 follow-up, B3 entry, ADR
+   amendment, ADR promotion, Flow 6 process edit, implementation
+   slice landing under a closed B-row. Apply §6.3 (default-up) if
+   the classification is borderline; apply §6.4 (output-artifact
+   tie-breaker) if two rows could apply; skim §6.5
+   (historical-skim set: `wave-1-session-loop.md`,
+   `wave-3-session-loop.md`) only when explicitly reading prior
+   sessions for shape-reference context. The playbook inventory
+   is in §6.6.
+3. `CONTRIBUTING.md` Flow 5 — the upstream authority for PR-flow
+   in the post-Wave-3 lane. (`CONTRIBUTING.md` as a whole sits in
+   `CLAUDE.md` §6.1's always-on floor; Flow 5 is the load-bearing
+   PR-flow for post-Wave-3 sessions; Flow 6 is the
+   operator-authorized direct-edit lane.)
 4. `studies/foundation/README.md`
 5. Every numbered document under `studies/foundation/`, in order.
 
 Then check `studies/foundation/06-decision-log.md` for the current
 state of every B-row and ADR, including Wave-S partial / full gate
 status and B3 lane activity.
+
+R1–R8 (CLAUDE.md §3) and P1–P6 (CLAUDE.md §4) are read by every
+session unconditionally — the router (CLAUDE.md §6) governs only
+the playbook layer and can never narrow rule or principle
+reading.
 
 ---
 
