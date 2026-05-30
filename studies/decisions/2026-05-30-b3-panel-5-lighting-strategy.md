@@ -9,7 +9,8 @@
 - Decision-log row: B3-5 (family fit derived in §Eligibility below; not assumed at registration)
 - Promotion target: [`docs/adr/0056-panel-5-lighting-strategy.md`](../../docs/adr/0056-panel-5-lighting-strategy.md) (provisional; operator reserves at promotion time per [ADR-0051](../../docs/adr/0051-claude-tooling-postwave3.md) Clause 7)
 - Critique rounds:
-  - Round 1 — [capture](../critiques/2026-05-30-b3-panel-5-lighting-strategy-critique-1.md) (0 blocking / 4 important / 5 minor); 4 important applied in this revision (Option B reclassified as Rejected per ADR-0049 §(a); Option A 2×2 sub-classification surfaced for the weak-vs-strong × A.x-vs-A.y axes; Recommendation §1 weak-reading branch sharpened to separate additive-label-extension from rename-amendment; Consequence #4 corrected — ADR-0055 is not touched, the inheritance chain through the decision-log carries the OQ-1 attribution correction). Five minor deferred under the two-round cap.
+  - Round 1 — [capture](../critiques/2026-05-30-b3-panel-5-lighting-strategy-critique-1.md) (0 blocking / 4 important / 5 minor); 4 important applied in the revision; minor deferred under the two-round cap.
+  - Round 2 — [capture](../critiques/2026-05-30-b3-panel-5-lighting-strategy-critique-2.md) (0 blocking / 0 important / 0 minor) — ratification-trailer round, no fresh adversarial pass. Operator ratified the two coupled D0s on ADR-0049 §(a) Conditions 1 + 3 mid-PR-#113 per CONTRIBUTING.md Flow 5 by adopting the **weak reading** of ADR-0039 §"Metric contract" Meaning column wording plus the **A.y sub-path** (constant zero for engine-non-derivable series); the reading carries forward to ADR-0056 §Notes as new-contribution-requires-review per R5 + A7.
 
 ---
 
@@ -81,21 +82,25 @@ step 2 for a B3-N entry. All four conditions must hold for B3.
 
 | # | Condition | Disposition |
 |---|---|---|
-| 1 | **P-B3.1 — expands not rewrites** | **D0 — pending operator ratification.** Resolution depends on the ADR-0039-wording interpretation tested in §Considered Options. Under the **weak reading** (the "scheduler currently tracks" phrase describes the only emitter known at ADR-0039 time but the committed semantics is "gauge of queue depth"), Path A is an extension — emitting the same metric from a different (engine-derived) source. Condition 1 passes. Under the **strong reading** (ADR-0039 committed the source — "scheduler" is part of the label-source rule), Path A redefines the rule. Condition 1 fails and Path A becomes amendment (and amendment is out of B3 scope per ADR-0049 §(a)). The operator picks the reading; the study does not assume one. |
+| 1 | **P-B3.1 — expands not rewrites** | **D0 — operator-ratified mid-PR-#113 on 2026-05-30** per [`CONTRIBUTING.md`](../../CONTRIBUTING.md) Flow 5 §"Operator-side responsibilities" (trailer captured in [`studies/critiques/2026-05-30-b3-panel-5-lighting-strategy-critique-2.md`](../critiques/2026-05-30-b3-panel-5-lighting-strategy-critique-2.md)). Operator adopted the **weak reading**: the "scheduler currently tracks" phrase describes the only emitter known at ADR-0039 time but the committed semantics is "gauge of queue depth, label `state`". Path A.y is an extension — emitting the same metric from an engine-derived source with an additive `source="engine"` label per ADR-0039 §"Evolution rules". Condition 1 passes. The reading carries forward to ADR-0056 as new-contribution-requires-review per R5 + A7. |
 | 2 | **P-B3.4 — in-scope family** | **Passes (Tooling extensions).** Path A — if eligible at all under Condition 1 — adds engine-runtime emission to two existing metric names, mirroring exactly the precedent set by ADR-0055's six-metric slice under the operator-ratified ADR-0049 Condition 2 reading (engine-runtime emission as Tooling-extensions per ADR-0051 Clause 1's adjacent-tooling reading). No new family fit; no new expansive reading. |
-| 3 | **P-B3.2 — conforms to ADR-0020 / 0021 / 0022 / 0023 envelope** | **D0 — pending operator ratification.** ADR-0033 fixes the scheduler as external per ADR-0007 §5 + §6. If the engine emits a gauge whose committed Meaning names the scheduler ("scheduler currently tracks"), the engine is functionally claiming to know what the scheduler tracks — a reach across the external-scheduler boundary even if the values are engine-derived. Under the weak reading of Condition 1, this is resolved by also reframing the Meaning (rename the metric, or qualify the label-source) so the engine doesn't claim scheduler knowledge it doesn't have. Under the strong reading, this is unsalvageable inside B3. The operator's ratification on Condition 1 implies the resolution here. |
+| 3 | **P-B3.2 — conforms to ADR-0020 / 0021 / 0022 / 0023 envelope** | **D0 — operator-ratified mid-PR-#113 on 2026-05-30** (same trailer as Condition 1). Resolution under the weak reading: the additive `source="engine"` label is the load-bearing mechanism — by self-identifying the gauge emission as engine-derived, the engine no longer claims scheduler-internal knowledge it doesn't have, so ADR-0033's external-scheduler boundary is preserved verbatim. ADR-0020 / 0021 / 0022 / 0023 envelope is untouched. Condition 3 passes. |
 | 4 | **Additive-maintenance threshold** | **Passes.** Emitting two new metric series from new engine call sites (the runner's in-flight execution count + the engine binary's known-trigger registry) crosses materially-novel ground: new gauges with new sample collection cadence + a new cross-package state surface (engine binary reading runner's in-flight count or scheduler-side data the engine doesn't own). |
 
-**Summary.** Two D0s surface (Conditions 1 + 3). They are **coupled**
-— the resolution of Condition 1 determines Condition 3's resolution.
-The operator's choice between the weak and strong readings of
-ADR-0039's "scheduler currently tracks" wording is the load-bearing
-ratification. Per CONTRIBUTING.md Flow 5, the ratification is
-operator-side, recorded in the round-2 critique trailer per
-[ADR-0048](../../docs/adr/0048-critique-rounds-preservation.md), and
-carried forward as **new contribution requiring review** per R5 + A7
-of the `adr-writing` skill. Same precedent shape as B3-2 (two D0s
-on Conditions 1 + 4, operator-ratified at merge).
+**Summary.** Two D0s surfaced (Conditions 1 + 3). They were
+**coupled** — the resolution of Condition 1 determined
+Condition 3's resolution. The operator ratified the **weak
+reading** of ADR-0039's "scheduler currently tracks" wording
+mid-PR-#113 on 2026-05-30 per CONTRIBUTING.md Flow 5, plus
+the **A.y sub-path** (see §Considered Options → Option A's
+2×2 table for sub-path classification). Trailer captured in
+[`studies/critiques/2026-05-30-b3-panel-5-lighting-strategy-critique-2.md`](../critiques/2026-05-30-b3-panel-5-lighting-strategy-critique-2.md).
+The reading carries forward to the promotion ADR (ADR-0056) as
+**new contribution proposed here, requires review** (R5 + A7).
+Structural-precedent shape mirrors B3-4 / PR #111 mid-PR
+ratification (different conditions: B3-4 ratified Condition 2;
+B3-5 ratified Conditions 1 + 3); B3-2 / PR #101 also mid-or-at-
+merge ratification of two coupled D0s.
 
 ---
 
@@ -225,10 +230,11 @@ of a path. Logged as a one-line decision per ADR-0049 §(a)
 
 ## Recommendation
 
-**The recommendation is procedurally bounded by the D0.** This
-study does not pre-decide between Path A and the deferral paths;
-the operator's ratification of Conditions 1 + 3 determines which
-follow-on becomes actionable. Two coupled outcomes:
+**The D0 has been ratified — weak reading + A.y sub-path
+(2026-05-30, mid-PR-#113).** Path A.y is the actionable B3
+follow-on. The contingent-recommendation framing below is
+preserved verbatim so future readers can see the bifurcation
+shape the study triaged; the actionable branch is §1.
 
 1. **If the operator ratifies the weak reading of ADR-0039**
    (the gauge meaning is the committed semantics; the
