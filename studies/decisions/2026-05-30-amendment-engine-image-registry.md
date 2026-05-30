@@ -12,7 +12,7 @@
   [ADR-0050](../../docs/adr/0050-v1-retirement-engine-release.md)'s
   B2-20 v1-retirement amendment).
 - **Status:** draft (B2-36 amendment, session 1;
-  pre-critique).
+  post-round-1-critique, pre-round-2).
 - **Last updated:** 2026-05-30.
 - **Upstream resolved:**
   [ADR-0042](../../docs/adr/0042-release-engineering-invariants.md)
@@ -112,16 +112,22 @@
     amendment ADR; this amendment does not pre-commit a
     migration path.
   - **P-AmRR.2** — **Scope: registry choice + image-name
-    pattern + push-step contract only.** The actual
-    push-step *wiring* (the
+    pattern + push-step contract + deployment-manifest
+    flip *shape*.** The amendment commits four
+    contract-layer items: which registry; the image-name
+    pattern (local + published); the push step's
+    behavioral contract (what must happen); and the
+    eventual image-reference shape the
+    `deploy/base/deployment.yaml` placeholder flips to.
+    The actual **wiring** — the
     [`.github/workflows/engine-image.yml`](../../.github/workflows/engine-image.yml)
-    edit, the `docker login` secret plumbing, the
-    `deploy/base/deployment.yaml` image reference flip
-    from placeholder to the real image path) is deferred
-    to a follow-on B-row per
+    edit, the CI secret plumbing, and the placeholder
+    flip itself in
+    [`deploy/base/deployment.yaml`](../../deploy/base/deployment.yaml)
+    — is deferred to a follow-on B-row per
     [`CLAUDE.md`](../../CLAUDE.md) §3 R4 (one topic per
-    session). This amendment commits the contract; the
-    wiring slice lands separately.
+    session). The amendment commits *what*; the wiring
+    slice commits *how*.
   - **P-AmRR.3** — **No platform code or workflow file
     changes in this study.** R1 is historical, but R4
     binds: this study touches only `studies/decisions/`,
@@ -151,10 +157,13 @@
   surfaces a blocking finding that requires a different
   registry or a different amendment shape, it is
   registered in §Open Questions and the study re-scopes.
-- **Critique rounds:** none yet — round 1 follows draft
-  per
-  [`.claude/playbooks/post-wave3-session-loop.md`](../../.claude/playbooks/post-wave3-session-loop.md)
-  step 6.
+- **Critique rounds:**
+  round 1 preserved
+  ([`studies/critiques/2026-05-30-amendment-engine-image-registry-critique-1.md`](../critiques/2026-05-30-amendment-engine-image-registry-critique-1.md)) —
+  0 blocking / 4 important / 4 minor; all dispositioned in
+  the Operator Response trailer per
+  [ADR-0048](../../docs/adr/0048-critique-rounds-preservation.md)
+  §"Skip" grammar.
 - **Promotion target:**
   `docs/adr/0054-engine-image-registry-amendment.md` —
   provisionally the next available number (last landed is
@@ -238,21 +247,19 @@ shape) are defended on this project's own terms.
 
 ### D1 — Registry choice: option space
 
-Four commodity registry substrates are in the option
-space. The comparison is on this project's terms (cost
-surface, auth posture, OIDC/CI integration, image-path
-shape), not on industry preference. Per R5, the
-substrates are environment (Docker is on R5's exemption
-list; GitHub Container Registry sits on GitHub which is
-the platform's git-hosting environment; Google Artifact
-Registry sits on GCP which is the platform's substrate
-environment per ADR-0010; AWS ECR is named but the
-platform does not run on AWS so it is out-of-substrate).
+Four registry substrates are in the option space,
+enumerated in §Considered Options. The comparison is
+framed in this project's specific operational context:
+cost surface, auth posture, OIDC/CI integration shape,
+and image-path shape. Per R5, the substrates sit inside
+the commodity-environment exemption (Docker enumerated;
+GitHub / GCP / AWS as platform-environment substrates).
 
 The operator-declared choice (P-AmRR.1) is **Option D**.
-The other three options are presented for the decision-
-log record and so future re-platforming has a documented
-starting point.
+The other three options are presented for the
+decision-log record and as a documented option-space
+starting point if a future session re-opens the choice
+(see D6).
 
 ### D2 — Image-name pattern: shape change
 
@@ -288,38 +295,47 @@ Clause 4 (deploy-validation) stand unamended. The
 amendment touches only Clause 1's image-name row and
 Consequence 10 §OQ-1.
 
-### D5 — `deploy/base/deployment.yaml` placeholder semantics
+### D5 — `deploy/base/deployment.yaml` placeholder flip target
 
 Today's `image: dq-engine:placeholder` is structurally
-complete but unpullable. The amendment commits the
-image-reference shape the deployment manifest must
-eventually carry; the actual flip from placeholder to
-the published shape is the follow-on B-row's work, not
-this amendment's. The amendment specifies the
-**published-shape contract** so the follow-on slice has
-a target to flip toward.
+complete but unpullable. The amendment specifies the
+*flip target shape* the deployment manifest must
+eventually carry — referencing the published-image shape
+committed by D2 — so the follow-on B-row that performs
+the flip has a documented destination. The flip itself
+(replacing the literal `dq-engine:placeholder` string in
+the deployment manifest) is not this amendment's work.
 
-### D6 — Future re-platforming has a documented starting point
+### D6 — Future re-opens have a documented starting point
 
-If the platform ever re-platforms onto GKE workload
-(making Artifact Registry the natural choice via Workload
-Identity Federation), or onto GitHub Enterprise (making
-GHCR cheaper), or onto AWS (making ECR the natural
-choice), the registry decision is re-opened via a future
-amendment ADR. This study documents the four-option
-comparison in §Considered Options so the future
-re-platforming session does not re-derive the trade-off
-math from scratch.
+If a future session re-opens the registry choice (for any
+reason — operational signal, cost change, security
+posture shift), §Considered Options provides a documented
+option-space starting point. The future session reads the
+four options and either confirms Docker Hub or shifts to
+a different substrate via its own amendment ADR; this
+study does not anticipate the triggering signal.
 
 ---
 
 ## Considered Options
 
-Four registry substrates are commodity environment per
-R5. Each option below names the substrate, the image-
-path shape, the cost surface in this project's terms,
-the auth posture, and the OIDC/CI integration relevant
-to the
+Four registry substrates are in the option space, all
+inside R5's commodity-environment exemption: Docker (and
+its Docker Hub registry) is enumerated on R5's list;
+GitHub Container Registry sits on GitHub, the platform's
+git-hosting environment; Google Artifact Registry sits
+on GCP, the platform's substrate environment per
+[ADR-0010](../../docs/adr/0010-substrate-posture.md);
+AWS ECR sits on AWS, a public-cloud equivalent to GCP
+under R5's "and equivalents" clause (the platform does
+not currently run on AWS, so the substrate is
+named-but-out-of-current-scope).
+
+Each option below names the substrate, the image-path
+shape, the cost surface framed in this project's
+specific operational context, the auth posture, and the
+OIDC/CI integration relevant to the
 [`.github/workflows/engine-image.yml`](../../.github/workflows/engine-image.yml)
 push step that will eventually land in the follow-on
 B-row.
@@ -498,40 +514,42 @@ the local and published shapes.
 
 ### Push-step contract (the follow-on B-row implements)
 
-The amendment ADR commits the push step's contract
-without committing the implementation. The follow-on
-B-row must:
+The amendment ADR commits the push step's behavioral
+contract without committing the implementation. The
+follow-on B-row must satisfy four behaviors; the *how*
+(specific tool invocations, secret names, CI step
+wording) is the B-row's decision:
 
-1. **Authenticate** to Docker Hub using a PAT stored in
-   the workflow's secret store (suggested secret name:
-   `DOCKERHUB_PAT`; the username
-   secret is `DOCKERHUB_USERNAME`, expected value
-   `fabiocaffarello`). The auth step uses
-   `docker login` with `-u "$DOCKERHUB_USERNAME"` and
-   `--password-stdin` reading from `$DOCKERHUB_PAT`.
-2. **Push** the locally-built `dq-engine:<tag>` image
-   to `docker.io/fabiocaffarello/dq-engine:<tag>`
-   (via `docker tag` + `docker push`, or a single
-   `docker buildx build --push` step).
-3. **Push only on tagged builds** — the workflow
-   triggers on PR + push to main today; the push step
-   activates only when the workflow runs against a
-   pushed `engine-v*` tag, not on every PR or main
-   push. Untagged builds remain build-only (the image
-   inspection step from line 36 onward stays).
-4. **Surface the pushed image digest** in the workflow
+1. **Authenticated push to Docker Hub.** The push step
+   authenticates to Docker Hub using a PAT supplied via
+   a CI secret. The credential is operator-supplied; the
+   B-row picks the secret name and the auth-step
+   mechanics.
+2. **Image published under the committed path.** The
+   locally-built `dq-engine:<tag>` image is published as
+   `docker.io/fabiocaffarello/dq-engine:<tag>`. The
+   B-row picks whether this is a separate tag + push
+   step or a single build-and-push invocation.
+3. **Tagged-build-only activation.** The push activates
+   only when the workflow runs against a pushed
+   `engine-v*` tag, not on every PR or main push.
+   Untagged builds remain build-only — the existing
+   image inspection step stays. The B-row picks the
+   conditional shape.
+4. **Pushed digest surfaced for downstream pinning.**
+   The pushed image's digest is surfaced in the workflow
    summary so the
    [`deploy/base/deployment.yaml`](../../deploy/base/deployment.yaml)
-   flip from placeholder can pin by digest for the
-   prod overlay per ADR-0042 Clause 1's
-   readOnlyRootFilesystem-and-non-root posture (digest
-   pinning preserves the security guarantee even if
-   the tag is later overwritten somewhere upstream).
+   flip can pin by digest for the prod overlay,
+   preserving ADR-0042 Clause 1's readOnlyRootFilesystem
+   + non-root posture even if a tag is later
+   overwritten upstream. The B-row picks the
+   summary-emission mechanism.
 
 PAT rotation is **operator-side discipline**. The
-follow-on B-row documents a recommended rotation
-cadence; the actual rotation happens when the operator
-rotates.
+follow-on B-row documents a recommended cadence and
+escalation conditions; the actual rotation events are
+operator decisions.
 
 ### `deploy/base/deployment.yaml` flip
 
@@ -637,13 +655,18 @@ amended surface.
    (`docker.io/fabiocaffarello/dq-engine:<tag>`) so the
    B-row has a target.
 
-6. **A new B-row (B2-37 — successor to this study's
-   B2-36 amendment row) registers in the decision log
-   for the push-step + manifest-flip wiring** per
-   P-AmRR.2. The B2-37 row's expected output is the
-   workflow edit + secret plumbing + `deploy/base/
-   deployment.yaml` placeholder flip. Implementation-
-   slice session per
+6. **A new B2 row registers in the decision log for the
+   push-step + manifest-flip wiring** per P-AmRR.2. The
+   row's number is reserved operator-side at
+   registration time (per
+   [ADR-0051](../../docs/adr/0051-claude-tooling-postwave3.md)
+   Clause 7's reservation discipline analogous to ADR
+   numbering — avoids collision with parallel sessions
+   that may register B2 rows before this PR merges).
+   The new row's expected output is the workflow edit +
+   CI secret plumbing + `deploy/base/deployment.yaml`
+   placeholder flip. The session shape is
+   Implementation-slice per
    [ADR-0052](../../docs/adr/0052-session-reading-router.md)
    §6.2 row 6 landing under closed B-row B2-36 (this
    amendment) — same shape as ADR-0053's follow-on
