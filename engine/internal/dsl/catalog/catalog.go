@@ -48,6 +48,14 @@ type Kind struct {
 // same content for a given engine binary — the catalog is part
 // of the binary's compiled state.
 func Load() (*Catalog, error) {
+	return parseCatalog(rawCatalog)
+}
+
+// parseCatalog is the byte-oriented parser Load wraps. Tests
+// inject crafted byte slices to exercise the malformed-YAML and
+// unsupported-version rejection paths the embedded data never
+// trips in production.
+func parseCatalog(raw []byte) (*Catalog, error) {
 	var doc struct {
 		CatalogVersion int `yaml:"catalog_version"`
 		Kinds          []struct {
@@ -56,7 +64,7 @@ func Load() (*Catalog, error) {
 			SourceMode string `yaml:"source_mode"`
 		} `yaml:"kinds"`
 	}
-	if err := yaml.Unmarshal(rawCatalog, &doc); err != nil {
+	if err := yaml.Unmarshal(raw, &doc); err != nil {
 		return nil, fmt.Errorf("parse embedded catalog: %w", err)
 	}
 	if doc.CatalogVersion != 1 {
