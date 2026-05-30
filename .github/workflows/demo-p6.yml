@@ -1,0 +1,92 @@
+# path: .github/workflows/demo-p6.yml
+#
+# End-to-end smoke for the W2-3 C-W2-3.4 invariant against the
+# local Compose substrate. Runs `scripts/smoke/demo-p6.sh` via
+# `make demo-p6`, which exercises the full publish → load → trigger
+# → write → alert path: manifest publish, loader hash-short-circuit
+# refresh (ADR-0007 §4), HTTP trigger acceptance (ADR-0014),
+# evaluator → BigQuery, dq_executions terminal row.
+#
+# # Trigger posture
+#
+# `pull_request` + `push` to main, matching `test.yml` and
+# `dryrun.yml`. The compose stack is the same one those lanes
+# already bring up per PR — B2-33 closed the substrate
+# completeness gap (BigQuery / GCS / Pub/Sub / Kafka +
+# Prometheus / Grafana), so running this end-to-end on every PR
+# is now substrate-cheap.
+#
+# # Gating posture — informational at first
+#
+# This lane is added as **non-blocking** on the first push: the
+# workflow runs on every PR and reports red on failure, but the
+# Check is **not** listed as required in branch protection. Two
+# reasons:
+#
+#   - The smoke is well-engineered (generous timeouts, set -euo
+#     pipefail, cleanup trap), but its CI-runner reliability is
+#     not yet observed at scale.
+#   - A flaky required-check on day one trains contributors to
+#     ignore the signal — exactly the wrong incentive.
+#
+# Promote the Check to required in
+# `Settings → Branches → branch protection rule` after ~10
+# consecutive green PRs across diverse branches, including PRs
+# that do NOT touch engine or rules code (so the green is
+# robust to unrelated changes, not just hot-path).
+#
+# Until promoted, the lane's value is twofold:
+#
+#   - **Pre-merge smoke** — contributors see breakage before
+#     merge, even if the Check is advisory.
+#   - **Drift detection** — reliability data accumulates over
+#     ~weeks, informing whether the promotion to required is
+#     safe.
+#
+# # Diagnostics
+#
+# On failure the engine's stdout/stderr capture
+# (`bin/demo-p6/dq-engine.log`, written by the smoke script
+# itself) is uploaded as a workflow artifact so the operator
+# does not need to rerun the job to see the engine's view of
+# what went wrong.
+
+name: demo-p6
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  demo-p6:
+    name: make demo-p6
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: engine/go.mod
+          cache: true
+
+      - name: Bring up docker-compose substrate
+        run: make up
+
+      - name: Run demo-p6 smoke
+        run: make demo-p6
+
+      - name: Upload engine log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: demo-p6-engine-log
+          path: bin/demo-p6/dq-engine.log
+          if-no-files-found: ignore
+
+      - name: Tear down docker-compose substrate
+        if: always()
+        run: make down
