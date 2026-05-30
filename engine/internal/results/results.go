@@ -91,6 +91,21 @@ type Reader interface {
 	// view as a future enhancement if call frequency becomes
 	// a cost concern.
 	LatestExecutionPerEntityCheck(ctx context.Context, asOf time.Time) ([]LatestExecutionRow, error)
+
+	// CountRunningExecutions returns the count of executions
+	// whose latest state per dq_executions_current is `running`
+	// — i.e., executions that have a `running` row written but
+	// no terminal follow-up row (success, failed, error,
+	// aborted). Canonical-view semantics per ADR-0003 CC2,
+	// matching ListRunningOlderThan's projection but returning
+	// a count rather than the row set.
+	//
+	// Consumed by the schedulerProxyMetricsLoop in
+	// engine/cmd/dq-engine per ADR-0056 §Clause 1 to set the
+	// dq_queue_depth{state="running",source="engine"} gauge.
+	// The query is partition-pruned per ADR-0031; scan cost
+	// is bounded by ResultsRetention.
+	CountRunningExecutions(ctx context.Context) (int64, error)
 }
 
 // Store is the full result-write surface: Writer + Reader +

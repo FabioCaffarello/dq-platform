@@ -210,6 +210,25 @@ func (m *mockStore) QueryCurrentExecution(_ context.Context, executionID string)
 	return latest, nil
 }
 
+// CountRunningExecutions satisfies the extended Reader contract
+// per ADR-0056 §Clause 1. Mirrors the SQL semantic: per
+// execution_id, take the row with the latest recorded_at; count
+// only those whose status is running.
+func (m *mockStore) CountRunningExecutions(_ context.Context) (int64, error) {
+	seen := map[string]struct{}{}
+	for _, r := range m.executions {
+		seen[r.ExecutionID] = struct{}{}
+	}
+	var n int64
+	for id := range seen {
+		latest := m.latestPerExecution(id)
+		if latest != nil && latest.Status == StatusRunning {
+			n++
+		}
+	}
+	return n, nil
+}
+
 // ListRunningOlderThan satisfies the extended Reader contract.
 // Mirrors the SQL semantic: per execution_id, take the row with
 // the latest recorded_at; include only those whose status is
@@ -335,6 +354,64 @@ func TestStoreInterface_MockShape(t *testing.T) {
 		t.Fatalf("QueryCurrentExecution(no-such): got nil error, want ErrExecutionNotFound")
 	} else if !strings.Contains(err.Error(), "not found") {
 		t.Errorf("error %q does not mention 'not found'", err)
+	}
+}
+
+func TestCountRunningExecutions_MockShape(t *testing.T) {
+	// Exercises Reader.CountRunningExecutions per ADR-0056 §Clause
+	// 1. Scenarios:
+	//   - exec-a: only a running row → counts (1)
+	//   - exec-b: running row followed by success → does NOT count
+	//     (canonical view returns the later row)
+	//   - exec-c: only a running row → counts (1)
+	// Expected total: 2.
+	ctx := context.Background()
+	s := &mockStore{}
+
+	t0 := time.Date(2026, 5, 30, 10, 0, 0, 0, time.UTC)
+
+	rows := []ExecutionRow{
+		{
+			ExecutionID: "exec-a", AttemptID: "att-a",
+			RecordedAt: t0, Status: StatusRunning, Mode: ModeSet,
+			EngineVersion: "0.1.0", RulesetVersion: "v1",
+			Entity: "e1", TriggerSource: TriggerScheduler,
+			WindowStart: t0.Add(-time.Hour), WindowEnd: t0,
+		},
+		{
+			ExecutionID: "exec-b", AttemptID: "att-b",
+			RecordedAt: t0, Status: StatusRunning, Mode: ModeSet,
+			EngineVersion: "0.1.0", RulesetVersion: "v1",
+			Entity: "e2", TriggerSource: TriggerScheduler,
+			WindowStart: t0.Add(-time.Hour), WindowEnd: t0,
+		},
+		{
+			ExecutionID: "exec-b", AttemptID: "att-b",
+			RecordedAt: t0.Add(time.Minute), Status: StatusSuccess, Mode: ModeSet,
+			EngineVersion: "0.1.0", RulesetVersion: "v1",
+			Entity: "e2", TriggerSource: TriggerScheduler,
+			WindowStart: t0.Add(-time.Hour), WindowEnd: t0,
+		},
+		{
+			ExecutionID: "exec-c", AttemptID: "att-c",
+			RecordedAt: t0, Status: StatusRunning, Mode: ModeSet,
+			EngineVersion: "0.1.0", RulesetVersion: "v1",
+			Entity: "e3", TriggerSource: TriggerScheduler,
+			WindowStart: t0.Add(-time.Hour), WindowEnd: t0,
+		},
+	}
+	for _, r := range rows {
+		if err := s.WriteExecutionRow(ctx, r); err != nil {
+			t.Fatalf("WriteExecutionRow: %v", err)
+		}
+	}
+
+	got, err := s.CountRunningExecutions(ctx)
+	if err != nil {
+		t.Fatalf("CountRunningExecutions: %v", err)
+	}
+	if got != 2 {
+		t.Errorf("CountRunningExecutions = %d; want 2 (exec-a + exec-c; exec-b superseded by success)", got)
 	}
 }
 

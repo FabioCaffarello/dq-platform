@@ -87,3 +87,51 @@ func TestNoopLoaderMetrics_DoesNotPanic(t *testing.T) {
 	noop := metrics.NoopLoaderMetrics()
 	noop.RefreshFailuresTotal.WithLabelValues("pointer_read").Inc()
 }
+
+func TestSchedulerProxyMetrics_RegisteredAndSettable(t *testing.T) {
+	r := metrics.New()
+
+	// Engine-derivable: in-flight running count.
+	r.SchedulerProxy.QueueDepth.WithLabelValues("running", "engine").Set(3)
+	// Engine-non-derivable: constant zero per ADR-0056 §Clause 3.
+	r.SchedulerProxy.QueueDepth.WithLabelValues("scheduled", "engine").Set(0)
+	r.SchedulerProxy.SchedulerTriggersManaged.WithLabelValues("healthy", "engine").Set(0)
+	r.SchedulerProxy.SchedulerTriggersManaged.WithLabelValues("errored", "engine").Set(0)
+
+	if got := testutil.CollectAndCount(r.SchedulerProxy.QueueDepth, "dq_queue_depth"); got != 2 {
+		t.Errorf("dq_queue_depth series count = %d; want 2", got)
+	}
+	if got := testutil.CollectAndCount(r.SchedulerProxy.SchedulerTriggersManaged, "dq_scheduler_triggers_managed"); got != 2 {
+		t.Errorf("dq_scheduler_triggers_managed series count = %d; want 2", got)
+	}
+	if got := testutil.ToFloat64(r.SchedulerProxy.QueueDepth.WithLabelValues("running", "engine")); got != 3 {
+		t.Errorf("dq_queue_depth{state=running,source=engine} = %v; want 3", got)
+	}
+	if got := testutil.ToFloat64(r.SchedulerProxy.QueueDepth.WithLabelValues("scheduled", "engine")); got != 0 {
+		t.Errorf("dq_queue_depth{state=scheduled,source=engine} = %v; want 0", got)
+	}
+}
+
+func TestSchedulerProxyMetrics_HandlerRendersWithSourceLabel(t *testing.T) {
+	r := metrics.New()
+	r.SchedulerProxy.QueueDepth.WithLabelValues("running", "engine").Set(5)
+
+	srv := httptest.NewServer(r.Handler())
+	defer srv.Close()
+	resp, err := http.Get(srv.URL)
+	if err != nil {
+		t.Fatalf("GET /metrics: %v", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	want := `dq_queue_depth{source="engine",state="running"} 5`
+	if !strings.Contains(string(body), want) {
+		t.Errorf("body missing expected sample %q:\n%s", want, body)
+	}
+}
+
+func TestNoopSchedulerProxyMetrics_DoesNotPanic(t *testing.T) {
+	noop := metrics.NoopSchedulerProxyMetrics()
+	noop.QueueDepth.WithLabelValues("running", "engine").Set(0)
+	noop.SchedulerTriggersManaged.WithLabelValues("healthy", "engine").Set(0)
+}
