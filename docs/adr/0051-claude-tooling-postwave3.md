@@ -48,7 +48,7 @@ surface when a contributor opens a session today:
    step 10. Sessions outside Wave 3 re-derive the discipline
    from the playbook by hand each session.
 3. **Settings posture too broad.** The current
-   [`.claude/settings.local.json`](../../.claude/settings.local.json)
+   [`.claude/settings.json`](../../.claude/settings.json)
    allows `Bash(gh pr *)`, which transitively authorizes
    `gh pr merge` — the operation `wave-3-session-loop.md` step 10
    explicitly reserves for the `[H]` reviewer after CI passes.
@@ -241,7 +241,7 @@ command runs the PR-opening checklist:
 The command reads from `CONTRIBUTING.md` per Clause 2; the
 checklist mirrors the upstream contract documented there.
 
-### Clause 6 — Hardened `.claude/settings.local.json`
+### Clause 6 — Hardened `.claude/settings.json`
 
 The settings file is hardened so the harness's enforcement layer
 matches the stated discipline. Three changes:
@@ -337,7 +337,7 @@ review surface for that expansion.
    Three new files (the `session-governance` skill, the
    `post-wave3-session-loop.md` playbook, the `/open-pr`
    command); one settings hardening
-   (`.claude/settings.local.json`); two edits (one to
+   (`.claude/settings.json`); two edits (one to
    `.claude/commands/promote-to-adr.md`; one to
    `CONTRIBUTING.md` — new post-Wave-3 section per Clause 2).
    The implementation slice is bounded; no engine, rules,
@@ -346,7 +346,7 @@ review surface for that expansion.
 2. **PR-flow discipline becomes auditable across sessions.**
    The `session-governance` skill (Clause 3) is the in-session
    reference; `/open-pr` (Clause 5) is the procedural reference;
-   `.claude/settings.local.json` (Clause 6) is the mechanical
+   `.claude/settings.json` (Clause 6) is the mechanical
    reference; `CONTRIBUTING.md` (Clause 2) is the upstream
    contract. Four layers; none alone is sufficient; together
    they make the discipline hard to skip. A session that
@@ -435,7 +435,7 @@ ADR; each has a named trigger condition:
   to extend.
 
 - **OQ-G3.1 — Force-push deny entries in
-  `.claude/settings.local.json`.** Adding `git push --force`
+  `.claude/settings.json`.** Adding `git push --force`
   and `git push -f` to the deny block is a related hardening
   but exceeded the original gap scope this ADR addresses.
   Force-push to `main` is already covered by
@@ -445,3 +445,38 @@ ADR; each has a named trigger condition:
   concrete operator signal (a near-miss force-push, or a
   pattern across sessions); until then, the in-session
   confirmation gate is the safeguard.
+
+---
+
+## Amendment log
+
+- **2026-05-30** — In-place naming-drift correction. Five
+  citations of the harness settings file in this ADR (Context
+  Gap 3, Clause 6 heading, Consequence 1, Consequence 2,
+  OQ-G3.1) were updated from `.claude/settings.local.json` to
+  `.claude/settings.json`. The shared team posture is held in
+  the tracked `.claude/settings.json`; `.claude/settings.local.json`
+  is per-user local state (gitignored at `.gitignore:25` —
+  "Claude Code per-user local state (the rest of `.claude/` is
+  tracked)") and cannot carry a contract that binds all
+  contributors. The actual file `.claude/settings.json` already
+  carried the full Clause 6 hardening at the time of this
+  amendment: explicit `gh pr create / view / list / diff / checks`
+  allowlist; deny block for `gh pr merge`, `git commit --no-verify`,
+  `git push --no-verify`; and the post-Wave-3 Make targets
+  (`make test-tools`, `make test-engine-sandbox`,
+  `make validate-deploy`, `make demo-p6`) plus the read-only
+  `git branch --show-current` / `git rev-parse --abbrev-ref HEAD`
+  / `git log main..HEAD` invocations. Permission semantics
+  unchanged; downstream artifacts
+  ([`.claude/skills/session-governance/SKILL.md`](../../.claude/skills/session-governance/SKILL.md),
+  [`.claude/commands/open-pr.md`](../../.claude/commands/open-pr.md),
+  [`.claude/skills/session-governance/reference/governance-checklist.md`](../../.claude/skills/session-governance/reference/governance-checklist.md))
+  already cite `.claude/settings.json` and are unaffected.
+  Landed under [`CONTRIBUTING.md`](../../CONTRIBUTING.md) Flow 6
+  as an operator-authorized direct edit (satellite catching up
+  to source of truth — here the ADR is the satellite that
+  drifted from the actual artifact). Amendment-log shape
+  follows the convention committed by
+  [ADR-0050](./0050-v1-retirement-engine-release.md)
+  §Consequence 4.
