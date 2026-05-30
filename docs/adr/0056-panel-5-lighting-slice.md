@@ -244,11 +244,14 @@ state-transition).
 6. **New `SchedulerProxyMetrics` struct in
    `engine/internal/metrics` extends the central inventory.** The
    metrics package remains the canonical inventory matching
-   ADR-0039's metric set; `RunnerMetrics` + `LoaderMetrics` +
-   `SchedulerProxyMetrics` together cover six (runner) + one
-   (loader) + four (scheduler-proxy) = eleven metric series,
-   matching the eight ADR-0039 inventory metrics plus the three
-   constant-zero engine-non-derivable label combos.
+   ADR-0039's metric set. `RunnerMetrics` + `LoaderMetrics` +
+   `SchedulerProxyMetrics` together carry **5 + 1 + 2 = 8 metric
+   families**, matching ADR-0039's 8-metric inventory exactly.
+   The `SchedulerProxyMetrics` 2 families expand to 4 emitted
+   label combinations (one engine-derivable +
+   three constant-zero per Clause 3); the other 7 families emit
+   their natural label cardinality per ADR-0055 §Clause 4 and
+   ADR-0056 §Clauses 1, 3.
 
 7. **A new periodic loop `schedulerProxyMetricsLoop` ticks every
    15s in the engine binary.** Cadence is a constant in
@@ -325,13 +328,16 @@ ratification was operator-side (mid-PR-#113) per
 for future B-rows touching ADR-0039 wording.
 
 **Critique rounds.** This ADR's Decision survived one
-`/critique` round before promotion (round-1 disposition recorded
-in the PR body's Critique result table). The originating B3-5
-study survived two rounds (1 = 0 blocking / 4 important / 5
-minor with the four importants applied; 2 = ratification
-trailer). The implementation code in this PR is self-verified
-against AC-W3-3 + AC-W3-7 per ADR-0052 §6.4 row 6 close-gates
-and ADR-0048 §"Skip" path for code-only `/critique` rounds.
+`/critique` round (0 blocking / 1 important / 5 minor; 1
+important applied — Consequence 6 arithmetic corrected from
+"6 + 1 + 4 = 11 series" to "5 + 1 + 2 = 8 metric families
+matching ADR-0039 verbatim"; 5 minor deferred under the two-round
+cap). The originating B3-5 study survived two rounds (1 = 0
+blocking / 4 important / 5 minor with the four importants
+applied; 2 = ratification trailer). The implementation code in
+this PR is self-verified against AC-W3-3 + AC-W3-7 per ADR-0052
+§6.4 row 6 close-gates and ADR-0048 §"Skip" path for code-only
+`/critique` rounds.
 
 **No ADR-0033 reopening.** Path B (scheduler-binary
 instrumentation) remains Rejected per ADR-0049 §(a) and is not
