@@ -44,55 +44,55 @@ for everything below.
 
 ---
 
-## 2. The three waves (current operating phase)
+## 2. Operating phases and lanes
 
-Work in this repository proceeds in **three sequential waves**. Each
-wave has a clear gate: do not cross the gate without explicit human
-approval.
+Work in this repository is organized into **three sequential waves**
+(now closed), one **wave-shaped capability extension** (Wave-S), and
+one **demand-driven evolutionary lane** (B3). Wave-S and B3 are
+structural peers of the original waves — not a "Wave 4" or "Wave 5".
+The taxonomy is defended on this project's own terms: Wave-S launches
+a new capability axis at wave shape (ADR-0020 §"Wave semantics"); B3
+is an open-ended lane explicitly framed as peer to the waves rather
+than a fourth priority tier (ADR-0049 §"Launch posture").
 
-### Wave 1 — Resolve blocking decisions
+### 2.1 Waves 1–3 (closed)
 
-**Status: in progress.**
+The set-mode capability is live; the five product workspaces carry
+real content.
 
-The decisions tracked in `studies/foundation/06-decision-log.md` as
-priority `B0` (blocking) must be resolved before any workspace gains
-real content. Each resolution becomes a dated document in
-`studies/decisions/`.
+- **Wave 1** — seven `B0` blocking decisions closed 2026-05-21
+  (`B0-1` → ADR-0001 through `B0-7` → ADR-0007).
+- **Wave 2** — consolidated platform decisions (`W2-1` … `W2-5`)
+  closed 2026-05-21 and promoted to ADRs 0008–0012 + 0015–0019.
+- **Wave 3** — workspace scaffolding (`W3-P0` … `W3-P8`) closed
+  2026-05-23. `engine/`, `rules/`, `tools/`, `deploy/`, and `docs/`
+  now carry real content.
 
-The seven B0 topics, summarized:
+### 2.2 Wave-S — record-mode capability (partial gate met)
 
-1. Engine ↔ rules compatibility model (how rule artifacts declare which
-   schema and linter contract they follow inside the monorepo).
-2. Run identity and idempotency (`execution_id` semantics, rerun
-   behavior).
-3. Result write model (`dq_executions` and `dq_check_results` storage
-   semantics).
-4. Failure scope (when a check fails, what is the entity's status).
-5. Manifest publication semantics (how a ruleset becomes "live").
-6. Alert routing contract (shape of owner metadata, deduplication,
-   severity).
-7. Loader / scheduler / retry failure semantics.
+Launched 2026-05-23 via [ADR-0020](docs/adr/0020-wave-s-launch.md)
+as a wave-shaped extension that opens the record-oriented evaluation
+axis alongside set-mode. The partial gate (B0-S1 / B0-S2 / B0-S3 —
+mode primitive, kind catalog, sources schema) was met 2026-05-24,
+which unblocked record-mode code shipping. The full-gate criteria
+remain in ADR-0020.
 
-### Wave 2 — Lock platform decisions
+### 2.3 B3 — evolutionary lane (open)
 
-A single consolidated decision document in `studies/decisions/`
-resolves:
+Opened 2026-05-29 via
+[ADR-0049](docs/adr/0049-b3-evolutionary-launch.md) as a
+demand-driven lane for post-Wave-3 evolution, restricted to three
+in-scope families (kind, capability mode, tooling extensions) and
+filtered by the four-condition eligibility test in ADR-0049 §(a).
+B3 has no closure gate — it stays open across the platform's
+operating life.
 
-- Git host choice (affects every CI artifact).
-- Multi-agent contract for `.claude/`, `.codex/`, and `AGENTS.md`.
-- Docker Compose local scope: which cloud services are emulated, which
-  require sandbox access.
-- Documentation language policy.
-- Workspace tooling choice (Go workspaces via `go.work` is the working
-  default; confirm or revise).
-- Per-workspace tag prefix conventions (e.g. `engine-v1.2.0`,
-  `rules-v0.5.0`).
+### 2.4 Live state
 
-### Wave 3 — Scaffold every workspace
-
-Only after Wave 1 and Wave 2 are closed. Wave 3 populates `engine/`,
-`rules/`, `tools/`, `deploy/`, and `docs/` with real content backed by
-the decisions made in waves 1 and 2 — never placeholders.
+The canonical live-state surface for every B-row and ADR is
+`studies/foundation/06-decision-log.md`. Wave gates, Wave-S
+partial / full gate status, and B3 lane activity are all
+reflected there in the "Last updated" history.
 
 ---
 
@@ -183,6 +183,10 @@ HTML comment header declaring its path:
 
 This makes outputs reconstructible if extracted, zipped, or moved.
 
+R6 applies to markdown files only. Non-markdown files (JSON, YAML,
+code) are out of scope regardless of whether they support comment
+syntax.
+
 ### R7. Output language: English for technical artifacts
 
 ADRs, schemas, technical READMEs, code comments, and contract
@@ -250,19 +254,36 @@ They must not be eroded by any output produced here.
 
 ---
 
-## 6. Playbooks — required reading at session start
+## 6. Required reading at session start
 
-The playbooks under `.claude/playbooks/` encode the working protocol
-for Wave 1. They are short. Read them at the start of every session,
-alongside the foundation documents:
+Two reading layers govern session-start grounding. Both are short.
+Read them at the start of every session, alongside the foundation
+documents.
 
-- **`.claude/playbooks/wave-1-session-loop.md`** — the 10-step loop
-  for resolving one B0. Includes explicit human decision points.
-- **`.claude/playbooks/acceptance-criteria.md`** — the binary,
-  verifiable criteria a decision study must meet before it can be
-  marked `resolved-study`.
-- **`.claude/playbooks/feedback-protocol.md`** — how feedback on a
-  draft is given (always citing R/P/AC labels, never personal).
+**Playbooks (operational protocol)** under `.claude/playbooks/`:
+
+- **`wave-1-session-loop.md`** — the 10-step loop for resolving one
+  B0 decision. Includes explicit human decision points. Historical
+  reference now that Wave 1 has closed.
+- **`wave-3-session-loop.md`** — the loop for one Wave 3 scaffolding
+  unit. Historical reference now that Wave 3 has closed.
+- **`post-wave3-session-loop.md`** — the 10-step loop for one B2
+  follow-up, B3 evolutionary entry, ADR amendment, or ADR promotion
+  in the post-Wave-3 lane. The current operational loop.
+- **`acceptance-criteria.md`** — the binary, verifiable criteria a
+  decision study must meet before it can be marked `resolved-study`.
+- **`wave-3-acceptance-criteria.md`** — the analogous criteria for
+  Wave 3 scaffolding artifacts.
+- **`feedback-protocol.md`** — how feedback on a draft is given
+  (always citing R/P/AC labels, never personal).
+
+**Contributor contract:**
+
+- **`CONTRIBUTING.md`** Flow 5 — the upstream authority for PR-flow
+  in the post-Wave-3 lane (committed by
+  [ADR-0051](docs/adr/0051-claude-tooling-postwave3.md) Clause 2).
+  The `.claude/` playbooks and skills defer to it; read it directly
+  to find the canonical branch / commit / PR discipline.
 
 These playbooks are operational, not architectural. When a playbook
 turns out to be wrong, update the playbook — do not silently
@@ -284,19 +305,19 @@ workflow.
   `AGENTS.md`, and `.codex/AGENTS.md`.
 - `/check-decision-backlog` — report which decisions are open,
   in-progress, or closed.
+- `/open-pr` — open a PR from the current feature branch against
+  `main` following the PR-flow checklist authoritative in
+  `CONTRIBUTING.md` Flow 5.
 
 ---
 
-## 8. What success in Wave 1 looks like
+## 8. Where success is measured
 
-By the end of Wave 1:
-
-- `studies/decisions/` contains a dated document for every B0 topic.
-- `studies/foundation/06-decision-log.md` has its B0 rows marked
-  resolved, each with a link to its decision document.
-- `engine/`, `rules/`, `tools/`, `deploy/`, and `docs/` contain no
-  content yet (they may not even exist as directories — that is
-  fine).
-
-That last clause is the test. If any workspace gained content during
-Wave 1, the wave was not respected.
+Waves 1, 2, and 3 closed. Success is no longer measured by a
+phase-specific closure test inside this document; it is measured by
+B-row and ADR closure recorded in
+`studies/foundation/06-decision-log.md`. The closure criteria for
+the open phases live in their governing ADRs:
+[ADR-0020](docs/adr/0020-wave-s-launch.md) for the Wave-S
+partial / full gate; [ADR-0049](docs/adr/0049-b3-evolutionary-launch.md)
+§(c) for B3 (the lane has no closure gate — by design).
