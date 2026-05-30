@@ -8,7 +8,8 @@
 - Status: draft
 - Decision-log row: B3-5 (family fit derived in §Eligibility below; not assumed at registration)
 - Promotion target: [`docs/adr/0056-panel-5-lighting-strategy.md`](../../docs/adr/0056-panel-5-lighting-strategy.md) (provisional; operator reserves at promotion time per [ADR-0051](../../docs/adr/0051-claude-tooling-postwave3.md) Clause 7)
-- Critique rounds: pending (this is the pre-critique draft)
+- Critique rounds:
+  - Round 1 — [capture](../critiques/2026-05-30-b3-panel-5-lighting-strategy-critique-1.md) (0 blocking / 4 important / 5 minor); 4 important applied in this revision (Option B reclassified as Rejected per ADR-0049 §(a); Option A 2×2 sub-classification surfaced for the weak-vs-strong × A.x-vs-A.y axes; Recommendation §1 weak-reading branch sharpened to separate additive-label-extension from rename-amendment; Consequence #4 corrected — ADR-0055 is not touched, the inheritance chain through the decision-log carries the OQ-1 attribution correction). Five minor deferred under the two-round cap.
 
 ---
 
@@ -150,17 +151,22 @@ itself can observe:
   - **A.y** = emit constant 0 for both states (panel 5 fully
     plotted but the `errored` line never deviates).
 
-The §(a) classification of Option A turns on the Condition 1 / 3
-D0:
+The §(a) classification of Option A turns on **two** axes: the
+Condition 1 / 3 D0 (weak vs strong reading of ADR-0039) AND
+the sub-path choice (A.x = drop the unsalvageable metric vs
+A.y = emit constant zero). The 2×2 table:
 
-- **A under weak reading of ADR-0039** = clean B3 extension
-  (with a follow-on metric-rename or label-qualification edit so
-  the engine doesn't claim scheduler knowledge it doesn't have;
-  Condition 3 satisfied by that rename).
-- **A under strong reading of ADR-0039** = amendment to ADR-0039
-  §"Metric contract" Meaning column (and ADR-0039 §"Cardinality
-  posture" / §"Label value sources" by extension); out of B3
-  scope; routes through amendment process per ADR-0049 §(a).
+| Reading × Sub-path | A.x (drop `dq_scheduler_triggers_managed`) | A.y (emit constant zero) |
+|---|---|---|
+| **Weak** (gauge meaning is the committed contract; source incidental) | **Amendment.** Dropping a metric from engine emission ≠ the inventory in ADR-0039. Even under the weak reading, the metric *name* is committed; engine declining to emit it makes the inventory and the engine ship out-of-sync. | **Extension (B3-eligible).** Metric remains in the inventory; engine emits a value; information content is minimal (constant 0) but the gauge is present. Closest fit to a clean B3 extension under the weak reading. |
+| **Strong** (source is part of committed label-source rule) | **Amendment.** Both the source change AND the metric drop amend the contract. | **Amendment.** The source change alone amends the contract; the constant-zero value-shape doesn't rescue it. |
+
+Three of the four cells are amendment-shaped; only the
+(weak-reading, A.y) cell is B3-eligible. The operator's
+ratification on Condition 1 (weak vs strong) plus a separate
+disposition on A.x vs A.y is required to land Option A inside
+the B3 envelope. The §Eligibility table's Conditions 1 + 3
+both resolve to "extension" only in the (weak, A.y) cell.
 
 **Cost surface (orthogonal to amendment-vs-extension):** A new
 read on the engine's Store interface every Prometheus scrape
@@ -187,10 +193,20 @@ two scheduler-side metrics natively. This:
    capability mode / tooling). It is wave-scale work, not B3
    evolutionary work.
 
-**Classification:** Out of B3 scope. Not Rejected per ADR-0049
-§(a) "rejected" branch (the work is in-scope for some future
-wave); not B3 (fails Condition 2); not amendment (extends
-capability, doesn't modify a decided contract).
+**Classification:** **Rejected** per ADR-0049 §(a). The §(a)
+Rejected definition is *iff the proposal falls outside the
+three in-scope families **and** outside any active wave's
+gate*. Option B fails Condition 2 (not in any of kind /
+capability mode / tooling) AND is outside any active wave's
+gate (no scheduler-binary wave exists or is in flight). Both
+clauses hold. The Rejected branch explicitly allows the
+one-line decision-log entry pointing at a rationale note; this
+study is that rationale. No B-row is opened for Option B; the
+decision-log B3-5 row's "Earlier update" entry (registered at
+study close) carries the rejection forward. If concrete demand
+for an in-platform scheduler surfaces later, that's a
+wave-launch decision — separate framing, separate ADR, not a
+re-opening of Option B here.
 
 ### Option C — Permanent deferral; panel 5 stays dark
 
@@ -217,20 +233,33 @@ follow-on becomes actionable. Two coupled outcomes:
 1. **If the operator ratifies the weak reading of ADR-0039**
    (the gauge meaning is the committed semantics; the
    "scheduler" word in the Meaning column was the
-   ADR-0039-time-known emitter, not a label-source commitment):
-   - Path A becomes a clean B3 follow-on slice.
-   - Recommended follow-on: a new B3-N (or implementation slice
-     landing under a closed B3-5) that emits
-     `dq_queue_depth{state="running"}` from
-     `Store.LatestExecutionPerEntityCheck`-style reader, drops
-     or zero-pads the other series, and ships a same-PR edit to
-     ADR-0039 §"Metric contract" Meaning column reframing the
-     wording so the engine no longer claims scheduler-internal
-     knowledge it doesn't have (e.g., "Count of runs the engine
-     observes as currently in-flight, plus zero for
-     scheduler-tracked-only states the engine cannot observe").
-     The reframing is itself **borderline amendment** territory
-     — flagged for a second-round critique.
+   ADR-0039-time-known emitter, not a label-source commitment),
+   AND adopts A.y over A.x (per the §Option A 2×2 table —
+   A.x is amendment under either reading):
+   - Path A.y becomes a B3 follow-on slice in the cleanest of
+     the four cells.
+   - Recommended follow-on: a new implementation slice landing
+     under closed B3-5 that emits
+     `dq_queue_depth{state="running"}` from a
+     `Store.LatestExecutionPerEntityCheck`-style reader, emits
+     constant zero for the other series the engine cannot
+     derive, and adds an **additive label** (e.g., `source=
+     "engine"` alongside the existing `state` label) so the
+     engine's emission self-identifies as engine-derived
+     without changing the metric name. Additive labels are
+     explicitly allowed per ADR-0039 §"Evolution rules" within
+     an engine-major version; the label addition is
+     extension-shaped, not amendment-shaped.
+   - **Renaming the metric** (e.g., `dq_queue_depth` →
+     `dq_engine_inflight_runs`) is **out of scope for the
+     weak-reading B3-eligible path** — the metric name is part
+     of ADR-0039's committed contract surface (operators key
+     on `dq_runs_total` etc. exactly because the name is the
+     contract). A rename would route through amendment
+     regardless of the Condition 1 reading. The additive-label
+     mechanism is the only weak-reading-compatible way to
+     surface the source distinction without amending the
+     contract.
 
 2. **If the operator ratifies the strong reading of ADR-0039**
    (the source IS part of the committed label-source rule;
@@ -302,18 +331,32 @@ follow-on becomes actionable. Two coupled outcomes:
    for B3-5's follow-on; future B-rows that touch the same
    wording inherit the ratified reading by precedent.
 
-4. **The originating B3-4 OQ-1's "ADR-0033 amendment" attribution
-   is corrected here.** This study's Context records the
-   re-attribution to ADR-0039. A small ADR-0055 §Notes append
-   is registered as a B-row-side housekeeping note (or rolled
-   into the follow-on session's PR), pointing future readers at
-   the correction without re-opening ADR-0055 itself.
+4. **The originating B3-4 OQ-1's "ADR-0033 amendment"
+   attribution is corrected inline in this study's Context.**
+   ADR-0055 itself is not touched — touching a merged ADR is
+   amendment territory governed by ADR-0050 §Consequence 4
+   (in-place Amendment-log) or by a standalone amendment ADR,
+   and the originating OQ-1 attribution is a study-side
+   sketch (not a contract surface), not material enough to
+   justify either mechanism. The inheritance chain that
+   carries the correction to future readers: B3-5 study
+   Context → decision-log B3-5 row "Earlier update" entry
+   (registered at study close) → the row's "Earlier update"
+   entry from B3-4 (still pointing at B3-4's OQ-1 sketch). A
+   future reader who walks the chain sees the correction
+   surfaced explicitly without needing ADR-0055 itself to be
+   updated.
 
-5. **Option B (scheduler-binary) is explicitly out of scope
-   without being routed to a new B-row.** ADR-0049 §(a) Condition
-   2 fails cleanly; the work is wave-scale; documented here as
-   a known path the operator may revisit when concrete demand
-   surfaces. No silent acceptance, no premature wave-launch.
+5. **Option B (scheduler-binary) is Rejected per ADR-0049 §(a).**
+   The §(a) Rejected branch holds (fails Condition 2 AND
+   outside any active wave's gate); the Rejected outcome's
+   one-line-entry discipline is satisfied by the decision-log
+   B3-5 row's update at study close. No new B-row is opened
+   for Option B. If concrete operator demand for an
+   in-platform scheduler surfaces later, that is a wave-launch
+   decision (per ADR-0033 §Notes — "deferred indefinitely
+   unless concrete operator demand surfaces"), not a re-opening
+   of this rejection.
 
 6. **Option C (permanent deferral) requires no new ADR.** The
    existing `baseline.json` panel-5 description + `deploy/
