@@ -20,34 +20,49 @@ bound by those rules.
 
 ## Quick summary for first-time agents
 
-You are in a monorepo that is being bootstrapped from zero. The
-project is a long-lived Data Quality platform organized as five
+You are in a long-lived Data Quality monorepo organized as five
 workspaces (`engine/`, `rules/`, `tools/`, `deploy/`, `docs/`). The
-project runs in three sequential waves:
+five product workspaces carry real content. Work is organized into
+three sequential waves (now closed), one wave-shaped capability
+extension (Wave-S), and one demand-driven evolutionary lane (B3) —
+Wave-S and B3 are structural peers of the original waves, not a
+"Wave 4" or "Wave 5".
 
-- **Wave 1 — closed.** All seven `B0` decision-log items are at
-  `resolved-study` in `studies/decisions/`. Gate met (7 of 7).
-- **Wave 2 — closed.** The consolidated platform-decisions study
-  (W2-1 through W2-5: Git host, multi-agent contract, Docker Compose
-  substrate posture, documentation language, per-workspace tag
-  conventions) is at `resolved-study`. Gate met (5 of 5).
-- **Wave 3 — unblocked, not yet started.** Scaffolds every
-  workspace, backed by the decisions resolved in Waves 1 and 2.
-  R1 (no production code during Waves 1 and 2) no longer applies
-  once a Wave 3 scaffolding session is explicitly opened by the
-  project lead.
+- **Wave 1 — closed.** Seven `B0` blocking decisions closed
+  2026-05-21 and promoted to ADRs 0001–0007.
+- **Wave 2 — closed.** Consolidated platform decisions (`W2-1`…
+  `W2-5`) closed 2026-05-21 and promoted to ADRs 0008–0012 + 0015–0019.
+- **Wave 3 — closed.** Workspace scaffolding (`W3-P0`…`W3-P8`) closed
+  2026-05-23.
+- **Wave-S — partial gate met.** Launched 2026-05-23 via ADR-0020;
+  the record-mode partial gate (B0-S1 / B0-S2 / B0-S3) was met
+  2026-05-24, unblocking record-mode code. Full-gate criteria remain
+  in ADR-0020.
+- **B3 — open.** Demand-driven evolutionary lane opened 2026-05-29
+  via ADR-0049, restricted to kind / capability-mode / tooling
+  extensions and filtered by the four-condition eligibility test in
+  ADR-0049 §(a). No closure gate — stays open across the platform's
+  operating life.
+
+R1 (no production code during Waves 1 and 2) is now historical:
+Waves 1–2 closed, and Wave 3 onward authorizes production code under
+the decisions resolved in the earlier waves.
 
 Read, in this order, before producing anything:
 
 1. `CLAUDE.md`
-2. Every playbook in `.claude/playbooks/` (operational protocol).
-3. `studies/foundation/README.md`
-4. Every numbered document under `studies/foundation/`, in order.
+2. Every playbook in `.claude/playbooks/` (operational protocol),
+   including the current `post-wave3-session-loop.md`,
+   `acceptance-criteria.md`, `wave-3-acceptance-criteria.md`, and
+   `feedback-protocol.md`.
+3. `CONTRIBUTING.md` Flow 5 — the upstream authority for PR-flow in
+   the post-Wave-3 lane.
+4. `studies/foundation/README.md`
+5. Every numbered document under `studies/foundation/`, in order.
 
 Then check `studies/foundation/06-decision-log.md` for the current
-state of open decisions, and skim
-`studies/decisions/2026-05-21-platform-decisions-wave2.md` for the
-Wave 2 commitments that shape every Wave 3 scaffolding choice.
+state of every B-row and ADR, including Wave-S partial / full gate
+status and B3 lane activity.
 
 ---
 
@@ -55,8 +70,11 @@ Wave 2 commitments that shape every Wave 3 scaffolding choice.
 
 - The hard rules R1–R8 in `CLAUDE.md`.
 - The six platform principles P1–P6 in `CLAUDE.md`.
-- The three-wave sequence.
-- The path-header convention on every produced markdown file.
+- The waves taxonomy: three sequential waves (closed) plus Wave-S
+  (wave-shaped capability extension) and B3 (open evolutionary lane)
+  as structural peers.
+- The path-header convention on every produced markdown file
+  (R6 applies to markdown only).
 - English as the default for technical artifacts (confirmed in
   Wave 2). Portuguese is permitted for onboarding guides when the
   file opens with a one-line language marker.
