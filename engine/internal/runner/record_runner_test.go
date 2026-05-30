@@ -15,11 +15,18 @@ import (
 // fakeConsumer is a test double for RecordConsumer: returns
 // pre-seeded batches one PollFetches call at a time, then
 // blocks until ctx is cancelled.
+//
+// committed accumulates the records the runner passed to Commit
+// across the consumer's lifetime per ADR-0058 §Clause 5 test
+// discipline; tests assert on this ledger to verify the
+// commit-after-dispatch boundary.
 type fakeConsumer struct {
-	mu      sync.Mutex
-	batches [][]FetchedRecord
-	idx     int
-	closed  bool
+	mu        sync.Mutex
+	batches   [][]FetchedRecord
+	idx       int
+	closed    bool
+	committed []FetchedRecord
+	commitErr error
 }
 
 func (f *fakeConsumer) PollFetches(ctx context.Context) ([]FetchedRecord, error) {
@@ -35,6 +42,24 @@ func (f *fakeConsumer) PollFetches(ctx context.Context) ([]FetchedRecord, error)
 	// waiting for new records.
 	<-ctx.Done()
 	return nil, ctx.Err()
+}
+
+func (f *fakeConsumer) Commit(_ context.Context, records []FetchedRecord) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.commitErr != nil {
+		return f.commitErr
+	}
+	f.committed = append(f.committed, records...)
+	return nil
+}
+
+func (f *fakeConsumer) committedSnapshot() []FetchedRecord {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make([]FetchedRecord, len(f.committed))
+	copy(out, f.committed)
+	return out
 }
 
 func (f *fakeConsumer) Close() { f.closed = true }
@@ -281,7 +306,128 @@ func (e *errConsumer) PollFetches(ctx context.Context) ([]FetchedRecord, error) 
 	return nil, ctx.Err()
 }
 
+func (e *errConsumer) Commit(_ context.Context, _ []FetchedRecord) error { return nil }
+
 func (e *errConsumer) Close() { e.closed = true }
+
+// TestRecordRunner_CommitsAfterSuccessfulDispatch verifies that
+// when dispatcher.Run returns nil for a closed window, the
+// runner calls consumer.Commit with that window's records per
+// ADR-0058 §Clause 2. Mirrors the
+// TestRecordRunner_ClosesWindowOnWatermarkAdvance scenario;
+// adds a commit-ledger assertion.
+func TestRecordRunner_CommitsAfterSuccessfulDispatch(t *testing.T) {
+	base := time.Date(2026, 5, 25, 12, 0, 0, 0, time.UTC)
+	inWindow := []FetchedRecord{
+		{Topic: "orders.events.v1", Partition: 0, Offset: 1,
+			Timestamp: base.Add(5 * time.Second),
+			Body:      []byte(`{"id":"a"}`)},
+		{Topic: "orders.events.v1", Partition: 0, Offset: 2,
+			Timestamp: base.Add(15 * time.Second),
+			Body:      []byte(`{"id":"b"}`)},
+		{Topic: "orders.events.v1", Partition: 0, Offset: 3,
+			Timestamp: base.Add(45 * time.Second),
+			Body:      []byte(`{"id":"c"}`)},
+	}
+	closingRecord := FetchedRecord{Topic: "orders.events.v1", Partition: 0, Offset: 4,
+		Timestamp: base.Add(90 * time.Second),
+		Body:      []byte(`{"id":"d"}`)}
+	batch := append(append([]FetchedRecord{}, inWindow...), closingRecord)
+	consumer := &fakeConsumer{batches: [][]FetchedRecord{batch}}
+	dispatch := &captureDispatcher{}
+
+	r, err := NewRecordRunner(RecordRunnerConfig{
+		Consumer:       consumer,
+		Dispatcher:     dispatch,
+		RulesetVersion: "rules-v0.1.0-beta",
+		Sources: []RecordSource{{
+			Entity:            "orders_stream",
+			Topic:             "orders.events.v1",
+			ConsumerGroup:     "dq-orders-stream",
+			WindowDuration:    60 * time.Second,
+			LatenessTolerance: 10 * time.Second,
+			Checks:            []CheckSpec{{CheckID: "c1", Kind: "record.schema_conformance"}},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("NewRecordRunner: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+	_ = r.Start(ctx)
+
+	committed := consumer.committedSnapshot()
+	if len(committed) != len(inWindow) {
+		t.Fatalf("expected %d committed records (the closed window's records); got %d (%v)",
+			len(inWindow), len(committed), committed)
+	}
+	for i, want := range inWindow {
+		if committed[i].Offset != want.Offset || committed[i].Partition != want.Partition {
+			t.Errorf("committed[%d] = (p=%d, o=%d); want (p=%d, o=%d)",
+				i, committed[i].Partition, committed[i].Offset, want.Partition, want.Offset)
+		}
+	}
+	// The closing record opened a new window but has not closed
+	// yet — it must NOT be in the ledger.
+	for _, c := range committed {
+		if c.Offset == closingRecord.Offset {
+			t.Errorf("closing record (offset=%d, still in active window) was committed; should not be", closingRecord.Offset)
+		}
+	}
+}
+
+// TestRecordRunner_DoesNotCommitOnDispatchFailure verifies that
+// when dispatcher.Run returns non-nil, the runner does NOT call
+// consumer.Commit for that window per ADR-0058 §Clause 2.
+func TestRecordRunner_DoesNotCommitOnDispatchFailure(t *testing.T) {
+	base := time.Date(2026, 5, 25, 12, 0, 0, 0, time.UTC)
+	batch := []FetchedRecord{
+		{Topic: "orders.events.v1", Partition: 0, Offset: 1,
+			Timestamp: base.Add(5 * time.Second),
+			Body:      []byte(`{"id":"a"}`)},
+		{Topic: "orders.events.v1", Partition: 0, Offset: 2,
+			Timestamp: base.Add(15 * time.Second),
+			Body:      []byte(`{"id":"b"}`)},
+		{Topic: "orders.events.v1", Partition: 0, Offset: 3,
+			Timestamp: base.Add(90 * time.Second),
+			Body:      []byte(`{"id":"c"}`)},
+	}
+	consumer := &fakeConsumer{batches: [][]FetchedRecord{batch}}
+	dispatch := &captureDispatcher{err: errors.New("downstream store unavailable")}
+
+	r, err := NewRecordRunner(RecordRunnerConfig{
+		Consumer:       consumer,
+		Dispatcher:     dispatch,
+		RulesetVersion: "rules-v0.1.0-beta",
+		Sources: []RecordSource{{
+			Entity:            "orders_stream",
+			Topic:             "orders.events.v1",
+			ConsumerGroup:     "dq-orders-stream",
+			WindowDuration:    60 * time.Second,
+			LatenessTolerance: 10 * time.Second,
+			Checks:            []CheckSpec{{CheckID: "c1", Kind: "record.schema_conformance"}},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("NewRecordRunner: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+	_ = r.Start(ctx)
+
+	// At least one window closed (the dispatcher saw the trigger
+	// and returned its error); the commit ledger must remain
+	// empty because the dispatch failed.
+	if got := len(dispatch.snapshot()); got == 0 {
+		t.Fatal("expected at least one dispatch attempt; got 0")
+	}
+	if committed := consumer.committedSnapshot(); len(committed) != 0 {
+		t.Errorf("expected no commits on dispatch failure; got %d records committed (%v)",
+			len(committed), committed)
+	}
+}
 
 func TestParseDuration_GrammarSubset(t *testing.T) {
 	cases := []struct {

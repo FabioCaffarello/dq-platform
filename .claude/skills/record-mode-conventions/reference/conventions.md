@@ -42,24 +42,43 @@ test doubles work without standing up franz-go.
 
 ---
 
-## S2 — β commit semantics: commit-after-fetch (at-most-once)
+## S2 — Commit-after-dispatch semantics (at-least-once)
 
 **Rule.** Auto-commit is disabled on the franz-go client;
-`CommitUncommittedOffsets` runs after every successful
-`PollFetches`. The β posture commits *after the fetch*, not
-*after the dispatch* — at-most-once on a crash mid-dispatch.
-Per-attempt re-read of offset ranges per ADR-0024 is a
-deferred future slice that will replace β commit with a
-commit-after-dispatch flow keyed on the trigger's successful
-return.
+the runner is the sole commit authority per
+[ADR-0058](../../../../docs/adr/0058-record-runner-commit-after-dispatch.md)
+§Clause 3. `PollFetches` returns records without committing.
+After each closed window's `dispatcher.Run` returns nil, the
+runner calls `consumer.Commit(ctx, fetched)` with the
+window's records (per ADR-0058 §Clause 2). The Kafka-side
+`Commit` implementation translates each `FetchedRecord` to a
+`*kgo.Record` carrying topic/partition/offset, calls
+`client.MarkCommitRecords` (the client tracks the high-water
+mark per partition internally), then
+`client.CommitMarkedOffsets` (flushes to the broker
+synchronously). On dispatch failure, the commit is skipped;
+the records remain uncommitted in the broker; on engine
+restart, they re-flow per ADR-0024's deterministic windowing,
+and ADR-0003 §2's canonical view (`dq_executions_current`
+collapses attempts per `execution_id` to the latest
+`recorded_at`) absorbs any spurious second attempt at the
+consumer-visible layer. Commit failures are warning-logged
+and do not propagate; the next successful dispatch in the
+same partition commits the uncommitted records transitively
+via high-water-mark monotonicity.
 
 **Citation.**
-`engine/internal/runner/kafka_consumer.go:62-67` (the
-`kgo.Opt` block);
-`engine/internal/runner/kafka_consumer.go:94-102` (the
-`CommitUncommittedOffsets` call + β-posture comment);
-`engine/internal/runner/kafka_consumer.go:18-22`
-(`FranzConsumer` struct doc).
+`engine/internal/runner/kafka_consumer.go:60-67` (the
+`kgo.Opt` block including `DisableAutoCommit`);
+`engine/internal/runner/kafka_consumer.go:107-124`
+(`FranzConsumer.Commit` — `MarkCommitRecords` +
+`CommitMarkedOffsets`);
+`engine/internal/runner/kafka_consumer.go:13-26`
+(`FranzConsumer` struct doc naming the runner-as-sole-commit-
+authority posture);
+`engine/internal/runner/record_runner.go:350-378`
+(`closeAndDispatch` — per-trigger commit keyed on
+`dispatcher.Run` success).
 
 ```go
 opts := []kgo.Opt{
@@ -70,16 +89,20 @@ opts := []kgo.Opt{
 }
 ```
 
-**Rationale.** The β posture trades durability for
-simplicity: a crash mid-dispatch loses the current window's
-work because the offsets were already committed at fetch
-time. ADR-0024's per-attempt re-read is the durability fix,
-and it shifts the commit to *after* the dispatcher returns
-nil. The β posture exists explicitly so the future slice has
-a single call site to move; the comment at `kafka_consumer.go:18-22`
-names the replacement target so a reader knows the current
-state is a deliberate stage on a longer arc, not the final
-answer.
+**Rationale.** Commit-after-dispatch keyed on
+`dispatcher.Run` success delivers at-least-once semantics
+across all crash positions, not only mid-dispatch. ADR-0024's
+deterministic windowing replays the same window from the
+re-flowed records; ADR-0002's deterministic `execution_id`
+formula produces the same identifier; ADR-0003 §1's append-
+only writes preserve both attempts in the base table under
+the shared `execution_id` (with distinct `attempt_id` per
+§4), and ADR-0003 §2's canonical view collapses them to one
+row for downstream consumers. The runner-driven commit
+boundary makes the dispatcher.Run nil return the load-bearing
+event; pushing the commit responsibility into the consumer
+would couple the consumer to dispatch outcomes it does not
+otherwise observe.
 
 ---
 
@@ -338,7 +361,7 @@ Do not introduce them.
 
 - **WHAT-style comments inside record-mode code.** Comments
   explain WHY, typically citing ADR-0024 (window-close
-  semantics), ADR-0021 (mode primitive), or naming the
-  future-slice replacement of β commit. The
+  semantics), ADR-0021 (mode primitive), or ADR-0058 (the
+  runner-as-sole-commit-authority posture). The
   [`go-coding-standards`](../../go-coding-standards/SKILL.md)
   anti-patterns apply uniformly across the engine.

@@ -1,7 +1,7 @@
 <!-- path: .claude/skills/record-mode-conventions/SKILL.md -->
 ---
 name: record-mode-conventions
-description: Use when writing, reviewing, or extending record-mode / stream-processing code under engine/internal/runner/ (record_runner.go, kafka_consumer.go, check_evaluator.go) or the engine binary's record-mode boot translation (engine/cmd/dq-engine/main.go's buildRecordRunners). Encodes seven conventions S1–S7 the existing record-mode code carries: substrate-agnostic consumer boundary (RecordConsumer interface + FetchedRecord shape; franz-go mapping at the boundary); β commit semantics (DisableAutoCommit + manual CommitUncommittedOffsets after PollFetches; per-attempt re-read deferred per ADR-0024); translation-at-boot boundary (runner package free of dsl/spec; engine binary calls RuleSpec.ToCheckSpecs() at boot; guarded by reflect-based struct-mirror test in external test package); TriggerDispatcher interface for testability with compile-time assertion that *Runner satisfies it; watermark-driven window-close semantics per ADR-0024 with LateDroppedCount on the trigger; single-goroutine state machine with no internal locking; colocated CheckEvaluator test doubles. Apply when touching the record-mode runner, the franz-go consumer, the boot-time translation, or the inner evaluator boundary. Trigger phrases include "record runner", "record mode", "RecordRunner", "RecordSource", "kafka consumer", "FetchedRecord", "consumer group", "TriggerDispatcher", "window close", "watermark", "lateness tolerance", "β commit", "commit-after-fetch", "DisableAutoCommit", "CommitUncommittedOffsets", "boot translation", "ToCheckSpecs", "struct mirror".
+description: Use when writing, reviewing, or extending record-mode / stream-processing code under engine/internal/runner/ (record_runner.go, kafka_consumer.go, check_evaluator.go) or the engine binary's record-mode boot translation (engine/cmd/dq-engine/main.go's buildRecordRunners). Encodes seven conventions S1–S7 the existing record-mode code carries: substrate-agnostic consumer boundary (RecordConsumer interface + FetchedRecord shape; franz-go mapping at the boundary); commit-after-dispatch semantics (DisableAutoCommit + runner-driven per-trigger Commit keyed on dispatcher.Run success per ADR-0058; at-least-once with canonical-view collapse at the execution_id boundary); translation-at-boot boundary (runner package free of dsl/spec; engine binary calls RuleSpec.ToCheckSpecs() at boot; guarded by reflect-based struct-mirror test in external test package); TriggerDispatcher interface for testability with compile-time assertion that *Runner satisfies it; watermark-driven window-close semantics per ADR-0024 with LateDroppedCount on the trigger; single-goroutine state machine with no internal locking; colocated CheckEvaluator test doubles. Apply when touching the record-mode runner, the franz-go consumer, the boot-time translation, or the inner evaluator boundary. Trigger phrases include "record runner", "record mode", "RecordRunner", "RecordSource", "kafka consumer", "FetchedRecord", "consumer group", "TriggerDispatcher", "window close", "watermark", "lateness tolerance", "commit-after-dispatch", "DisableAutoCommit", "MarkCommitRecords", "CommitMarkedOffsets", "at-least-once", "boot translation", "ToCheckSpecs", "struct mirror".
 ---
 
 # `record-mode-conventions`
@@ -33,24 +33,37 @@ FetchedRecord` at the boundary.
 ```go
 type RecordConsumer interface {
     PollFetches(ctx context.Context) ([]FetchedRecord, error)
+    Commit(ctx context.Context, records []FetchedRecord) error
     Close()
 }
 ```
 
-`engine/internal/runner/record_runner.go:31-47` (interface +
-doc comment); `engine/internal/runner/record_runner.go:49-58`
-(`FetchedRecord` shape); `engine/internal/runner/kafka_consumer.go:13-25`
-(franz-go-backed implementation); `engine/internal/runner/kafka_consumer.go:85-92`
-(per-record mapping inside `EachRecord`).
+`engine/internal/runner/record_runner.go:31-58` (interface +
+doc comment naming the runner-as-sole-commit-authority
+boundary per ADR-0058); `engine/internal/runner/record_runner.go:62-71`
+(`FetchedRecord` shape); `engine/internal/runner/kafka_consumer.go:13-27`
+(franz-go-backed implementation);
+`engine/internal/runner/kafka_consumer.go:87-93` (per-record
+mapping inside `EachRecord`).
 
-## S2. β commit semantics
+## S2. Commit-after-dispatch semantics
 
-`DisableAutoCommit()` is set on the franz-go client;
-`CommitUncommittedOffsets` runs after every successful
-`PollFetches`. β commits after the fetch, not after the
-dispatch — at-most-once on a crash mid-dispatch. Per-attempt
-re-read of offset ranges per ADR-0024 is a future slice that
-will replace β commit with commit-after-dispatch.
+`DisableAutoCommit()` is set on the franz-go client; the
+runner is the sole commit authority per
+[ADR-0058](../../../docs/adr/0058-record-runner-commit-after-dispatch.md)
+§Clause 3. `PollFetches` returns records without committing.
+After each closed window's `dispatcher.Run` returns nil, the
+runner calls `consumer.Commit(ctx, fetched)` with the window's
+records (per ADR-0058 §Clause 2). The Kafka-side `Commit`
+implementation translates each `FetchedRecord` to a
+`*kgo.Record`, calls `MarkCommitRecords` (tracks the high-water
+mark per partition internally), then `CommitMarkedOffsets`
+(flushes to the broker synchronously). On dispatch failure, the
+commit is skipped; the records remain uncommitted in the
+broker; on engine restart, they re-flow per ADR-0024's
+deterministic windowing and ADR-0003 §2's canonical view
+(`dq_executions_current`) collapses any spurious second
+attempt to the consumer-visible single row.
 
 ```go
 opts := []kgo.Opt{
@@ -61,13 +74,15 @@ opts := []kgo.Opt{
 }
 ```
 
-`engine/internal/runner/kafka_consumer.go:62-67` (the
+`engine/internal/runner/kafka_consumer.go:60-67` (the
 `kgo.Opt` block including `DisableAutoCommit`);
-`engine/internal/runner/kafka_consumer.go:94-102` (the
-`CommitUncommittedOffsets` call + β-posture comment naming the
-future replacement); `engine/internal/runner/kafka_consumer.go:18-22`
-(`FranzConsumer` struct doc naming β commits-after-fetch and
-the future slice).
+`engine/internal/runner/kafka_consumer.go:107-124` (the
+`FranzConsumer.Commit` method — `MarkCommitRecords` +
+`CommitMarkedOffsets`); `engine/internal/runner/kafka_consumer.go:13-26`
+(`FranzConsumer` struct doc naming the runner-as-sole-commit-
+authority posture); `engine/internal/runner/record_runner.go:350-378`
+(`closeAndDispatch` — per-trigger commit keyed on
+`dispatcher.Run` success; commit failure warning-logged + skipped).
 
 ## S3. Translation-at-boot boundary
 
