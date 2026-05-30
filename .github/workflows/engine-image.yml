@@ -2,18 +2,28 @@
 #
 # Builds the dq-engine container image on every pull request and
 # every push to main per ADR-0042 §"Clause 1" + B2-28's slice, and
-# publishes it to Docker Hub on every `engine-v*` git tag push per
-# ADR-0054 §"Clause 3 — Push-step behavioral contract" (the
-# amendment to ADR-0042 that closed Consequence 10 §OQ-1 by
-# committing Docker Hub `fabiocaffarello` as the registry).
+# (subject to the dual-gate below) publishes it to Docker Hub on
+# every `engine-v*` git tag push per ADR-0054 §"Clause 3 —
+# Push-step behavioral contract" (the amendment to ADR-0042 that
+# closed Consequence 10 §OQ-1 by committing Docker Hub
+# `fabiocaffarello` as the registry).
 #
-# The build + inspect steps run on every PR + main push and do not
-# consume any secret — they validate the Dockerfile + Make target
-# end-to-end. The push step is conditional on `engine-v*` tag
-# events; it consumes two operator-provisioned repository secrets
-# (DOCKERHUB_USERNAME, DOCKERHUB_TOKEN) per ADR-0054 Clause 5.
+# Two-stage activation matches the sandbox.yml /
+# lint-reachability.yml workflow-discipline pattern:
 #
-# Required-check candidate for branch protection.
+# 1. Build + inspect — runs on every PR + main push + engine-v*
+#    tag push. Consumes no secret. The Required-check candidate
+#    for branch protection is this stage (its existence pre-dates
+#    ADR-0054).
+# 2. Publish — runs only when the push event is an `engine-v*`
+#    tag AND the operator has opened the publish gate. The gate
+#    is opened by either setting `vars.ENGINE_IMAGE_PUBLISH_ENABLED`
+#    to `'true'` or by provisioning `secrets.DOCKERHUB_TOKEN`. With
+#    neither set, the publish steps silently skip — a notice step
+#    surfaces the skip in the run summary so the gate state is
+#    visible to the operator. **Publish is explicitly NOT part of
+#    the default PR gate** and is not a required check on branch
+#    protection without explicit operator sign-off.
 
 name: engine-image
 
@@ -70,24 +80,48 @@ jobs:
           # free of git-describe duplication.
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
-      # --- Push step (ADR-0054 §"Clause 3") ---------------------
-      # Activates only on `engine-v*` tag events per Clause 3 item
-      # 3 (tagged-build-only activation). PRs and main pushes
-      # remain build-only; their inspect step above already
-      # validated the image shape.
+      # --- Publish stage (ADR-0054 §"Clause 3" + dual-gate) ----
+      # Dual-gate (matches sandbox.yml + lint-reachability.yml
+      # discipline): activates only when (a) the push event is an
+      # `engine-v*` tag (Clause 3 item 3 — tagged-build-only) AND
+      # (b) the publish gate is open — either
+      # `vars.ENGINE_IMAGE_PUBLISH_ENABLED == 'true'` or
+      # `secrets.DOCKERHUB_TOKEN` is non-empty. With neither set,
+      # the publish steps silently skip; the notice step below
+      # surfaces the skip in the run summary so the gate state is
+      # visible. The build + inspect stage above is unaffected by
+      # this gate.
+
+      - name: Publish gate — notice when open without credentials
+        if: github.ref_type == 'tag' && startsWith(github.ref_name, 'engine-v') && !(vars.ENGINE_IMAGE_PUBLISH_ENABLED == 'true' || secrets.DOCKERHUB_TOKEN != '')
+        run: |
+          {
+            echo "## ADR-0054 publish stage — skipped"
+            echo ""
+            echo "An \`engine-v*\` tag was pushed, but the publish gate is closed."
+            echo ""
+            echo "To open the gate, either:"
+            echo ""
+            echo "- set repository variable \`ENGINE_IMAGE_PUBLISH_ENABLED\` to \`true\`, or"
+            echo "- provision repository secret \`DOCKERHUB_TOKEN\` (and \`DOCKERHUB_USERNAME\`)."
+            echo ""
+            echo "Build + inspect succeeded; no image was published. This skip is by design — see ADR-0054 Notes \"Publish-gate dual-authorization\"."
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Log in to Docker Hub
-        if: github.ref_type == 'tag' && startsWith(github.ref_name, 'engine-v')
+        if: github.ref_type == 'tag' && startsWith(github.ref_name, 'engine-v') && (vars.ENGINE_IMAGE_PUBLISH_ENABLED == 'true' || secrets.DOCKERHUB_TOKEN != '')
         uses: docker/login-action@v3
         with:
           # ADR-0054 Clause 5 + Notes "CI secret names" pin these
-          # two secret names. Operator provisions both directly in
-          # the repository's secrets store; missing secrets fail
-          # this step loudly (no silent skip).
+          # two secret names. The operator provisions both in the
+          # repository secrets store; missing username while the
+          # token is set (or vice versa) fails this step loudly so
+          # the misconfiguration is visible.
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Push dq-engine image to Docker Hub
-        if: github.ref_type == 'tag' && startsWith(github.ref_name, 'engine-v')
+        if: github.ref_type == 'tag' && startsWith(github.ref_name, 'engine-v') && (vars.ENGINE_IMAGE_PUBLISH_ENABLED == 'true' || secrets.DOCKERHUB_TOKEN != '')
         run: |
           set -euo pipefail
           tag="${{ steps.inspect.outputs.tag }}"

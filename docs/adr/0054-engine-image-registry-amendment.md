@@ -449,6 +449,19 @@ condition surfaces.
 
 ### Why the base manifest does not gate on secret presence
 
+> **Amended 2026-05-30 (post-acceptance, operator-
+> authorized).** This block originally committed a
+> "fail-loudly-on-missing-secrets" posture for the publish
+> step. A subsequent operator-authorized override aligned
+> the publish step's gating with the established
+> `sandbox.yml` / `lint-reachability.yml` workflow
+> discipline — silent skip when the publish gate is
+> closed, with a visible notice block in the run summary.
+> The original posture below is preserved for the audit
+> trail; the **current** posture is recorded in the
+> sibling block "Publish-gate dual-authorization
+> (post-acceptance override)" below.
+
 The `.github/workflows/engine-image.yml` push step is
 **conditional on the `engine-v*` tag event**, not on the
 secrets' presence. If the secrets are missing when an
@@ -470,3 +483,55 @@ pre-amendment state. This means:
 This posture is committed by Clause 3 item 1's
 "authenticated push" language and Clause 5's "fails
 loudly" framing.
+
+### Publish-gate dual-authorization (post-acceptance override)
+
+A subsequent operator-authorized override aligned the
+publish step's gating with the established
+[`sandbox.yml`](../../.github/workflows/sandbox.yml) /
+[`lint-reachability.yml`](../../.github/workflows/lint-reachability.yml)
+workflow discipline. The publish steps in
+`.github/workflows/engine-image.yml` are now dual-gated:
+they activate only when **both** conditions hold:
+
+1. **The push event is an `engine-v*` tag.** (Unchanged
+   from Clause 3 item 3.)
+2. **The publish gate is open** — either
+   `vars.ENGINE_IMAGE_PUBLISH_ENABLED` is set to
+   `'true'` *or* `secrets.DOCKERHUB_TOKEN` is non-empty.
+
+If condition 1 holds but condition 2 does not, the
+publish steps silently skip and a notice step emits a
+"## ADR-0054 publish stage — skipped" block to
+`$GITHUB_STEP_SUMMARY` explaining the gate is closed and
+naming the two ways to open it. The build + inspect
+stage continues to run on every PR + main push +
+engine-v* tag push regardless of gate state.
+
+Rationale for the override: the original "fail loudly"
+posture surfaces missing secrets as a workflow failure
+on the first `engine-v*` tag push, which couples the
+release-cut moment (tag push) to the operator's
+secret-provisioning state. The dual-gate decouples the
+two — an operator can cut release tags without
+provisioning publish credentials yet, and the publish
+moment is a separate, explicit operator opt-in (set the
+variable or provision the token). This matches how
+`sandbox.yml` and `lint-reachability.yml` already gate
+their respective workloads.
+
+The override is documented here on the durable audit
+surface rather than re-promoted via a new amendment ADR
+because: (a) the change is a Notes posture clarification,
+not a Decision clause change; (b) Clause 3's behavioral
+contract (authenticated push of a tagged build to the
+committed path) is unchanged — only the *activation
+criterion* tightens; (c) the change aligns with prior
+workflow-discipline patterns committed by sandbox.yml /
+lint-reachability.yml, not new ground. A future
+substantive amendment that changes Clause 3 itself would
+follow the standalone-superseding-ADR pattern.
+
+The sibling block above ("Why the base manifest does not
+gate on secret presence") is preserved verbatim with an
+amendment banner for the audit trail.

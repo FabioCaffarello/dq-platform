@@ -152,7 +152,7 @@ demo-p6: ## End-to-end Phase 6 demo (W3-P6d). Closes the W2-3 C-W2-3.4 invariant
 # field-name typos (e.g. `replicass:`), deprecated API versions,
 # and schema mismatches against the Kubernetes API surface fail
 # loudly without introducing a new top-level CI lane.
-validate-deploy: ## Render every overlay via `kubectl kustomize` + validate via `kubeconform -strict` (B2-8 CC2/CC7 + ADR-0042 Clause 4).
+validate-deploy: ## Render every overlay via `kubectl kustomize` + validate via `kubeconform -strict` + assert no `:placeholder` image markers (B2-8 CC2/CC7 + ADR-0042 Clause 4 + ADR-0054 Clause 4 closes OQ-1).
 	@if ! command -v kubeconform >/dev/null 2>&1; then \
 		echo "validate-deploy: kubeconform not on PATH" >&2; \
 		echo "  install via 'brew install kubeconform' (macOS), or download a release from https://github.com/yannh/kubeconform/releases" >&2; \
@@ -161,6 +161,12 @@ validate-deploy: ## Render every overlay via `kubectl kustomize` + validate via 
 	@set -e; \
 	for env in local qa prod; do \
 		echo "→ validating deploy/overlays/$$env/"; \
-		kubectl kustomize deploy/overlays/$$env/ \
-			| kubeconform -strict -summary -; \
+		rendered="$$(kubectl kustomize deploy/overlays/$$env/)"; \
+		printf '%s\n' "$$rendered" | kubeconform -strict -summary -; \
+		if printf '%s\n' "$$rendered" | grep -nF ':placeholder' >/dev/null; then \
+			echo "validate-deploy: overlay $$env contains a ':placeholder' image marker — forbidden by ADR-0054 (closes ADR-0042 OQ-1: the registry-prefixed shape replaces all placeholders)" >&2; \
+			echo "matching lines:" >&2; \
+			printf '%s\n' "$$rendered" | grep -nF ':placeholder' >&2; \
+			exit 1; \
+		fi; \
 	done
