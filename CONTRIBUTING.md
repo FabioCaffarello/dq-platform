@@ -372,6 +372,19 @@ Short summary:
     reviewer approves, merge via the GitHub UI. **The agent
     never calls `gh pr merge`.**
 
+    Under the single-user model committed by
+    [ADR-0057](docs/adr/0057-single-user-codeowners-amendment.md),
+    the **[H]** reviewer IS the operator-as-person —
+    author-equals-reviewer per
+    [ADR-0051](docs/adr/0051-claude-tooling-postwave3.md)
+    §Consequence 7. The merge act in the GitHub UI is the
+    ratification per the §"Operator-side responsibilities"
+    section below. The `.claude/settings.json` deny block on
+    `Bash(gh pr merge *)` is preserved as the harness-side
+    mechanical guard backing this clause (deny block guards
+    the agent, not the review model — independent surfaces
+    per the OQ-1 ratification recorded with ADR-0057).
+
 ### Branch naming for post-Wave-3 sessions
 
 The Wave-3 convention `wave-3/<phase>-<topic-slug>` (Flow 4)

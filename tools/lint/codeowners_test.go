@@ -156,8 +156,15 @@ func TestLoadCodeOwners_PathWithoutReviewer_Skipped(t *testing.T) {
 
 func TestLoadCodeOwners_RealRepoCODEOWNERS(t *testing.T) {
 	// Golden test against the repository's own .github/CODEOWNERS.
-	// It must parse without error and contain the three groups
-	// committed by ADR-0015 §2.
+	// It must parse without error and contain the single owner
+	// committed by ADR-0057 (single-user CODEOWNERS amendment to
+	// ADR-0015 §2 — group inventory collapsed from three
+	// `@PLACEHOLDER-org/...` placeholders to one personal-user
+	// owner @FabioCaffarello when the org-creation session was
+	// declared structurally out-of-scope). The parser's
+	// reviewer-token regex per ADR-0037 §"Parser scope" item 4
+	// already accepts the `@<user>` shape — no parser change was
+	// needed for the amendment per ADR-0057 §Clause 4.
 	repoPath, err := filepath.Abs("../../.github/CODEOWNERS")
 	if err != nil {
 		t.Fatalf("repo CODEOWNERS path: %v", err)
@@ -166,14 +173,8 @@ func TestLoadCodeOwners_RealRepoCODEOWNERS(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadCodeOwners(real): %v", err)
 	}
-	for _, wantGroup := range []string{
-		"@PLACEHOLDER-org/platform-team",
-		"@PLACEHOLDER-org/sre",
-		"@PLACEHOLDER-org/rules-authors",
-	} {
-		if !groups.Contains(wantGroup) {
-			t.Errorf("real CODEOWNERS missing %q; got %v", wantGroup, groups.Slice())
-		}
+	if !groups.Contains("@FabioCaffarello") {
+		t.Errorf("real CODEOWNERS missing %q; got %v", "@FabioCaffarello", groups.Slice())
 	}
 	if groups.Contains("*") {
 		t.Error("real CODEOWNERS Contains(`*`) = true; default-path token must be discarded")

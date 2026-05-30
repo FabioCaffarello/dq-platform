@@ -9,7 +9,7 @@
 schema_version: 2
 entities:
   customer:
-    owner: "@PLACEHOLDER-org/rules-authors"
+    owner: "@FabioCaffarello"
     mode: set
     description: First onboarded entity end-to-end (W3-P6d).
     channels:
@@ -18,7 +18,7 @@ entities:
       operational:
         - email:oncall@example.com
   orders_stream:
-    owner: "@PLACEHOLDER-org/rules-authors"
+    owner: "@FabioCaffarello"
     mode: record
     description: First record-mode entity (Wave-S sub-slice β).
     channels:

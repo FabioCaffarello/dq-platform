@@ -2,70 +2,84 @@
 #
 # Authoritative review-ownership map for dq-platform.
 # Format: GitHub CODEOWNERS — last matching rule wins.
-# Group identifiers are placeholders pending ADR-0008 host-primitive
-# follow-up; substitution lands in a separate operational session.
-# Path-rule shape committed by B1-9 (resolved-study 2026-05-22).
+# Path-rule shape committed by ADR-0015 (B1-9, 2026-05-22) and
+# preserved structurally by ADR-0057 (single-user CODEOWNERS
+# amendment, 2026-05-30). Under the single-user model committed
+# by ADR-0057, every rule names @FabioCaffarello (personal user
+# that owns the repository); the prior @PLACEHOLDER-org/...
+# group identifiers collapsed when the org-creation session was
+# declared structurally out-of-scope.
+#
+# Deployment precondition per ADR-0057 §Consequence 7: the
+# GitHub branch-protection rule "Require review from CODEOWNERS"
+# MUST be off (or self-approval must be enabled), because the
+# only listed owner is also every PR's author.
+#
+# The path-rule structure (general-to-specific ordering;
+# explicit-line duplications for /.github/workflows/,
+# /docs/adr/, etc.) is preserved as future-org-migration
+# substrate per ADR-0057 §Consequence 10.
 
 # --- Default ------------------------------------------------------
-*                                       @PLACEHOLDER-org/platform-team
+*                                       @FabioCaffarello
 
 # --- Engine workspace ---------------------------------------------
-/engine/                                @PLACEHOLDER-org/platform-team
+/engine/                                @FabioCaffarello
 
 # --- Tools workspace ----------------------------------------------
-/tools/                                 @PLACEHOLDER-org/platform-team
+/tools/                                 @FabioCaffarello
 
 # --- Rules workspace (asymmetric per ADR-0001 §C3) ----------------
 # Default: domain teams own per-entity rule YAMLs.
-/rules/                                 @PLACEHOLDER-org/rules-authors
+/rules/                                 @FabioCaffarello
 
 # Override: schema mirror is platform-team only (byte-equal copy of
 # engine/internal/dsl/schema/, never hand-edited per ADR-0001 §2).
-/rules/_schema/                         @PLACEHOLDER-org/platform-team
+/rules/_schema/                         @FabioCaffarello
 
 # Override: owner metadata is platform-team only (ADR-0006 §9 second
 # line of defense — "no alert without owner" enforcement).
-/rules/_owners.yaml                     @PLACEHOLDER-org/platform-team
-/rules/_owners.schema.json              @PLACEHOLDER-org/platform-team
+/rules/_owners.yaml                     @FabioCaffarello
+/rules/_owners.schema.json              @FabioCaffarello
 
 # --- Deploy workspace (per-environment depth per B1-4 MD-3) -------
-/deploy/                                @PLACEHOLDER-org/platform-team
-/deploy/base/                           @PLACEHOLDER-org/platform-team
-/deploy/overlays/local/                 @PLACEHOLDER-org/platform-team
-/deploy/overlays/qa/                    @PLACEHOLDER-org/platform-team @PLACEHOLDER-org/sre
-/deploy/overlays/prod/                  @PLACEHOLDER-org/platform-team @PLACEHOLDER-org/sre
+/deploy/                                @FabioCaffarello
+/deploy/base/                           @FabioCaffarello
+/deploy/overlays/local/                 @FabioCaffarello
+/deploy/overlays/qa/                    @FabioCaffarello
+/deploy/overlays/prod/                  @FabioCaffarello
 
 # --- Docs ---------------------------------------------------------
 # /docs/adr/ kept as an explicit line (same owner as /docs/) so a
 # future ADR-specific reviewer group can be slotted in without
 # editing /docs/.
-/docs/                                  @PLACEHOLDER-org/platform-team
-/docs/adr/                              @PLACEHOLDER-org/platform-team
+/docs/                                  @FabioCaffarello
+/docs/adr/                              @FabioCaffarello
 
 # --- Multi-agent contract (ADR-0009 §1–§3) ------------------------
 # Single authorship for CLAUDE.md (source) and the two pointers,
 # so /sync-agents drift cannot be approved without the canonical
 # contract being touched.
-/CLAUDE.md                              @PLACEHOLDER-org/platform-team
-/AGENTS.md                              @PLACEHOLDER-org/platform-team
-/.claude/                               @PLACEHOLDER-org/platform-team
-/.codex/                                @PLACEHOLDER-org/platform-team
+/CLAUDE.md                              @FabioCaffarello
+/AGENTS.md                              @FabioCaffarello
+/.claude/                               @FabioCaffarello
+/.codex/                                @FabioCaffarello
 
 # --- CI + branch protection (ADR-0001 §C9, ADR-0008) --------------
 # /.github/workflows/ and /.github/CODEOWNERS kept as explicit
 # overrides (same owner as /.github/) so a future workflows-only or
 # CODEOWNERS-only reviewer group can be slotted in without editing
 # /.github/.
-/.github/                               @PLACEHOLDER-org/platform-team
-/.github/workflows/                     @PLACEHOLDER-org/platform-team
-/.github/CODEOWNERS                     @PLACEHOLDER-org/platform-team
+/.github/                               @FabioCaffarello
+/.github/workflows/                     @FabioCaffarello
+/.github/CODEOWNERS                     @FabioCaffarello
 
 # --- Root build/runtime config ------------------------------------
-/Makefile                               @PLACEHOLDER-org/platform-team
-/go.work                                @PLACEHOLDER-org/platform-team
-/go.work.sum                            @PLACEHOLDER-org/platform-team
-/docker-compose.yml                     @PLACEHOLDER-org/platform-team
-/scripts/                               @PLACEHOLDER-org/platform-team
+/Makefile                               @FabioCaffarello
+/go.work                                @FabioCaffarello
+/go.work.sum                            @FabioCaffarello
+/docker-compose.yml                     @FabioCaffarello
+/scripts/                               @FabioCaffarello
 
 # --- Studies (reasoning history, R8) ------------------------------
-/studies/                               @PLACEHOLDER-org/platform-team
+/studies/                               @FabioCaffarello

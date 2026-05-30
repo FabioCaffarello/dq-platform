@@ -2,7 +2,7 @@
 
 # ADR-0015 — CODEOWNERS Review-Ownership Map
 
-- **Status:** accepted
+- **Status:** accepted; **amended by [ADR-0057](./0057-single-user-codeowners-amendment.md)** (group inventory collapses to single owner `@FabioCaffarello` under the single-user model; substitution protocol re-targeted to land as the implementation slice in the amendment's PR rather than in a never-occurring org-creation session; asymmetric-review-as-mechanism framing in §Consequences #1 and #5 becomes moot — no second author exists for asymmetric review to operate over)
 - **Date:** 2026-05-23
 
 ---
