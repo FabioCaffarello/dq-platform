@@ -11,11 +11,12 @@
   for an amendment-class outcome — same convention as
   [ADR-0050](../../docs/adr/0050-v1-retirement-engine-release.md)'s
   B2-20 v1-retirement amendment).
-- **Status:** draft (B2-36 amendment, session 1;
-  post-round-2-critique; two-round cap reached per
+- **Status:** resolved-study (B2-36 amendment; closed
+  2026-05-30 at the merge of PR #107, merge commit
+  `0a622b3`; two-round critique cap reached per
   [`.claude/playbooks/wave-1-session-loop.md`](../../.claude/playbooks/wave-1-session-loop.md)
-  step 7; ready to move to `resolved-study` after
-  decision-log row update lands).
+  step 7; §(a) outcome verified as Amendment per the
+  Metadata block's eligibility check — no D0 borderlines).
 - **Last updated:** 2026-05-30.
 - **Upstream resolved:**
   [ADR-0042](../../docs/adr/0042-release-engineering-invariants.md)

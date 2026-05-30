@@ -14,9 +14,13 @@
 # ADR-0014 §4. The container port 8080 matches
 # `env.Local.HTTPAddr` from W3-P7a's typed env package.
 #
-# Image is intentionally a placeholder; the overlay session (or
-# a future release-engineering session per B2-3) sets the real
-# registry / tag.
+# Image references the Docker Hub registry per ADR-0054
+# (amends ADR-0042 Clause 1's image-name row + closes
+# Consequence 10 §OQ-1). The image is pushed by the
+# `engine-image` workflow on every `engine-v*` git tag event;
+# until the first such tag pushes, the tag below references a
+# not-yet-existing image — same structural posture the
+# previous `:placeholder` state carried, with the correct path.
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -40,19 +44,19 @@ spec:
       serviceAccountName: dq-engine
       containers:
         - name: dq-engine
-          # PLACEHOLDER for the registry prefix only. The Dockerfile
-          # itself ships under B2-28 + ADR-0042 Clause 1; the
-          # `make build-engine-image` target produces
-          # `dq-engine:<tag>` locally. Registry choice (i.e., the
-          # prefix that turns `dq-engine:<tag>` into
-          # `<registry>/dq-engine:<tag>`) is still TBD per
-          # ADR-0042 OQ-1 — overlays will substitute the registry
-          # in the same operational session that resolves the
-          # ADR-0008 host-primitive follow-up. Until then,
-          # `kubectl apply` resolves to ImagePullBackOff against
-          # this placeholder; the deployment artifact is
-          # structurally complete.
-          image: dq-engine:placeholder
+          # Published image per ADR-0054 Clause 2's two-part
+          # image-name shape: local builds keep `dq-engine:<tag>`
+          # (ADR-0042 Clause 1's unchanged row); the registry-
+          # prefixed shape below is what the engine-image workflow
+          # pushes and what `kubectl apply` resolves. The `0.1.0`
+          # tag matches the current `EngineVersion` baseline in
+          # engine/internal/env/{local,qa,prod}.go per ADR-0054
+          # Notes "Why 0.1.0 as the base manifest tag". Overlays
+          # at deploy/overlays/{local,qa,prod}/ may patch the
+          # reference (pin by digest, override the tag per env)
+          # per ADR-0042 Clause 4 + ADR-0019 Kustomize overlay
+          # framing.
+          image: docker.io/fabiocaffarello/dq-engine:0.1.0
           # IfNotPresent suits local dev with a locally-built
           # image. Overlays for qa/prod set this to "Always" or
           # pin by digest for the production posture.
