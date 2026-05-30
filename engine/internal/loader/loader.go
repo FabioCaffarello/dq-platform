@@ -41,6 +41,19 @@ const (
 // load.
 var ErrHashMismatch = errors.New("manifest body hash does not match pointer hash")
 
+// ErrBodyFetch wraps the failure mode where the content-addressed
+// manifest body's ReadObject call fails. Carried as a sentinel so
+// ADR-0055 §Clause 5's classifier maps the loader's error returns
+// to the `body_fetch` error_class label via errors.Is rather than
+// by matching wrapped-error message text.
+var ErrBodyFetch = errors.New("manifest body fetch failed")
+
+// ErrParseError wraps the failure mode where the fetched manifest
+// body fails JSON unmarshal. Sentinel for the same reason
+// ErrBodyFetch is — keeps ADR-0055 §Clause 5's error_class binding
+// independent of the wrapping error message text.
+var ErrParseError = errors.New("manifest body parse failed")
+
 // Config configures a Loader. EngineVersion and SupportedSchemaVersions
 // are required; the *Key / *Prefix fields default to ADR-0005's
 // committed object-store layout if empty.
@@ -196,29 +209,25 @@ func (l *Loader) Refresh(ctx context.Context, currentHash string) (*Manifest, bo
 
 // classifyFetchAndVerifyError maps fetchAndVerify's wrapped error
 // to one of ADR-0055 §Clause 5's error_class enum values. The
-// wrapped error chain distinguishes body fetch from hash mismatch
-// (errors.Is on ErrHashMismatch) from parse error from compat-
-// contract failure; anything else is reported as
-// compatibility_contract by elimination so the metric series
-// stays defined.
+// binding uses sentinel errors + errors.Is (not error-message
+// string matching) so a wording change to any fmt.Errorf in the
+// loader's body-fetch / parse paths does not silently drift the
+// metric label. ErrHashMismatch / ErrBodyFetch / ErrParseError are
+// the three sentinels the body-path returns; everything else flows
+// through compatibility_contract by elimination (runContractChecks
+// errors, stripSha256Prefix on the body path, ADR-0001 / PAT-1
+// fail-fast cases) so the metric series stays defined.
 func classifyFetchAndVerifyError(err error) string {
-	if err == nil {
-		return errorClassCompatibilityContract
-	}
-	if errors.Is(err, ErrHashMismatch) {
-		return errorClassHashMismatch
-	}
-	msg := err.Error()
 	switch {
-	case strings.HasPrefix(msg, "fetch manifest body "):
+	case err == nil:
+		return errorClassCompatibilityContract
+	case errors.Is(err, ErrHashMismatch):
+		return errorClassHashMismatch
+	case errors.Is(err, ErrBodyFetch):
 		return errorClassBodyFetch
-	case strings.HasPrefix(msg, "parse manifest JSON: "):
+	case errors.Is(err, ErrParseError):
 		return errorClassParseError
 	default:
-		// runContractChecks errors, stripSha256Prefix on the body
-		// path, and any other compat-contract failure mode flow
-		// through here. ADR-0001 / PAT-1 fail-fast checks count as
-		// compatibility_contract per ADR-0055 §Clause 5.
 		return errorClassCompatibilityContract
 	}
 }
@@ -249,7 +258,7 @@ func (l *Loader) fetchAndVerify(ctx context.Context, pointer *Pointer) (*Manifes
 	key := l.bodyPrefix + "sha256-" + hexStr + ".json"
 	raw, err := l.store.ReadObject(ctx, key)
 	if err != nil {
-		return nil, fmt.Errorf("fetch manifest body %s: %w", key, err)
+		return nil, fmt.Errorf("%w: %s: %w", ErrBodyFetch, key, err)
 	}
 
 	sum := sha256.Sum256(raw)
@@ -261,7 +270,7 @@ func (l *Loader) fetchAndVerify(ctx context.Context, pointer *Pointer) (*Manifes
 
 	var m Manifest
 	if err := json.Unmarshal(raw, &m); err != nil {
-		return nil, fmt.Errorf("parse manifest JSON: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrParseError, err)
 	}
 
 	if err := runContractChecks(&m, l.engineVersion, l.supportedMV, l.supportedSV); err != nil {

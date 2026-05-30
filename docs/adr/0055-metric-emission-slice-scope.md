@@ -76,8 +76,10 @@ library is the canonical Go producer of the Prometheus exposition
 format the existing dashboard and scrape stack already consume
 (per ADR-0045 + B2-33). An OpenTelemetry-exporter alternative
 configured for Prometheus output was considered and rejected —
-the additional SDK indirection layer is YAGNI against the
-current scope (P1, P2, P5 favor the simpler direct producer).
+the additional SDK indirection layer is speculative against the
+current scope (no consumer of this slice asks for OTLP push or
+multi-exporter routing today; P1, P2, P5 favor the simpler
+direct producer).
 
 Future OTLP-push migration remains available as a separate
 decision if concrete demand surfaces; this ADR does not foreclose
@@ -182,9 +184,21 @@ values above are **new contribution requiring review** per R5
 here for the first time. Future loader failure modes extend the
 enum additively per ADR-0039's evolution rules.
 
-`Loader.Load` (startup-mode) does not emit; the engine exits
-non-zero on startup failure per ADR-0007 §1, so the metric
-would never be scraped before the process dies.
+The binding from `Loader.Refresh`'s error returns to the
+`error_class` label is by **sentinel errors + `errors.Is`**, not
+by matching wrapped-error message text. The loader exports three
+sentinels (`ErrHashMismatch`, `ErrBodyFetch`, `ErrParseError`);
+the classifier dispatches on `errors.Is` against each, and
+everything else routes to `compatibility_contract` by
+elimination. The sentinel discipline keeps the binding resilient
+to wording changes in any of the loader's `fmt.Errorf` wrapping
+sites — refactoring an error message does not drift the metric
+label.
+
+`Loader.Load` (startup-mode) does not emit. Startup failures are
+unconditionally fatal per ADR-0007 §1; the existing log + exit
+channels carry the operational signal, and a startup-emission
+would not survive long enough to be useful.
 
 ### Clause 6 — Cardinality posture preserved
 
@@ -248,6 +262,11 @@ substrate fields ADR-0039 already commits.
    `parse_error`, `compatibility_contract`) cover ADR-0007 §1's
    enumerated failure surface. Future loader failure modes
    extend the enum additively per ADR-0039 §"Evolution rules".
+   The label binding uses sentinel errors + `errors.Is` (the
+   loader exports `ErrHashMismatch`, `ErrBodyFetch`,
+   `ErrParseError`); the binding is not coupled to any
+   `fmt.Errorf` message text, so wording changes in the loader's
+   error returns cannot silently drift the metric label.
 
 8. **`dq_bytes_scanned` reports zero when the
    `evidence_summary.bytes_scanned` sub-field is absent**
@@ -315,12 +334,16 @@ at-merge); the precedent stands for future B3-N entries to
 follow either path.
 
 **Critique rounds.** This ADR's Decision survived one
-`/critique` round before promotion; the originating B3-4 study
-also survived two `/critique` rounds (1 = 0 blocking / 3
-important / 5 minor; 2 = ratification trailer). The
-implementation code in this PR is self-verified against
-AC-W3-3 + AC-W3-7 per ADR-0052 §6.4 row 6 close-gates and
-ADR-0048 §"Skip" path for code-only `/critique` rounds.
+`/critique` round (0 blocking / 2 important / 5 minor; 2
+important applied — sentinel-based `error_class` binding noted
+in Clause 5 + Consequence 7, and Clause 1's rejection rationale
+rewritten without external-principle naming; 5 minor deferred
+under the two-round cap). The originating B3-4 study survived
+two `/critique` rounds (1 = 0 blocking / 3 important / 5 minor;
+2 = ratification trailer). The implementation code in this PR
+is self-verified against AC-W3-3 + AC-W3-7 per ADR-0052 §6.4
+row 6 close-gates and ADR-0048 §"Skip" path for code-only
+`/critique` rounds.
 
 **No ADR-0033 reopening.** Panel 5 stays dark by design. The
 external-scheduler posture committed by ADR-0033 is preserved
