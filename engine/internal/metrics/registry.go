@@ -29,9 +29,10 @@ import (
 // One instance lives in the engine binary for its lifetime;
 // tests construct their own via New.
 type Registry struct {
-	reg    *prometheus.Registry
-	Runner RunnerMetrics
-	Loader LoaderMetrics
+	reg             *prometheus.Registry
+	Runner          RunnerMetrics
+	Loader          LoaderMetrics
+	SchedulerProxy  SchedulerProxyMetrics
 }
 
 // New constructs a Registry with every metric from ADR-0039's
@@ -39,9 +40,10 @@ type Registry struct {
 func New() *Registry {
 	reg := prometheus.NewRegistry()
 	return &Registry{
-		reg:    reg,
-		Runner: newRunnerMetrics(reg),
-		Loader: newLoaderMetrics(reg),
+		reg:             reg,
+		Runner:          newRunnerMetrics(reg),
+		Loader:          newLoaderMetrics(reg),
+		SchedulerProxy:  newSchedulerProxyMetrics(reg),
 	}
 }
 
@@ -132,4 +134,37 @@ func NoopRunnerMetrics() RunnerMetrics {
 // registered against a throwaway registry.
 func NoopLoaderMetrics() LoaderMetrics {
 	return newLoaderMetrics(prometheus.NewRegistry())
+}
+
+// SchedulerProxyMetrics holds the handles set by the engine's
+// scheduler-proxy periodic loop per ADR-0056 §Clause 4. The two
+// gauge handles map to the two scheduler-side metrics in
+// ADR-0039's inventory; both carry the additive `source` label
+// per ADR-0056 §Clause 2 so the engine's emission self-identifies
+// as engine-derived without amending ADR-0039 §"Metric contract".
+type SchedulerProxyMetrics struct {
+	QueueDepth               *prometheus.GaugeVec
+	SchedulerTriggersManaged *prometheus.GaugeVec
+}
+
+func newSchedulerProxyMetrics(reg prometheus.Registerer) SchedulerProxyMetrics {
+	m := SchedulerProxyMetrics{
+		QueueDepth: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "dq_queue_depth",
+			Help: "Count of runs the engine observes in the named state, scoped by source per ADR-0056 §Clause 2 (additive `source` label distinguishes engine-derived from scheduler-derived emission). The engine emits state=running from a partition-pruned dq_executions_current count per ADR-0056 §Clause 1; state=scheduled is engine-non-derivable and emits constant zero per ADR-0056 §Clause 3.",
+		}, []string{"state", "source"}),
+		SchedulerTriggersManaged: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "dq_scheduler_triggers_managed",
+			Help: "Count of triggers the engine observes in the named state, scoped by source per ADR-0056 §Clause 2. Engine-non-derivable in either state (healthy / errored) per ADR-0033 external-scheduler posture; emits constant zero per ADR-0056 §Clause 3.",
+		}, []string{"state", "source"}),
+	}
+	reg.MustRegister(m.QueueDepth, m.SchedulerTriggersManaged)
+	return m
+}
+
+// NoopSchedulerProxyMetrics returns a SchedulerProxyMetrics
+// whose handles are registered against a throwaway registry.
+// Safe for tests that do not assert emission.
+func NoopSchedulerProxyMetrics() SchedulerProxyMetrics {
+	return newSchedulerProxyMetrics(prometheus.NewRegistry())
 }

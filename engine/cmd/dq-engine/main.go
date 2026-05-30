@@ -376,9 +376,10 @@ func main() {
 	)
 
 	var wg sync.WaitGroup
-	wg.Add(3 + len(recordRunners))
+	wg.Add(4 + len(recordRunners))
 	go loaderRefreshLoop(ctx, &wg, loaderLogger, ldr, current, cfg.LoaderRefreshInterval)
 	go orphanScanLoop(ctx, &wg, orphanLogger, detector, cfg.OrphanScanInterval)
+	go schedulerProxyMetricsLoop(ctx, &wg, runnerLogger, store, metricsReg.SchedulerProxy, schedulerProxyMetricsInterval)
 	go func() {
 		defer wg.Done()
 		if err := httpServer.ListenAndServe(); err != nil {
@@ -746,6 +747,65 @@ func verifyHandlerRegistryAgainstCatalog(evaluator *eval.Evaluator, logger *slog
 		"adr_reference", "ADR-0022 §C-B0S2.3",
 	)
 	return nil
+}
+
+// schedulerProxyMetricsInterval is the cadence the
+// scheduler-proxy metrics loop ticks at per ADR-0056 §Clause 5.
+// Matches the default Prometheus scrape interval committed by
+// deploy/observability/prometheus/prometheus.yml. Not exposed
+// as an EnvConfig field (per ADR-0056 §Clause 5 — would trigger
+// ADR-0018's "separate decision" for a new field without
+// current operational benefit); a future ADR commits an
+// EnvConfig field if concrete per-env tuning demand surfaces.
+const schedulerProxyMetricsInterval = 15 * time.Second
+
+// schedulerProxyMetricsLoop ticks on the configured interval
+// and refreshes the four ADR-0056 scheduler-proxy series:
+// dq_queue_depth{state="running",source="engine"} carries the
+// engine's in-flight execution count from
+// Store.CountRunningExecutions; the three engine-non-derivable
+// series (dq_queue_depth{state="scheduled"} +
+// dq_scheduler_triggers_managed{state=healthy|errored}) emit
+// constant zero per ADR-0056 §Clause 3.
+//
+// Failure posture per ADR-0056 §Clause 5: a CountRunningExecutions
+// error is warning-logged; the gauge values are left at their
+// prior set value (next successful tick recovers correctness).
+// Same "best-effort, retry-on-cadence" posture as
+// loaderRefreshLoop per ADR-0007 §2.
+func schedulerProxyMetricsLoop(ctx context.Context, wg *sync.WaitGroup, logger *slog.Logger, store results.Store, m metrics.SchedulerProxyMetrics, interval time.Duration) {
+	defer wg.Done()
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	// The three engine-non-derivable series are constant zero;
+	// set once at startup and on every tick (the per-tick Set is
+	// cheap and idempotent).
+	setZeroes := func() {
+		m.QueueDepth.WithLabelValues("scheduled", "engine").Set(0)
+		m.SchedulerTriggersManaged.WithLabelValues("healthy", "engine").Set(0)
+		m.SchedulerTriggersManaged.WithLabelValues("errored", "engine").Set(0)
+	}
+	setZeroes()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			count, err := store.CountRunningExecutions(ctx)
+			if err != nil {
+				logger.Warn("scheduler-proxy metric refresh failed (retaining prior gauge value per ADR-0056 §Clause 5)",
+					"metric", "dq_queue_depth",
+					"state", "running",
+					"error", err.Error(),
+				)
+				continue
+			}
+			m.QueueDepth.WithLabelValues("running", "engine").Set(float64(count))
+			setZeroes()
+		}
+	}
 }
 
 // orphanScanLoop ticks on the configured interval and calls

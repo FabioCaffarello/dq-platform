@@ -184,6 +184,10 @@ func (s *inMemStore) ListRunningOlderThan(_ context.Context, _ time.Time) ([]res
 	return nil, nil
 }
 
+func (s *inMemStore) CountRunningExecutions(_ context.Context) (int64, error) {
+	return 0, nil
+}
+
 func (s *inMemStore) LatestExecutionPerEntityCheck(_ context.Context, _ time.Time) ([]results.LatestExecutionRow, error) {
 	return nil, nil
 }

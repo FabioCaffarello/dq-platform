@@ -142,6 +142,29 @@ WHERE rn = 1
   AND started_at < @before
 `
 
+// countRunningSQL is the query the Go API uses for
+// CountRunningExecutions (scheduler-proxy metric snapshot per
+// ADR-0056 §Clause 1). Same canonical-view ROW_NUMBER()
+// projection as runningOlderThanSQL, COUNT(*) instead of row
+// read, and no time filter — counts every execution whose
+// latest state is `running` at query time.
+//
+// The {{dataset}} placeholder is replaced with the configured
+// project + dataset identifier.
+const countRunningSQL = `
+SELECT COUNT(*) AS running_count
+FROM (
+  SELECT execution_id, status,
+         ROW_NUMBER() OVER (
+           PARTITION BY execution_id
+           ORDER BY recorded_at DESC
+         ) AS rn
+  FROM ` + "`{{dataset}}." + tableExecutions + "`" + `
+)
+WHERE rn = 1
+  AND status = 'running'
+`
+
 // currentExecutionsInlineSQL is the query the Go API uses for
 // QueryCurrentExecution. Same semantics as the view; portable
 // across the emulator's view fidelity gap.

@@ -189,6 +189,39 @@ func (s *BigQueryStore) QueryCurrentExecution(ctx context.Context, executionID s
 	return fromExecutionRecord(rec), nil
 }
 
+// CountRunningExecutions returns the count of executions whose
+// latest state is `running` per dq_executions_current canonical-
+// view semantics. Used by the schedulerProxyMetricsLoop per
+// ADR-0056 §Clause 1 to set the
+// dq_queue_depth{state="running",source="engine"} gauge.
+func (s *BigQueryStore) CountRunningExecutions(ctx context.Context) (int64, error) {
+	dataset := s.fullyQualifiedDataset()
+	sql := strings.ReplaceAll(countRunningSQL, "{{dataset}}", dataset)
+
+	q := s.client.Query(sql)
+	q.QueryConfig.UseLegacySQL = false
+
+	it, err := q.Read(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("submit CountRunningExecutions query: %w", err)
+	}
+
+	var rec struct {
+		RunningCount int64 `bigquery:"running_count"`
+	}
+	if err := it.Next(&rec); err != nil {
+		if errors.Is(err, iterator.Done) {
+			// COUNT(*) over an empty table returns one row with
+			// value 0; reaching iterator.Done here means the
+			// emulator returned no result row at all, which is
+			// equivalent to zero for our metric purposes.
+			return 0, nil
+		}
+		return 0, fmt.Errorf("read CountRunningExecutions row: %w", err)
+	}
+	return rec.RunningCount, nil
+}
+
 // ListRunningOlderThan returns the canonical row of every
 // execution whose latest state is `running` and whose started_at
 // is strictly before the given cutoff. Used by the orphan-run
