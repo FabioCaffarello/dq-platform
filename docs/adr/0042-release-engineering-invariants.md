@@ -2,7 +2,7 @@
 
 # ADR-0042 — Release Engineering Invariants
 
-- **Status:** accepted
+- **Status:** accepted; **amended in part by [ADR-0054](./0054-engine-image-registry-amendment.md)** (Clause 1 image-name shape extended to two-part — local `dq-engine:<tag>` unchanged + published `docker.io/fabiocaffarello/dq-engine:<tag>` new; Consequence #10 OQ-1 (image registry choice) closed by selecting Docker Hub `fabiocaffarello` namespace. ADR-0054 also commits a new push-step behavioral contract and deployment-manifest flip target shape standalone — those clauses do not amend ADR-0042 directly. Clauses #2/#3/#4 and Consequences #1–#9 are preserved verbatim.)
 - **Date:** 2026-05-26
 
 ---
