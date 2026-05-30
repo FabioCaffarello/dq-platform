@@ -8,7 +8,8 @@
 - Status: draft
 - Decision-log row: B3-4 (tooling family)
 - Promotion target: [`docs/adr/0055-metric-emission-slice-scope.md`](../../docs/adr/0055-metric-emission-slice-scope.md)
-- Critique rounds: pending (this is the pre-critique draft)
+- Critique rounds:
+  - Round 1 — [capture](../critiques/2026-05-30-b3-metric-emission-slice-scope-critique-1.md) (0 blocking / 3 important / 5 minor); 3 important applied in this revision; minors deferred under the two-round cap unless surfaced again in round 2.
 
 ---
 
@@ -150,9 +151,9 @@ the engine binary can directly observe:
 3. `dq_run_duration_seconds` — runner started_at → completed_at.
 4. `dq_check_duration_seconds` — runner per-check.
 5. `dq_bytes_scanned` — runner per-check (from evidence
-   aggregation; the bytes_scanned sub-field is undocumented per
-   ADR-0039 OQ-3, so the gauge reports zero when absent rather
-   than dropping the emission).
+   aggregation; the `bytes_scanned` sub-field is undocumented
+   per ADR-0039 OQ-3, so the gauge's behavior on field absence
+   is a promotion-ADR decision tracked as OQ-6 below).
 6. `dq_loader_refresh_failures_total` — loader refresh-path
    failure classifier per ADR-0007.
 
@@ -218,18 +219,18 @@ disguised as an emission.
 - The structural choices the slice's ADR must commit: which
   metrics client library; the `/metrics` route registration site;
   the per-package emitter convention; the test surface for the
-  emission code; the cardinality posture (continues ADR-0039's
-  no-numeric-ceiling deferral until the first scrape-pressure
-  signal).
+  emission code. ADR-0039's cardinality posture is preserved as
+  written (no re-litigation in the slice ADR).
 
 ### What this study does NOT commit
 
 - The library choice itself. Two reasonable candidates exist in
-  the commodity-environment space named by R5
-  (`prometheus/client_golang` and an `otel/metric` exporter
-  configured with Prometheus output). Selection belongs to the
-  promotion ADR after a same-session comparison; this scoping
-  study only commits that one of them is picked.
+  the commodity-environment space named by R5: the canonical Go
+  client for the Prometheus exposition format, and an
+  OpenTelemetry metrics exporter configured for Prometheus
+  output. Selection belongs to the promotion ADR after a
+  same-session comparison; this scoping study only commits that
+  one of them is picked.
 - Any per-metric label cardinality ceiling.
 - The per-package emitter naming convention's exact shape
   (mirrors `engine/internal/logging/`'s `component` attr
@@ -327,6 +328,16 @@ disguised as an emission.
   is reviewer-load-bearing in the promotion ADR. **Out-of-scope
   for current cycle** — this study scopes that the convention is
   committed at promotion time, not its exact shape.
+
+- **OQ-6: `dq_bytes_scanned` behavior on absent
+  `evidence_summary.bytes_scanned` sub-field.** ADR-0039 OQ-3
+  leaves the field undocumented; the gauge has at least two
+  plausible behaviors when the sub-field is missing on a check
+  (emit zero, skip emission, emit NaN). The choice has
+  observable consequences for downstream consumers querying the
+  gauge series. **Out-of-scope for current cycle** —
+  promotion-ADR decision against working code; the scoping
+  study only registers that the choice exists.
 
 ---
 
