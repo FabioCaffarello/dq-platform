@@ -12,8 +12,11 @@
   [ADR-0051](../../docs/adr/0051-claude-tooling-postwave3.md)
   Clause 1 — this study reuses that precedent, it does not
   open a new expansive reading).
-- **Status:** draft (B3-2, session 1; post-round-1-critique,
-  pre-round-2).
+- **Status:** draft (B3-2, session 1; post-round-2-critique;
+  two-round cap reached per
+  [`.claude/playbooks/wave-1-session-loop.md`](../../.claude/playbooks/wave-1-session-loop.md)
+  step 7; ready to move to `resolved-study` after
+  decision-log row update lands).
 - **Last updated:** 2026-05-30.
 - **Upstream resolved:**
   [ADR-0049](../../docs/adr/0049-b3-evolutionary-launch.md) (B3
@@ -185,7 +188,13 @@
   round 1 preserved
   ([`studies/critiques/2026-05-30-b3-session-reading-router-critique-1.md`](../critiques/2026-05-30-b3-session-reading-router-critique-1.md)) —
   0 blocking / 5 important / 5 minor; all dispositioned in
-  the Operator Response trailer per
+  the Operator Response trailer;
+  round 2 preserved
+  ([`studies/critiques/2026-05-30-b3-session-reading-router-critique-2.md`](../critiques/2026-05-30-b3-session-reading-router-critique-2.md)) —
+  0 blocking / 1 important / 4 minor; the important finding
+  (B2/Implementation-slice row boundary tie-breaker) applied
+  in this revision, two minor findings applied, two
+  accepted as-is per
   [ADR-0048](../../docs/adr/0048-critique-rounds-preservation.md)
   §"Skip" grammar.
 - **Promotion target:**
@@ -325,9 +334,16 @@ distinct mechanisms apply and must not be conflated:
   materiality failure on its own does **not** make the
   proposal "outside the family" (the agent-harness fit
   under Tooling extensions is settled by ADR-0051
-  Clause 1); it just makes B3 the wrong lane for the
-  materiality of the change. In that case the §(a)
-  outcome is `rejected` only if no other lane fits.
+  Clause 1); it makes B3 the wrong lane for the
+  materiality of the change. The proposal is then
+  **"ineligible for B3 but valid elsewhere"** — a state
+  that §(a)'s four-option taxonomy does not name
+  directly. The decision-log entry records this as a
+  one-line note (`ineligible for B3; routed to Flow 6`
+  or similar) rather than collapsing it into `rejected`,
+  because §(a) `rejected` carries the stronger semantic
+  "no lane fits". `rejected` per §(a) applies only if
+  no other lane fits at all.
 - **Practical re-routing follow-up.** If the proposal's
   *substance* is still worth shipping after a failed §(a)
   reading, the operator opens a new PR under the
@@ -542,6 +558,27 @@ rule and costs at most one extra playbook. The router
 narrows confidently-classified sessions; uncertain
 classification reverts to the universal-prescription
 behavior for that session only.
+
+**Row-boundary tie-breaker — output artifact.** Where two
+rows could plausibly apply (canonically: a B2 follow-up
+that ships an implementation slice), the tie-breaker is the
+session's **output artifact**. The **B2 follow-up**, **B3
+entry**, and **ADR amendment / promotion** rows apply when
+the session's output is a study or an ADR document (the
+AC-1..AC-10 gate from
+[`acceptance-criteria.md`](../../.claude/playbooks/acceptance-criteria.md)
+is the close-gate). The **Implementation slice** row
+applies when the session's output is code or scaffold (the
+AC-W3-3 / AC-W3-7 gates from
+[`wave-3-acceptance-criteria.md`](../../.claude/playbooks/wave-3-acceptance-criteria.md)
+are the close-gate). The **Flow 6 process edit** row
+applies when the session's output is an edit to a process
+document (`CLAUDE.md` / `AGENTS.md` / `.codex/AGENTS.md`).
+A B2 follow-up that both produces a study *and* lands an
+implementation slice runs as **two separate sessions** per
+R4 (one topic per session) — the study session reads the
+B2 row; the implementation-slice session reads the
+Implementation slice row.
 
 **Per-type reading sets:**
 
@@ -773,7 +810,11 @@ with R1–R8 and is read through the always-on floor.
   per-type set turned out to be load-bearing mid-session.
   If the attention-cost saving turns out to be materially
   smaller than the line-count saving, a follow-up B3-N
-  entry revisits the router shape.
+  entry revisits the router shape. **Forcing function:**
+  the measurement-decision PR opens by the **third
+  post-router session at the latest**, regardless of
+  whether 2–3 sessions have surfaced enough signal —
+  this prevents indefinite deferral.
   *Out-of-scope for current cycle:* deferred to the first
   three post-router sessions for empirical evidence.
 
