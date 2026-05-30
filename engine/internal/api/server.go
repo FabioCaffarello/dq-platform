@@ -37,16 +37,25 @@ type Server struct {
 //   - POST /v1/trigger
 //   - GET  /healthz
 //   - GET  /readyz
+//   - GET  /metrics (when metricsHandler is non-nil; ADR-0039 + ADR-0055 §Clause 2)
 //
 // Any other path returns 404 via the default ServeMux behavior;
 // any wrong-method request on a registered path returns 405 (Go's
 // ServeMux handles method-specific patterns this way out of the
 // box).
-func NewServer(addr string, handler *Handler, logger *slog.Logger) *Server {
+//
+// metricsHandler is the http.Handler the engine binary's
+// *metrics.Registry exposes via Handler(). Pass nil for tests
+// that exercise the trigger surface without standing up the
+// metrics registry — the route is then absent.
+func NewServer(addr string, handler *Handler, logger *slog.Logger, metricsHandler http.Handler) *Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /v1/trigger", handler.HandleTrigger)
 	mux.HandleFunc("GET /healthz", handler.HandleHealthz)
 	mux.HandleFunc("GET /readyz", handler.HandleReadyz)
+	if metricsHandler != nil {
+		mux.Handle("GET /metrics", metricsHandler)
+	}
 
 	srv := &http.Server{
 		Addr:              addr,
