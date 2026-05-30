@@ -12,7 +12,8 @@
   [ADR-0051](../../docs/adr/0051-claude-tooling-postwave3.md)
   Clause 1 — this study reuses that precedent, it does not
   open a new expansive reading).
-- **Status:** draft (B3-2, session 1; pre-critique).
+- **Status:** draft (B3-2, session 1; post-round-1-critique,
+  pre-round-2).
 - **Last updated:** 2026-05-30.
 - **Upstream resolved:**
   [ADR-0049](../../docs/adr/0049-b3-evolutionary-launch.md) (B3
@@ -141,22 +142,52 @@
     `CLAUDE.md` §6, the decision log row addition, and (if
     promoted) ADR-0052. No engine, rules, tools, or deploy
     files move.
-  - **P-B3RR.4** — The five session types named in this study
-    (B2 follow-up / B3 entry / ADR amendment / ADR promotion /
-    Flow 6 process edit) are the exhaustive set under the
-    current operating shape. Future session types (e.g., a
-    rule-promotion lane, a release-cut lane) require a
-    router-row addition through a follow-up B3-N entry; the
-    router is not silently extended.
+  - **P-B3RR.4** — The **six** session types named by the
+    router (B2 follow-up / B3 entry / ADR amendment / ADR
+    promotion / Flow 6 process edit / implementation slice
+    landing under a closed B-row — the sixth row added in
+    round-1 revision per F5) are the exhaustive set under the
+    current operating shape. Three boundary cases were
+    considered and resolved:
+    - **B-row triage** (the operator deciding whether a newly
+      surfaced item is B2 / B3 / amendment / rejected per
+      ADR-0049 §(a)). Triage is a one-pass classification
+      that runs *before* the session opens; it does not
+      itself produce a study, an ADR, or a scaffold. The
+      operator reads ADR-0049 §(a) and the decision log,
+      both already in the always-on floor. No router row
+      needed.
+    - **Study revival** (re-opening a previously deferred
+      study). Revival follows the originating row's type
+      (B2 if originally B2; B3 if originally B3) — the
+      router routes by *current* session type, not by
+      originating wave. No separate row.
+    - **ADR supersession** (the
+      [ADR-0017](../../docs/adr/0017-substrate-posture-amendment.md)
+      pattern). Supersession is a special case of ADR
+      amendment when the amendment reshapes architectural
+      prose rather than touching only structured data
+      (ADR-0050 §Consequence 4 boundary). The router's
+      "ADR amendment" row already covers it; the
+      ADR-0050 in-place vs. ADR-0017 supersession choice
+      is made inside the session.
+    Future session types beyond the six (e.g., a
+    rule-promotion lane, a release-cut lane, an automation
+    lane) require a router-row addition through a follow-up
+    B3-N entry; the router is not silently extended.
 - **Downstream open:** none enumerated. If `/critique`
   surfaces a blocking finding that requires a sixth session
   type or a different routing axis (e.g., routing on artifact
   type rather than session type), it is registered in §Open
   Questions and the study re-scopes — it does not silently
   grow.
-- **Critique rounds:** none yet — round 1 follows draft per
-  [`.claude/playbooks/post-wave3-session-loop.md`](../../.claude/playbooks/post-wave3-session-loop.md)
-  step 6.
+- **Critique rounds:**
+  round 1 preserved
+  ([`studies/critiques/2026-05-30-b3-session-reading-router-critique-1.md`](../critiques/2026-05-30-b3-session-reading-router-critique-1.md)) —
+  0 blocking / 5 important / 5 minor; all dispositioned in
+  the Operator Response trailer per
+  [ADR-0048](../../docs/adr/0048-critique-rounds-preservation.md)
+  §"Skip" grammar.
 - **Promotion target:**
   `docs/adr/0052-session-reading-router.md` — provisionally
   the next available number at the time of writing (last
@@ -231,15 +262,19 @@ than letting each session improvise:
    for that session. The uniform "read all" prescription
    over-reads; an under-reading improvisation under-reads with no
    audit surface.
-2. **No taxonomy of post-Wave-3 session types.** Five distinct
+2. **No taxonomy of post-Wave-3 session types.** Six distinct
    session types operate in the post-Wave-3 lane (B2 follow-up,
-   B3 entry, ADR amendment, ADR promotion, Flow 6 process edit),
-   each with its own grounding needs. They are scattered across
+   B3 entry, ADR amendment, ADR promotion, Flow 6 process edit,
+   and implementation slice landing under a closed B-row — the
+   sixth surfaced explicitly in round-1 critique F5), each with
+   its own grounding needs. They are scattered across
    `post-wave3-session-loop.md`, `CONTRIBUTING.md` Flow 5,
-   `CONTRIBUTING.md` Flow 6, and [ADR-0050](../../docs/adr/0050-v1-retirement-engine-release.md)
-   §Consequence 4 (the Amendment-log convention). No single
-   surface enumerates the five types or maps them to required
-   reading.
+   `CONTRIBUTING.md` Flow 6, [ADR-0050](../../docs/adr/0050-v1-retirement-engine-release.md)
+   §Consequence 4 (the Amendment-log convention), and
+   [`wave-3-acceptance-criteria.md`](../../.claude/playbooks/wave-3-acceptance-criteria.md)
+   (the scaffold-shaped AC-W3 set that still governs
+   implementation slices). No single surface enumerates the
+   six types or maps them to required reading.
 
 This study proposes a **session reading router** in `CLAUDE.md`
 §6: a short decision table that maps session type to minimal
@@ -278,11 +313,33 @@ recorded in the round-2 critique trailer (per
 and carries forward to the promoted ADR as a
 new-contribution marker per R5.
 
-If D0 fails (the operator rejects either reading), this
-study closes as **rejected** per ADR-0049 §(a) outcome
-vocabulary and the proposed edit is re-routed: through
-Flow 6 if the Condition-4 reading fails alone, or shelved
-pending a different framing if Condition 1 fails.
+If D0 fails (the operator rejects either reading), two
+distinct mechanisms apply and must not be conflated:
+
+- **Formal ADR-0049 §(a) outcome.** A failed eligibility
+  reading registers in the decision log as one of the
+  §(a) outcomes — `rejected` if the proposal genuinely
+  falls outside the three in-scope families *and* outside
+  any active wave's gate, or as `amendment` / `B2` if the
+  re-triage names a different lane. A Condition-4
+  materiality failure on its own does **not** make the
+  proposal "outside the family" (the agent-harness fit
+  under Tooling extensions is settled by ADR-0051
+  Clause 1); it just makes B3 the wrong lane for the
+  materiality of the change. In that case the §(a)
+  outcome is `rejected` only if no other lane fits.
+- **Practical re-routing follow-up.** If the proposal's
+  *substance* is still worth shipping after a failed §(a)
+  reading, the operator opens a new PR under the
+  appropriate flow — Flow 6 if the substance is a tight
+  clarification of an existing rule whose substance is
+  unchanged; an amendment ADR if Condition 1 fails because
+  the change reshapes a committed contract. The re-routing
+  PR is a separate session with separate provenance, not a
+  continuation of B3-2.
+
+The decision log records the §(a) outcome; the re-routing
+PR carries the substance. Both surfaces remain auditable.
 
 ### D1 — Preserve R1–R8 and P1–P6 reading floor
 
@@ -310,15 +367,16 @@ For each session type, the required-reading set is the
 auditable against R1–R8, P1–P6, and the relevant acceptance
 criteria. A reading set that omits a playbook the session
 genuinely depends on is **wrong** even if it saves cost. The
-five session-type-to-reading-set mappings below are
+six session-type-to-reading-set mappings below are
 defended individually.
 
 ### D4 — Future session types extend the router, not bypass it
 
-The router commits five session types as the current
-exhaustive set. A future session type (a rule-promotion
-lane, a release-cut lane, an automation lane) requires a
-router-row addition through a follow-up B3-N entry. The
+The router commits six session types as the current
+exhaustive set (per P-B3RR.4's boundary-case analysis). A
+future session type (a rule-promotion lane, a release-cut
+lane, an automation lane) requires a router-row addition
+through a follow-up B3-N entry. The
 router is not silently extended; new session types ride
 the same B3 study trail this proposal does.
 
@@ -336,8 +394,9 @@ the per-type rows narrow and the floor explicit.
 
 ### Option A — Per-type subset router with explicit always-on floor
 
-A new short decision table in `CLAUDE.md` §6. Five rows
-(one per session type), three columns:
+A new short decision table in `CLAUDE.md` §6. Six rows
+(one per session type — the sixth added in round-1 revision
+per F5), three columns:
 
 - Session type — short label.
 - Trigger — when this type applies.
@@ -346,12 +405,16 @@ A new short decision table in `CLAUDE.md` §6. Five rows
 
 Above the table, an always-on floor block listing CLAUDE.md,
 AGENTS.md, CONTRIBUTING.md, and the decision log as
-unconditional reads.
+unconditional reads, plus a default-up safety rule for
+borderline classifications.
 
 Below the table, a historical-skim block listing the Wave-1
-and Wave-3 playbooks plus `wave-3-acceptance-criteria.md` as
-"not load-bearing for any current session type; skim if you
-are reading prior sessions for context".
+and Wave-3 session-loop playbooks as "not load-bearing for
+any current session type; skim if you are reading prior
+sessions for context". `wave-3-acceptance-criteria.md` is
+**not** in the historical-skim set under Option A's revised
+shape — it is load-bearing for implementation-slice sessions
+(round-1 F5).
 
 **Trade-offs.** Explicit; auditable; reviewable per session
 type. Adds a new taxonomy that future playbook additions must
@@ -365,7 +428,7 @@ playbook is universal).
 
 Leave the universal-read prescription in place; ship a new
 guide (e.g., `.claude/playbooks/session-types.md`) that lists
-the five session types and their load-bearing reading sets.
+the six session types and their load-bearing reading sets.
 Sessions read the guide first, then narrow their own reading
 informally.
 
@@ -454,10 +517,13 @@ they are (§3 and §4); §6 governs only the playbook surface.
 
 **Always-on floor** (every session, regardless of type):
 
-- [`CLAUDE.md`](../../CLAUDE.md) §1–8 (R1–R8 in §3; P1–P6
-  in §4; slash commands in §7; phase/lane taxonomy in §2;
-  required reading in §6 — the floor includes itself by
-  reference).
+- [`CLAUDE.md`](../../CLAUDE.md) §1–8 in full. §1's
+  "read this entire file before producing any output"
+  mandate covers R1–R8 (§3), P1–P6 (§4), the phase/lane
+  taxonomy (§2), the session-reading router (§6, including
+  this router as the intentional self-reference — every
+  session reads §6 to find its own row), and the slash
+  commands (§7).
 - [`AGENTS.md`](../../AGENTS.md) (cross-agent convention
   file; rebinds the rules to non-Claude agents).
 - [`CONTRIBUTING.md`](../../CONTRIBUTING.md) (PR-flow
@@ -467,6 +533,16 @@ they are (§3 and §4); §6 governs only the playbook surface.
   (live state surface for every B-row, ADR status, and
   Wave-S gate status).
 
+**Default-up safety rule.** If a contributor or agent is
+unsure between two session types — e.g., between Flow 6
+process edit and B3 entry on a borderline materiality
+call — **default to the next-larger reading set**. The
+larger set is a superset; reading it does not violate any
+rule and costs at most one extra playbook. The router
+narrows confidently-classified sessions; uncertain
+classification reverts to the universal-prescription
+behavior for that session only.
+
 **Per-type reading sets:**
 
 | Session type | Trigger / when to use | Minimal required playbook reading (beyond the floor) |
@@ -475,7 +551,8 @@ they are (§3 and §4); §6 governs only the playbook surface.
 | **B3 entry** | A B-row marked B3 in the decision log; ADR-0049 §(a) eligibility filter must clear before drafting. | [`post-wave3-session-loop.md`](../../.claude/playbooks/post-wave3-session-loop.md) (step 2's eligibility-check sub-step is load-bearing); [`acceptance-criteria.md`](../../.claude/playbooks/acceptance-criteria.md); [`feedback-protocol.md`](../../.claude/playbooks/feedback-protocol.md); [ADR-0049](../../docs/adr/0049-b3-evolutionary-launch.md) §(a) and §(b). |
 | **ADR amendment** | In-place edit to an existing ADR (structured-data row amendment or Amendment-log subsection per ADR-0050 §Consequence 4); no decision rewrite. | [`post-wave3-session-loop.md`](../../.claude/playbooks/post-wave3-session-loop.md) step 10 (PR-flow close); [`feedback-protocol.md`](../../.claude/playbooks/feedback-protocol.md); the originating ADR; [ADR-0050](../../docs/adr/0050-v1-retirement-engine-release.md) §Consequence 4 (Amendment-log convention). [`acceptance-criteria.md`](../../.claude/playbooks/acceptance-criteria.md) optional — only if the amendment produces a study. |
 | **ADR promotion** | Running [`/promote-to-adr`](../../.claude/commands/promote-to-adr.md) on a `resolved-study`. | [`post-wave3-session-loop.md`](../../.claude/playbooks/post-wave3-session-loop.md) step 10 (PR-flow close); [`acceptance-criteria.md`](../../.claude/playbooks/acceptance-criteria.md) (the source study must have cleared AC-1…AC-10 before promotion); [`feedback-protocol.md`](../../.claude/playbooks/feedback-protocol.md) (the promotion may surface critique-style feedback on the proposed ADR text); [`/promote-to-adr`](../../.claude/commands/promote-to-adr.md) command spec. |
-| **Flow 6 process edit** | Operator-authorized direct edit to `CLAUDE.md` / `AGENTS.md` / `.codex/AGENTS.md` per [`CONTRIBUTING.md`](../../CONTRIBUTING.md) Flow 6. | [`CONTRIBUTING.md`](../../CONTRIBUTING.md) Flow 6 (scope-and-gate; the load-bearing contract); [`post-wave3-session-loop.md`](../../.claude/playbooks/post-wave3-session-loop.md) step 10 only (PR-flow close — Flow 6 inherits Flow 5 PR-flow). [`feedback-protocol.md`](../../.claude/playbooks/feedback-protocol.md) optional — useful if the operator requests `/critique`-style review on the edit. |
+| **Flow 6 process edit** | Operator-authorized direct edit to `CLAUDE.md` / `AGENTS.md` / `.codex/AGENTS.md` per [`CONTRIBUTING.md`](../../CONTRIBUTING.md) Flow 6. | [`CONTRIBUTING.md`](../../CONTRIBUTING.md) Flow 6 (scope-and-gate; the load-bearing contract — Flow 6 explicitly inherits Flow 5 PR-flow); [`post-wave3-session-loop.md`](../../.claude/playbooks/post-wave3-session-loop.md) step 10 (the load-bearing playbook content for PR-flow close — Flow 6 inherits the rest of Flow 5 through CONTRIBUTING.md, not through the playbook). [`feedback-protocol.md`](../../.claude/playbooks/feedback-protocol.md) optional; **load-bearing if `/critique` is run** (the [`/critique`](../../.claude/commands/critique.md) command grounds on it). |
+| **Implementation slice landing under a closed B-row** | A code or scaffold slice that lands the artifacts committed by a closed B-row's ADR (e.g., an ADR-0051 follow-on slice shipping the four named artifacts; a Wave-3 follow-up slice landing a deferred capability matrix row). | [`post-wave3-session-loop.md`](../../.claude/playbooks/post-wave3-session-loop.md) (the close-discipline); [`wave-3-acceptance-criteria.md`](../../.claude/playbooks/wave-3-acceptance-criteria.md) (AC-W3-3 load-bearing for citation discipline; AC-W3-7 load-bearing for local build/lint/test gates — both are scaffold-shaped semantics that apply to any post-Wave-3 implementation slice); [`feedback-protocol.md`](../../.claude/playbooks/feedback-protocol.md). [`acceptance-criteria.md`](../../.claude/playbooks/acceptance-criteria.md) optional — only if the slice produces a follow-up study. |
 
 **Historical-skim set** (not load-bearing for any current
 session type; preserved for audit-trail and shape-reference
@@ -488,10 +565,16 @@ for context):
 - [`wave-3-session-loop.md`](../../.claude/playbooks/wave-3-session-loop.md)
   — Wave 3 closed 2026-05-23. Shape reference for the PR-flow
   discipline now authoritative in CONTRIBUTING.md Flow 5.
-- [`wave-3-acceptance-criteria.md`](../../.claude/playbooks/wave-3-acceptance-criteria.md)
-  — AC-W3-1…AC-W3-10. Scaffold-shaped; not load-bearing for
-  any post-Wave-3 session type. Preserved for Wave-3
-  retrospective audit.
+
+Note: [`wave-3-acceptance-criteria.md`](../../.claude/playbooks/wave-3-acceptance-criteria.md)
+(AC-W3-1…AC-W3-10) was initially placed in the
+historical-skim set in this study's draft, but round-1
+critique F5 surfaced that AC-W3-3 and AC-W3-7 are still
+load-bearing for implementation-slice sessions landing
+under a closed B-row. It is therefore named load-bearing in
+the **Implementation slice** row above; the rest of the
+AC-W3 set (path-header, English, R5 hygiene, etc.) overlaps
+with R1–R8 and is read through the always-on floor.
 
 ### What the router does not change
 
@@ -515,13 +598,18 @@ for context):
 
 ## Consequences
 
-1. **Each session reads less; the per-session cost drops.**
-   The maximum saving (a Flow 6 process edit) is ~600 lines
-   of playbook text avoided (~85% of the current corpus).
-   The minimum saving (a B3 entry) is ~280 lines (Wave-1
-   loop, Wave-3 loop, Wave-3 acceptance criteria — the
-   historical-skim set). Every current session type lands
-   strictly below the universal prescription's reading cost.
+1. **Each session reads less; the per-session line count
+   drops.** The maximum saving (a Flow 6 process edit) is
+   roughly 600 lines of playbook text avoided (~85% of the
+   current corpus by line count). The minimum saving (an
+   implementation-slice or B3 entry) is roughly 280 lines
+   of historical-skim content (Wave-1 loop, Wave-3 loop).
+   The numbers are **by line count, not benchmarked against
+   attention cost** — structured prose and dense code do not
+   carry equivalent reading load, and the actual session-load
+   drop may be smaller in practice. The first 2–3 post-router
+   sessions provide a measurement window; OQ-5 below commits
+   to revisit the cost claim with concrete evidence.
 
 2. **Session-type taxonomy becomes a load-bearing concept.**
    Future playbook additions declare their session-type
@@ -585,12 +673,22 @@ for context):
    to a follow-up B3-N entry and is **not** committed by
    this study.
 
-9. **`/sync-agents` coverage of `CLAUDE.md` §6 is preserved.**
-   The router lives inside §6. The
+9. **`/sync-agents` coverage of `CLAUDE.md` §6 is preserved
+   and may force ADR-0051 OQ-2 earlier.** The router lives
+   inside §6. The
    [`/sync-agents`](../../.claude/commands/sync-agents.md)
-   drift-check already covers the required-reading section
-   per ADR-0051 OQ-2; the router lands inside that drift
-   surface without expanding its scope.
+   drift-check already covers the required-reading section,
+   so the router itself lands inside the drift surface
+   without expanding its scope. However, a structural change
+   to §6 (introducing a new taxonomy that future playbook
+   additions must register against) is exactly the kind of
+   surface that pressures
+   [ADR-0051](../../docs/adr/0051-claude-tooling-postwave3.md)
+   Notes OQ-2 (`/sync-agents` coverage for skills, playbooks,
+   and command inventory). The router landing is registered
+   here as a concrete forcing function for OQ-2's resolution;
+   the first time a new playbook is added without a router
+   row, the OQ-2 ruling becomes load-bearing.
 
 10. **The promoted ADR-0052 commits the router as a
     contract.** Future router amendments (a new session type;
@@ -627,20 +725,26 @@ for context):
   *Out-of-scope for current cycle:* deferred to whenever the
   skill's coverage is next revisited.
 
-- **OQ-3 — Routing axis: session type vs. artifact type.**
-  An alternate routing axis (route on the artifact being
-  produced — study / scaffold / ADR / process edit —
-  rather than on the session type) was considered briefly
-  during drafting. It collapses three of the five session
-  types into "produces a study" but does not distinguish
-  between B2 and B3 (both produce studies). The
-  session-type axis is the recommended axis because it
+- **OQ-3 — Routing axis: session type vs. artifact type vs.
+  composition of both.** An alternate routing axis (route on
+  the artifact being produced — study / scaffold / ADR /
+  process edit — rather than on the session type) was
+  considered briefly during drafting. It collapses three of
+  the now-six session types into "produces a study" but does
+  not distinguish between B2 and B3 (both produce studies).
+  The session-type axis is the recommended axis because it
   preserves the eligibility-check distinction (B2 vs. B3)
-  that ADR-0049 §(a) commits. If a future B3-N entry
-  reveals that artifact-type routing is more useful in
-  practice, the router is re-shaped through that entry.
-  *Out-of-scope for current cycle:* documented here so
-  the trade-off is not re-derived from scratch.
+  that ADR-0049 §(a) commits. A third possibility surfaced
+  in round-1 critique F9: the two axes may **compose** —
+  route on session type first, then route on artifact type
+  within each row. Composition would refine, e.g., the B3
+  entry row to "B3 entry producing a study" vs. "B3 entry
+  producing a tooling artifact" with different reading
+  subsets. The current router does not commit composition;
+  if a future B3-N entry reveals that within-row variance is
+  material, composition is the documented re-shape path.
+  *Out-of-scope for current cycle:* documented here so the
+  trade-off is not re-derived from scratch.
 
 - **OQ-4 — Wave-S session type.** Wave-S is still
   partially open (full-gate criteria pending per
@@ -654,6 +758,24 @@ for context):
   reveals new session shape, a follow-up B3-N adds it.
   *Out-of-scope for current cycle:* Wave-S full gate is
   the trigger.
+
+- **OQ-5 — Attention-cost measurement for the router's
+  cost-savings claim.** §Consequences §1 commits a
+  by-line-count saving (~85% for Flow 6; ~280-line
+  historical-skim floor for B3 / implementation-slice)
+  without benchmarking against actual attention cost.
+  Structured-prose lines and dense-code lines do not
+  carry equivalent reading load. The first 2–3
+  post-router sessions provide a measurement window; the
+  operator notes for each session (a) which router row
+  applied, (b) which playbooks were actually read in full
+  vs. skimmed, and (c) whether any playbook outside the
+  per-type set turned out to be load-bearing mid-session.
+  If the attention-cost saving turns out to be materially
+  smaller than the line-count saving, a follow-up B3-N
+  entry revisits the router shape.
+  *Out-of-scope for current cycle:* deferred to the first
+  three post-router sessions for empirical evidence.
 
 ---
 
