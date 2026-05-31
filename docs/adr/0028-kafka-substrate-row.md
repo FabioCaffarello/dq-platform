@@ -2,7 +2,7 @@
 
 # ADR-0028 — Kafka Substrate Row (Amends ADR-0010)
 
-- **Status:** accepted
+- **Status:** accepted (amends ADR-0010)
 - **Date:** 2026-05-25
 
 ---
