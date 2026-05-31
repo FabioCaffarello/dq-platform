@@ -26,6 +26,13 @@
 //     implementation — window_start / window_end as additive
 //     Required columns populated by both runners.
 //
+// Out of scope: aggregation-shape parity per ADR-0026 (per-record
+// → per-window → per-check threshold collapse). This test uses
+// NoopEvaluator on both sides, which short-circuits to ResultPass
+// without exercising the record-mode aggregation path; that path
+// is covered by record_runner_test.go unit tests. This slice
+// asserts the consumer-facing table contract only.
+//
 // Bring the substrate up first:
 //
 //	make up
@@ -44,6 +51,12 @@ import (
 
 	"dq-platform/engine/internal/results"
 )
+
+// testRulesetVersion is the ruleset_version this test uses on
+// both modes. Matches the runner constructed by makeRunner so
+// the execution_id formula (ADR-0002 §3) has the same first
+// input on both sides.
+const testRulesetVersion = "rules-v1.0.0"
 
 // TestIntegration_CrossModeTableShapeParity drives one set-mode
 // execution and one record-mode execution against the same
@@ -89,14 +102,15 @@ func TestIntegration_CrossModeTableShapeParity(t *testing.T) {
 	setStart := time.Date(2026, 5, 31, 14, 0, 0, 0, time.UTC)
 	setEnd := setStart.Add(time.Hour)
 	setTrigger := TriggerRequest{
-		Entity:        setEntity,
-		WindowStart:   setStart,
-		WindowEnd:     setEnd,
-		TriggerSource: results.TriggerScheduler,
+		Entity:         setEntity,
+		WindowStart:    setStart,
+		WindowEnd:      setEnd,
+		TriggerSource:  results.TriggerScheduler,
+		RulesetVersion: testRulesetVersion,
 		Checks: []CheckSpec{{
 			CheckID: "row_count_positive",
 			Kind:    "set.row_count_positive",
-			Mode:    "set",
+			Mode:    string(results.ModeSet),
 		}},
 	}
 
@@ -124,7 +138,7 @@ func TestIntegration_CrossModeTableShapeParity(t *testing.T) {
 	recordRunner, err := NewRecordRunner(RecordRunnerConfig{
 		Consumer:       consumer,
 		Dispatcher:     r,
-		RulesetVersion: "rules-v1.0.0",
+		RulesetVersion: testRulesetVersion,
 		Sources: []RecordSource{{
 			Entity:            recEntity,
 			Topic:             "orders.events.v1",
@@ -134,7 +148,7 @@ func TestIntegration_CrossModeTableShapeParity(t *testing.T) {
 			Checks: []CheckSpec{{
 				CheckID: "schema_present",
 				Kind:    "record.schema_conformance",
-				Mode:    "record",
+				Mode:    string(results.ModeRecord),
 			}},
 		}},
 	})
@@ -160,7 +174,7 @@ func TestIntegration_CrossModeTableShapeParity(t *testing.T) {
 	recWindowStart := recBase
 	recWindowEnd := recBase.Add(60 * time.Second)
 	recExecutionID, err := Compute(
-		"rules-v1.0.0",
+		testRulesetVersion,
 		recEntity,
 		recWindowStart,
 		recWindowEnd,
@@ -238,26 +252,9 @@ func TestIntegration_CrossModeTableShapeParity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Compute set execution_id: %v", err)
 	}
-	// setTrigger.RulesetVersion was empty at construction, so
-	// Runner.Run fell back to the runner's constructor-time default
-	// "rules-v1.0.0" (per makeRunner). Recompute with that.
-	if setRecomputed == setTerminal.ExecutionID {
-		// Already match; nothing further.
-	} else {
-		setRecomputedDefault, err := Compute(
-			"rules-v1.0.0",
-			setTrigger.Entity,
-			setTrigger.WindowStart,
-			setTrigger.WindowEnd,
-			setTrigger.TriggerSource,
-		)
-		if err != nil {
-			t.Fatalf("Compute set execution_id (default ruleset): %v", err)
-		}
-		if setRecomputedDefault != setTerminal.ExecutionID {
-			t.Errorf("set execution_id = %q; want %q (formula divergence)",
-				setTerminal.ExecutionID, setRecomputedDefault)
-		}
+	if setRecomputed != setTerminal.ExecutionID {
+		t.Errorf("set execution_id = %q; want %q (formula divergence)",
+			setTerminal.ExecutionID, setRecomputed)
 	}
 	// The record-mode lookup itself used Compute() at phase 2 — a
 	// successful waitForStatus on recExecutionID confirms the
@@ -266,6 +263,19 @@ func TestIntegration_CrossModeTableShapeParity(t *testing.T) {
 	if recRow.ExecutionID != recExecutionID {
 		t.Errorf("record row ExecutionID = %q; want %q (canonical-view divergence)",
 			recRow.ExecutionID, recExecutionID)
+	}
+
+	// (5b) Cross-mode trigger_source parity. Both rows must carry
+	// TriggerScheduler — set-mode receives it on the trigger;
+	// record-mode hardcodes it in RecordRunner.closeAndDispatch.
+	// Equality is implicit in the execution_id lookup above
+	// (TriggerSource is a hash input) but a direct assertion
+	// documents the invariant.
+	if setRow.TriggerSource != results.TriggerScheduler {
+		t.Errorf("set row TriggerSource = %q; want %q", setRow.TriggerSource, results.TriggerScheduler)
+	}
+	if recRow.TriggerSource != results.TriggerScheduler {
+		t.Errorf("record row TriggerSource = %q; want %q", recRow.TriggerSource, results.TriggerScheduler)
 	}
 
 	// (6) dq_check_results row-shape parity.
@@ -301,6 +311,11 @@ func TestIntegration_CrossModeTableShapeParity(t *testing.T) {
 	// (7) Mode-agnostic count: ADR-0041 §"Cross-mode dashboard
 	// interpretation" Rule 1 commits this query shape as valid by
 	// construction. No WHERE on mode, no WHERE on window endpoints.
+	// The Rule 1 example targets `dq_executions_current` (the
+	// canonical view); the test queries the base table with an
+	// inline ROW_NUMBER() projection because ADR-0010's
+	// "Tabular store: lazy view" row is Partial on the emulator
+	// (same workaround as results_integration_test.go).
 	gotCount := mustQueryCountSuccess(t, cli, datasetID, setEntity, recEntity)
 	if gotCount != 2 {
 		t.Errorf("mode-agnostic success count = %d; want 2 (one per mode)", gotCount)
