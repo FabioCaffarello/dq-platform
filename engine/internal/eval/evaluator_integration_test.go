@@ -2,7 +2,7 @@
 
 //go:build integration
 
-// Integration tests for the W3-P6c row_count_positive evaluator
+// Integration tests for the set.row_count_positive evaluator
 // against the local Compose substrate. Bring the stack up first:
 //
 //	make up
@@ -13,6 +13,15 @@
 // after the trigger entity, and verify the evaluator maps the
 // query result to ResultPass / ResultFail / ResultError per
 // ADR-0004 CC1.
+//
+// Originally written for W3-P6c (commit 3c5dc2b, 2026-05-22).
+// Refactored to track the post-Wave-S evolutions of the eval
+// package: ADR-0022 §"Kind catalog" moved the kind identifier
+// to the `set.` prefix (KindSetRowCountPositive), and ADR-0023
+// moved source resolution from a deployment-wide Config field
+// to a per-rule CheckSpec.Source descriptor. The Config no
+// longer carries SourceProject / SourceDataset; tests construct
+// a runner.RuleSource per CheckSpec.
 
 package eval
 
@@ -108,17 +117,42 @@ func createTableWithRows(t *testing.T, cli *bigquery.Client, ds, tbl string, n i
 	}
 }
 
-func makeEvaluator(t *testing.T, cli *bigquery.Client, sourceDataset string) *Evaluator {
+func makeEvaluator(t *testing.T, cli *bigquery.Client) *Evaluator {
 	t.Helper()
-	e, err := New(Config{
-		Client:        cli,
-		SourceProject: integrationProjectID,
-		SourceDataset: sourceDataset,
-	})
+	e, err := New(Config{Client: cli})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
 	return e
+}
+
+// bqSource constructs the per-rule BigQuery source descriptor
+// CheckSpec.Source carries per ADR-0023. The evaluator no longer
+// reads a deployment-wide SourceProject / SourceDataset; the rule
+// declares the substrate location itself.
+func bqSource(datasetID, tableID string) *runner.RuleSource {
+	return &runner.RuleSource{
+		Type:      "bigquery",
+		ProjectID: integrationProjectID,
+		DatasetID: datasetID,
+		TableID:   tableID,
+	}
+}
+
+// stdTrigger returns a TriggerRequest with the runner-required
+// window endpoints set per validateTrigger. row_count_positive
+// without a partition_column doesn't read the endpoints, but the
+// runner enforces `WindowEnd > WindowStart` at trigger validation
+// (the runner-side TestIntegration_RunnerWithEvaluator_PassesEndToEnd
+// path needs this; the direct-Evaluate tests don't go through
+// validateTrigger but set them for hygiene).
+func stdTrigger(entity string) runner.TriggerRequest {
+	return runner.TriggerRequest{
+		Entity:        entity,
+		WindowStart:   time.Date(2026, 5, 22, 14, 0, 0, 0, time.UTC),
+		WindowEnd:     time.Date(2026, 5, 22, 15, 0, 0, 0, time.UTC),
+		TriggerSource: results.TriggerScheduler,
+	}
 }
 
 func TestIntegration_RowCountPositive_PassesWithRows(t *testing.T) {
@@ -128,10 +162,14 @@ func TestIntegration_RowCountPositive_PassesWithRows(t *testing.T) {
 	ds := createDataset(t, cli)
 	createTableWithRows(t, cli, ds, "customer", 3)
 
-	e := makeEvaluator(t, cli, ds)
+	e := makeEvaluator(t, cli)
 	eval, err := e.Evaluate(context.Background(),
-		runner.CheckSpec{CheckID: "row_count_positive", Kind: KindRowCountPositive},
-		runner.TriggerRequest{Entity: "customer"})
+		runner.CheckSpec{
+			CheckID: "row_count_positive",
+			Kind:    KindSetRowCountPositive,
+			Source:  bqSource(ds, "customer"),
+		},
+		stdTrigger("customer"))
 	if err != nil {
 		t.Fatalf("Evaluate: %v", err)
 	}
@@ -154,10 +192,14 @@ func TestIntegration_RowCountPositive_FailsOnEmpty(t *testing.T) {
 	ds := createDataset(t, cli)
 	createTableWithRows(t, cli, ds, "customer", 0)
 
-	e := makeEvaluator(t, cli, ds)
+	e := makeEvaluator(t, cli)
 	eval, err := e.Evaluate(context.Background(),
-		runner.CheckSpec{CheckID: "row_count_positive", Kind: KindRowCountPositive},
-		runner.TriggerRequest{Entity: "customer"})
+		runner.CheckSpec{
+			CheckID: "row_count_positive",
+			Kind:    KindSetRowCountPositive,
+			Source:  bqSource(ds, "customer"),
+		},
+		stdTrigger("customer"))
 	if err != nil {
 		t.Fatalf("Evaluate: %v", err)
 	}
@@ -174,12 +216,18 @@ func TestIntegration_RowCountPositive_ErrorOnMissingTable(t *testing.T) {
 	defer cli.Close()
 
 	ds := createDataset(t, cli)
-	// Deliberately do NOT create a table.
+	// Deliberately do NOT create a table — the source descriptor
+	// points at a non-existent table_id so the evaluator exercises
+	// the query_read_failed branch per ADR-0004 CC1.
 
-	e := makeEvaluator(t, cli, ds)
+	e := makeEvaluator(t, cli)
 	eval, err := e.Evaluate(context.Background(),
-		runner.CheckSpec{CheckID: "row_count_positive", Kind: KindRowCountPositive},
-		runner.TriggerRequest{Entity: "does_not_exist"})
+		runner.CheckSpec{
+			CheckID: "row_count_positive",
+			Kind:    KindSetRowCountPositive,
+			Source:  bqSource(ds, "does_not_exist"),
+		},
+		stdTrigger("does_not_exist"))
 	if err == nil {
 		t.Fatal("expected non-nil error for missing table")
 	}
@@ -215,7 +263,7 @@ func TestIntegration_RunnerWithEvaluator_PassesEndToEnd(t *testing.T) {
 		t.Fatalf("EnsureSchema: %v", err)
 	}
 
-	evaluator := makeEvaluator(t, cli, sourceDS)
+	evaluator := makeEvaluator(t, cli)
 
 	r, err := runner.New(runner.Config{
 		Store:          store,
@@ -233,7 +281,11 @@ func TestIntegration_RunnerWithEvaluator_PassesEndToEnd(t *testing.T) {
 		WindowEnd:     time.Date(2026, 5, 22, 15, 0, 0, 0, time.UTC),
 		TriggerSource: results.TriggerScheduler,
 		Checks: []runner.CheckSpec{
-			{CheckID: "row_count_positive", Kind: KindRowCountPositive},
+			{
+				CheckID: "row_count_positive",
+				Kind:    KindSetRowCountPositive,
+				Source:  bqSource(sourceDS, "customer"),
+			},
 		},
 	}
 	terminal, err := r.Run(context.Background(), trigger)
