@@ -8,11 +8,31 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math/rand/v2"
 	"strings"
 	"sync"
 	"time"
 
 	"dq-platform/engine/internal/results"
+)
+
+// Commit-retry parameters per ADR-0059 §Clause 2. Constants are
+// package-level (not Config-injected) — operator-tunable knobs
+// are deferred per ADR-0059 OQ-1 until production signal
+// motivates promotion to env-var or runner-config field.
+const (
+	// recordCommitMaxAttempts is the total number of
+	// consumer.Commit attempts (1 initial + 2 retries) the
+	// runner makes before falling through to ADR-0058 §Clause 2's
+	// warning-log + skip path.
+	recordCommitMaxAttempts = 3
+
+	// recordCommitBackoffBase is the base of the exponential
+	// back-off schedule: the window upper bound after the Nth
+	// failure is base × 2^N. At the chosen parameters, back-off
+	// 1's window is [0, 200ms]; back-off 2's window is [0, 400ms];
+	// total worst-case stall is 600ms.
+	recordCommitBackoffBase = 100 * time.Millisecond
 )
 
 // RecordSource is one record-mode rule the record runner consumes.
@@ -387,16 +407,58 @@ func (r *RecordRunner) closeAndDispatch(ctx context.Context, state *entityState)
 		state.lateDropped = 0
 		return
 	}
-	if err := r.consumer.Commit(ctx, w.fetched); err != nil {
-		r.logger.Warn("record window commit failed",
-			"entity", state.source.Entity,
-			"window_start", w.start.UTC(),
-			"error", err.Error(),
-			"adr_reference", "ADR-0058",
-		)
+	if err := r.commitWithRetry(ctx, w.fetched); err != nil {
+		if !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+			r.logger.Warn("record window commit failed",
+				"entity", state.source.Entity,
+				"window_start", w.start.UTC(),
+				"error", err.Error(),
+				"commit_attempts", recordCommitMaxAttempts,
+				"adr_reference", "ADR-0058+ADR-0059",
+			)
+		}
 	}
 	state.active = nil
 	state.lateDropped = 0
+}
+
+// commitWithRetry invokes consumer.Commit up to
+// recordCommitMaxAttempts times per ADR-0059. Back-off between
+// attempts is uniform-random within an exponentially-growing
+// window (random_uniform(0, base × 2^attempt)) — the random draw
+// de-synchronizes retries between concurrent runners against a
+// recovering broker. Context cancellation pre-empts the back-off
+// wait and returns ctx.Err() immediately so engine shutdown is
+// not stalled by the retry budget.
+//
+// Returns nil on the first successful commit; returns the last
+// commit error after the budget is exhausted; returns ctx.Err()
+// on cancellation. The caller (closeAndDispatch) is responsible
+// for warning-logging the non-nil non-context return per
+// ADR-0058 §Clause 2's terminal path.
+func (r *RecordRunner) commitWithRetry(ctx context.Context, records []FetchedRecord) error {
+	var lastErr error
+	for attempt := 1; attempt <= recordCommitMaxAttempts; attempt++ {
+		if err := r.consumer.Commit(ctx, records); err == nil {
+			return nil
+		} else {
+			lastErr = err
+		}
+		if attempt == recordCommitMaxAttempts {
+			return lastErr
+		}
+		// Window upper bound: base << attempt = base × 2^attempt.
+		// At attempt=1: [0, base × 2 = 200ms]; attempt=2: [0,
+		// base × 4 = 400ms].
+		windowMax := time.Duration(int64(recordCommitBackoffBase) << attempt)
+		delay := time.Duration(rand.Float64() * float64(windowMax))
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(delay):
+		}
+	}
+	return lastErr
 }
 
 // ParseDuration parses a duration literal from the rule's

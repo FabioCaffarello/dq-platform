@@ -104,6 +104,34 @@ event; pushing the commit responsibility into the consumer
 would couple the consumer to dispatch outcomes it does not
 otherwise observe.
 
+**Retry envelope** (per
+[ADR-0059](../../../../docs/adr/0059-record-runner-commit-retry.md)):
+the runner wraps `consumer.Commit` in a `commitWithRetry`
+helper that retries up to `recordCommitMaxAttempts = 3` times
+with exponential back-off and uniform-random jitter (delay =
+`random_uniform(0, recordCommitBackoffBase × 2^attempt)`
+where `base = 100ms`). Worst-case stall is `(base × 2^1) +
+(base × 2^2) = 600ms`; expected `~150ms` under uniform-random
+jitter. The back-off `select` statement respects `ctx.Done()`
+so engine shutdown pre-empts the retry loop within the
+current back-off window. Jitter source: `math/rand/v2`
+(stdlib in Go 1.22+; no third-party retry library). After the
+retry budget is exhausted, the helper returns the last commit
+error and `closeAndDispatch` falls through to the
+warning-log + skip path verbatim — the retry layer is additive
+on top of the existing terminal, not replacing it. The runner
+warning log gains a `commit_attempts` field on exhaustion so
+operators can distinguish retried-and-exhausted from
+single-attempt failure.
+
+**Retry citation.**
+`engine/internal/runner/record_runner.go:18-35`
+(`recordCommitMaxAttempts` + `recordCommitBackoffBase`
+β constants);
+`engine/internal/runner/record_runner.go:390-440`
+(`commitWithRetry` helper + `closeAndDispatch` invocation
+site).
+
 ---
 
 ## S3 — Translation-at-boot boundary
