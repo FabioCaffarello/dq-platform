@@ -20,13 +20,23 @@ import (
 // across the consumer's lifetime per ADR-0058 §Clause 5 test
 // discipline; tests assert on this ledger to verify the
 // commit-after-dispatch boundary.
+//
+// commitFailureSequence is the per-call retry failure pattern
+// per ADR-0059 §Clause 6: when set, the first N Commit calls
+// return the configured errors in order; subsequent calls
+// append records to the ledger as usual. Independent from
+// commitErr (which returns the same error indefinitely);
+// commitFailureSequence drains as it's consumed.
 type fakeConsumer struct {
-	mu        sync.Mutex
-	batches   [][]FetchedRecord
-	idx       int
-	closed    bool
-	committed []FetchedRecord
-	commitErr error
+	mu                    sync.Mutex
+	batches               [][]FetchedRecord
+	idx                   int
+	closed                bool
+	committed             []FetchedRecord
+	commitErr             error
+	commitFailureSequence []error
+	commitFailureIdx      int
+	commitCallCount       int
 }
 
 func (f *fakeConsumer) PollFetches(ctx context.Context) ([]FetchedRecord, error) {
@@ -47,11 +57,23 @@ func (f *fakeConsumer) PollFetches(ctx context.Context) ([]FetchedRecord, error)
 func (f *fakeConsumer) Commit(_ context.Context, records []FetchedRecord) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.commitCallCount++
+	if f.commitFailureIdx < len(f.commitFailureSequence) {
+		err := f.commitFailureSequence[f.commitFailureIdx]
+		f.commitFailureIdx++
+		return err
+	}
 	if f.commitErr != nil {
 		return f.commitErr
 	}
 	f.committed = append(f.committed, records...)
 	return nil
+}
+
+func (f *fakeConsumer) commitCalls() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.commitCallCount
 }
 
 func (f *fakeConsumer) committedSnapshot() []FetchedRecord {
@@ -426,6 +448,184 @@ func TestRecordRunner_DoesNotCommitOnDispatchFailure(t *testing.T) {
 	if committed := consumer.committedSnapshot(); len(committed) != 0 {
 		t.Errorf("expected no commits on dispatch failure; got %d records committed (%v)",
 			len(committed), committed)
+	}
+}
+
+// recordCommitTestBatch is the canonical batch used by the
+// commit-retry tests: three in-window records (offsets 1–3 with
+// timestamps t0+5s/15s/45s, all inside the [t0, t0+60s) window)
+// plus one closing record at t0+90s that pushes the watermark
+// past t0+70s and triggers closeAndDispatch on the first window.
+// Shared between the three commit-retry tests so the assertion
+// "first window's 3 records committed (or not)" is uniform.
+func recordCommitTestBatch() (base time.Time, batch []FetchedRecord, inWindow []FetchedRecord) {
+	base = time.Date(2026, 5, 31, 12, 0, 0, 0, time.UTC)
+	inWindow = []FetchedRecord{
+		{Topic: "orders.events.v1", Partition: 0, Offset: 1,
+			Timestamp: base.Add(5 * time.Second),
+			Body:      []byte(`{"id":"a"}`)},
+		{Topic: "orders.events.v1", Partition: 0, Offset: 2,
+			Timestamp: base.Add(15 * time.Second),
+			Body:      []byte(`{"id":"b"}`)},
+		{Topic: "orders.events.v1", Partition: 0, Offset: 3,
+			Timestamp: base.Add(45 * time.Second),
+			Body:      []byte(`{"id":"c"}`)},
+	}
+	closing := FetchedRecord{Topic: "orders.events.v1", Partition: 0, Offset: 4,
+		Timestamp: base.Add(90 * time.Second),
+		Body:      []byte(`{"id":"d"}`)}
+	batch = append(append([]FetchedRecord{}, inWindow...), closing)
+	return base, batch, inWindow
+}
+
+func recordCommitTestSource() RecordSource {
+	return RecordSource{
+		Entity:            "orders_stream",
+		Topic:             "orders.events.v1",
+		ConsumerGroup:     "dq-orders-stream",
+		WindowDuration:    60 * time.Second,
+		LatenessTolerance: 10 * time.Second,
+		Checks:            []CheckSpec{{CheckID: "c1", Kind: "record.schema_conformance"}},
+	}
+}
+
+// TestRecordRunner_CommitRetryEventualSuccess verifies that when
+// the first two consumer.Commit attempts return transient errors
+// and the third succeeds, the runner commits the records on the
+// successful attempt and the ledger contains exactly that
+// window's records per ADR-0059 §Clause 1.
+func TestRecordRunner_CommitRetryEventualSuccess(t *testing.T) {
+	_, batch, inWindow := recordCommitTestBatch()
+	transient := errors.New("kafka commit: broker connection reset")
+	consumer := &fakeConsumer{
+		batches:               [][]FetchedRecord{batch},
+		commitFailureSequence: []error{transient, transient},
+	}
+	dispatch := &captureDispatcher{}
+
+	r, err := NewRecordRunner(RecordRunnerConfig{
+		Consumer:       consumer,
+		Dispatcher:     dispatch,
+		RulesetVersion: "rules-v0.1.0-beta",
+		Sources:        []RecordSource{recordCommitTestSource()},
+	})
+	if err != nil {
+		t.Fatalf("NewRecordRunner: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_ = r.Start(ctx)
+
+	if got := consumer.commitCalls(); got != recordCommitMaxAttempts {
+		t.Errorf("commit calls = %d; want %d (1 initial + 2 retries)", got, recordCommitMaxAttempts)
+	}
+	committed := consumer.committedSnapshot()
+	if len(committed) != len(inWindow) {
+		t.Fatalf("expected %d committed records (the closed window's records); got %d (%v)",
+			len(inWindow), len(committed), committed)
+	}
+}
+
+// TestRecordRunner_CommitRetryExhaustion verifies that when all
+// recordCommitMaxAttempts attempts fail, the runner falls
+// through to ADR-0058 §Clause 2's warning-log + skip path: no
+// records appear in the ledger.
+func TestRecordRunner_CommitRetryExhaustion(t *testing.T) {
+	_, batch, _ := recordCommitTestBatch()
+	transient := errors.New("kafka commit: persistent broker failure")
+	// One error per attempt — all failing.
+	failureSeq := make([]error, recordCommitMaxAttempts)
+	for i := range failureSeq {
+		failureSeq[i] = transient
+	}
+	consumer := &fakeConsumer{
+		batches:               [][]FetchedRecord{batch},
+		commitFailureSequence: failureSeq,
+	}
+	dispatch := &captureDispatcher{}
+
+	r, err := NewRecordRunner(RecordRunnerConfig{
+		Consumer:       consumer,
+		Dispatcher:     dispatch,
+		RulesetVersion: "rules-v0.1.0-beta",
+		Sources:        []RecordSource{recordCommitTestSource()},
+	})
+	if err != nil {
+		t.Fatalf("NewRecordRunner: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_ = r.Start(ctx)
+
+	if got := consumer.commitCalls(); got != recordCommitMaxAttempts {
+		t.Errorf("commit calls = %d; want exactly %d (budget exhausted; no further calls)",
+			got, recordCommitMaxAttempts)
+	}
+	if committed := consumer.committedSnapshot(); len(committed) != 0 {
+		t.Errorf("expected empty commit ledger on retry exhaustion; got %d records (%v)",
+			len(committed), committed)
+	}
+}
+
+// TestRecordRunner_CommitRetryRespectsContext verifies that
+// context cancellation during a back-off wait pre-empts the
+// retry loop per ADR-0059 §Clause 3 (the select on ctx.Done in
+// commitWithRetry). Uses a long-running consumer (commit fails
+// indefinitely) and cancels the context immediately so the test
+// can assert the retry loop did not exhaust its budget.
+func TestRecordRunner_CommitRetryRespectsContext(t *testing.T) {
+	_, batch, _ := recordCommitTestBatch()
+	persistent := errors.New("kafka commit: broker unreachable")
+	consumer := &fakeConsumer{
+		batches:   [][]FetchedRecord{batch},
+		commitErr: persistent, // returns the error indefinitely
+	}
+	dispatch := &captureDispatcher{}
+
+	r, err := NewRecordRunner(RecordRunnerConfig{
+		Consumer:       consumer,
+		Dispatcher:     dispatch,
+		RulesetVersion: "rules-v0.1.0-beta",
+		Sources:        []RecordSource{recordCommitTestSource()},
+	})
+	if err != nil {
+		t.Fatalf("NewRecordRunner: %v", err)
+	}
+
+	// Tight context: the runner has time to invoke the first
+	// closeAndDispatch (which calls commitWithRetry), but the
+	// retry-window stall should be pre-empted by ctx cancellation
+	// rather than wait the full budget. Total worst-case retry
+	// stall at the chosen β parameters is 600ms; a 100ms context
+	// deadline is well below that.
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	_ = r.Start(ctx)
+	elapsed := time.Since(start)
+
+	// The runner returned within the context deadline plus a
+	// small margin (the deadline triggers ctx.Done; the select
+	// in commitWithRetry returns; closeAndDispatch returns;
+	// Start's loop catches ctx.Err and exits). The retry budget
+	// (≤600ms worst case) was NOT consumed.
+	if elapsed > 400*time.Millisecond {
+		t.Errorf("Start took %v after ctx cancellation; expected return within context deadline + margin (retry budget should have been pre-empted)", elapsed)
+	}
+	// Commit was attempted at least once (the initial attempt);
+	// the budget should not have been exhausted before
+	// cancellation. The exact count depends on timing of the
+	// back-off windows vs the 100ms deadline, so the assertion
+	// is bounded: at least 1 (first attempt fired), at most
+	// recordCommitMaxAttempts (budget cap).
+	calls := consumer.commitCalls()
+	if calls < 1 {
+		t.Errorf("expected at least 1 commit attempt before cancellation; got %d", calls)
+	}
+	if calls > recordCommitMaxAttempts {
+		t.Errorf("commit calls = %d; exceeds budget cap %d", calls, recordCommitMaxAttempts)
 	}
 }
 

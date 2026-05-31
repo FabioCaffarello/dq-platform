@@ -65,6 +65,21 @@ deterministic windowing and ADR-0003 §2's canonical view
 (`dq_executions_current`) collapses any spurious second
 attempt to the consumer-visible single row.
 
+**Retry envelope** (per
+[ADR-0059](../../../docs/adr/0059-record-runner-commit-retry.md)):
+the runner wraps `consumer.Commit` in a `commitWithRetry`
+helper that retries up to `recordCommitMaxAttempts = 3` times
+with exponential back-off and uniform-random jitter (delay =
+`random_uniform(0, recordCommitBackoffBase × 2^attempt)` where
+`base = 100ms`). Worst-case stall 600ms; expected ~150ms. The
+back-off select respects `ctx.Done()` so engine shutdown
+pre-empts the retry loop. After the retry budget is exhausted,
+the helper returns the last commit error and `closeAndDispatch`
+falls through to ADR-0058 §Clause 2's warning-log + skip path
+verbatim — the retry layer is additive on top of the existing
+terminal, not replacing it. Jitter source is `math/rand/v2`
+(stdlib Go 1.22+).
+
 ```go
 opts := []kgo.Opt{
     kgo.SeedBrokers(cfg.Brokers...),
@@ -80,9 +95,14 @@ opts := []kgo.Opt{
 `FranzConsumer.Commit` method — `MarkCommitRecords` +
 `CommitMarkedOffsets`); `engine/internal/runner/kafka_consumer.go:13-26`
 (`FranzConsumer` struct doc naming the runner-as-sole-commit-
-authority posture); `engine/internal/runner/record_runner.go:350-378`
-(`closeAndDispatch` — per-trigger commit keyed on
-`dispatcher.Run` success; commit failure warning-logged + skipped).
+authority posture); `engine/internal/runner/record_runner.go:18-35`
+(`recordCommitMaxAttempts` + `recordCommitBackoffBase` β
+constants per ADR-0059 §Clause 2);
+`engine/internal/runner/record_runner.go:390-440`
+(`closeAndDispatch` + `commitWithRetry` — per-trigger commit
+keyed on `dispatcher.Run` success with bounded retry envelope;
+commit failure warning-logged with `commit_attempts` field +
+skipped per ADR-0058 §Clause 2 terminal).
 
 ## S3. Translation-at-boot boundary
 
