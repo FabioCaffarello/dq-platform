@@ -51,6 +51,7 @@ func TestNew_RegistersInaugurralKinds(t *testing.T) {
 	want := map[string]bool{
 		KindSetRowCountPositive:       true,
 		KindSetRowCountWithinBaseline: true, // B2-14 first baselined kind
+		KindSetNullRate:               true,
 		KindRecordSchemaConformance:   true,
 	}
 	for _, k := range kinds {

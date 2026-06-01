@@ -58,6 +58,7 @@ func TestLoad_CatalogShape_KnownKindsPresent(t *testing.T) {
 	}{
 		{name: "set.row_count_positive", mode: "set", sourceMode: "set"},
 		{name: "set.row_count_within_baseline", mode: "set", sourceMode: "set"},
+		{name: "set.null_rate", mode: "set", sourceMode: "set"},
 		{name: "record.schema_conformance", mode: "record", sourceMode: "record"},
 	}
 	for _, c := range cases {
