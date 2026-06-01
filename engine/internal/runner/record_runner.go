@@ -13,7 +13,15 @@ import (
 	"sync"
 	"time"
 
+	"dq-platform/engine/internal/metrics"
 	"dq-platform/engine/internal/results"
+)
+
+// recordCommitRetryOutcome enumerates the two outcome label values
+// on dq_record_commit_retries_total per ADR-0060 §Clause 1.
+const (
+	recordCommitRetryOutcomeSuccessAfterRetry = "success_after_retry"
+	recordCommitRetryOutcomeExhausted         = "exhausted"
 )
 
 // Commit-retry parameters per ADR-0059 §Clause 2. Constants are
@@ -117,6 +125,17 @@ type RecordRunnerConfig struct {
 	// Logger is the structured logger. Optional; defaults to
 	// a discarding logger.
 	Logger *slog.Logger
+
+	// Metrics is the per-package RunnerMetrics handle set per
+	// ADR-0055 §Clause 3 + ADR-0060 §Clause 1. The engine binary
+	// passes the Registry's RunnerMetrics; tests use
+	// metrics.NoopRunnerMetrics() (the zero value's nil handles
+	// would otherwise panic on the commit-path emission sites).
+	// The record runner emits dq_record_commit_failures_total,
+	// dq_record_commit_retries_total, and
+	// dq_record_commit_duration_seconds from the commit path
+	// per ADR-0060 §Clause 2.
+	Metrics metrics.RunnerMetrics
 }
 
 // TriggerDispatcher is the interface RecordRunner needs from
@@ -136,6 +155,7 @@ type RecordRunner struct {
 	rulesetVersion string
 	now            func() time.Time
 	logger         *slog.Logger
+	metrics        metrics.RunnerMetrics
 
 	// Per-entity state. The runner is single-goroutine by
 	// construction (Start runs one consumer poll loop); no
@@ -192,6 +212,7 @@ func NewRecordRunner(cfg RecordRunnerConfig) (*RecordRunner, error) {
 		rulesetVersion: cfg.RulesetVersion,
 		now:            cfg.Now,
 		logger:         cfg.Logger,
+		metrics:        cfg.Metrics,
 		sources:        map[string]*RecordSource{},
 		state:          map[string]*entityState{},
 	}
@@ -200,6 +221,12 @@ func NewRecordRunner(cfg RecordRunnerConfig) (*RecordRunner, error) {
 	}
 	if r.logger == nil {
 		r.logger = slog.New(slog.NewTextHandler(io.Discard, nil))
+	}
+	// Mirror the runner.go convention per ADR-0055 §Clause 3:
+	// if the caller didn't pass Metrics, install Noop handles so
+	// the commit-path emission sites never deref a nil counter.
+	if r.metrics.RecordCommitFailures == nil {
+		r.metrics = metrics.NoopRunnerMetrics()
 	}
 	for i := range cfg.Sources {
 		src := cfg.Sources[i]
@@ -370,7 +397,10 @@ func (r *RecordRunner) handleFetched(ctx context.Context, f FetchedRecord) {
 // Commit failures are warning-logged and do not propagate; the
 // next successful dispatch in the same partition commits the
 // uncommitted records transitively via high-water-mark
-// monotonicity.
+// monotonicity. Per ADR-0060 §Clause 5, the warning-log path
+// also increments dq_record_commit_failures_total — excluding
+// context.Canceled / context.DeadlineExceeded so the counter
+// tracks broker failure, not operator-driven shutdown.
 //
 // After dispatch, state.active is cleared and state.lateDropped
 // is reset to 0 — the next window starts fresh.
@@ -416,6 +446,12 @@ func (r *RecordRunner) closeAndDispatch(ctx context.Context, state *entityState)
 				"commit_attempts", recordCommitMaxAttempts,
 				"adr_reference", "ADR-0058+ADR-0059",
 			)
+			// Per ADR-0060 §Clause 5: increment the failures
+			// counter alongside the warning-log line, excluding
+			// context.Canceled / context.DeadlineExceeded
+			// (operator-driven shutdown is not a failure mode
+			// per ADR-0059 §Clause 5).
+			r.metrics.RecordCommitFailures.WithLabelValues(state.source.Entity).Inc()
 		}
 	}
 	state.active = nil
@@ -436,15 +472,30 @@ func (r *RecordRunner) closeAndDispatch(ctx context.Context, state *entityState)
 // on cancellation. The caller (closeAndDispatch) is responsible
 // for warning-logging the non-nil non-context return per
 // ADR-0058 §Clause 2's terminal path.
+//
+// Instrumentation per ADR-0060: each consumer.Commit call is
+// observed by dq_record_commit_duration_seconds (per-attempt,
+// per §Clause 2); the retries counter increments at the two
+// terminal branches that consumed at least one retry —
+// success-after-retry (err == nil where attempt > 1) and
+// exhausted (attempt == recordCommitMaxAttempts && err != nil).
+// First-attempt success is uninstrumented per §Clause 1.
 func (r *RecordRunner) commitWithRetry(ctx context.Context, records []FetchedRecord) error {
+	entity := r.commitEntity(records)
 	var lastErr error
 	for attempt := 1; attempt <= recordCommitMaxAttempts; attempt++ {
-		if err := r.consumer.Commit(ctx, records); err == nil {
+		start := time.Now()
+		err := r.consumer.Commit(ctx, records)
+		r.metrics.RecordCommitDuration.WithLabelValues(entity).Observe(time.Since(start).Seconds())
+		if err == nil {
+			if attempt > 1 {
+				r.metrics.RecordCommitRetries.WithLabelValues(entity, recordCommitRetryOutcomeSuccessAfterRetry).Inc()
+			}
 			return nil
-		} else {
-			lastErr = err
 		}
+		lastErr = err
 		if attempt == recordCommitMaxAttempts {
+			r.metrics.RecordCommitRetries.WithLabelValues(entity, recordCommitRetryOutcomeExhausted).Inc()
 			return lastErr
 		}
 		// Window upper bound: base << attempt = base × 2^attempt.
@@ -459,6 +510,23 @@ func (r *RecordRunner) commitWithRetry(ctx context.Context, records []FetchedRec
 		}
 	}
 	return lastErr
+}
+
+// commitEntity resolves the entity label for the commit-path
+// metrics. The slice's records are always from one window of one
+// entity per ADR-0058 §Clause 2; the lookup is a topic →
+// source.Entity translation through r.sources. Defensive fallback
+// to empty string if the records slice is empty or the topic is
+// unknown — the latter shouldn't happen given the Start loop's
+// own topic-routing guard.
+func (r *RecordRunner) commitEntity(records []FetchedRecord) string {
+	if len(records) == 0 {
+		return ""
+	}
+	if src, ok := r.sources[records[0].Topic]; ok {
+		return src.Entity
+	}
+	return ""
 }
 
 // ParseDuration parses a duration literal from the rule's

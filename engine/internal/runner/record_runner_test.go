@@ -9,6 +9,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
+	dto "github.com/prometheus/client_model/go"
+
+	"dq-platform/engine/internal/metrics"
 	"dq-platform/engine/internal/results"
 )
 
@@ -626,6 +631,236 @@ func TestRecordRunner_CommitRetryRespectsContext(t *testing.T) {
 	}
 	if calls > recordCommitMaxAttempts {
 		t.Errorf("commit calls = %d; exceeds budget cap %d", calls, recordCommitMaxAttempts)
+	}
+}
+
+// histogramSampleCount extracts the cumulative sample count from
+// a HistogramVec's child for the given label values. Used by the
+// commit-RPC histogram tests per ADR-0060 §Clause 6.
+func histogramSampleCount(t *testing.T, vec *prometheus.HistogramVec, labels ...string) uint64 {
+	t.Helper()
+	obs, err := vec.GetMetricWithLabelValues(labels...)
+	if err != nil {
+		t.Fatalf("HistogramVec.GetMetricWithLabelValues(%v): %v", labels, err)
+	}
+	hist, ok := obs.(prometheus.Histogram)
+	if !ok {
+		t.Fatalf("expected HistogramVec child to implement prometheus.Histogram; got %T", obs)
+	}
+	var pb dto.Metric
+	if err := hist.Write(&pb); err != nil {
+		t.Fatalf("histogram.Write: %v", err)
+	}
+	return pb.GetHistogram().GetSampleCount()
+}
+
+// TestRecordRunner_CommitFailuresCounterIncrementsOnExhaustion verifies
+// the two-part invariant ADR-0060 §Clause 5 commits on
+// dq_record_commit_failures_total: the counter increments exactly
+// once per commitWithRetry cycle that exhausts the retry budget on
+// broker failure, AND it is not incremented when the helper returns
+// because of context.Canceled / context.DeadlineExceeded (clean
+// shutdown is operator-driven, not a failure mode per ADR-0059
+// §Clause 5).
+func TestRecordRunner_CommitFailuresCounterIncrementsOnExhaustion(t *testing.T) {
+	t.Run("ExhaustionIncrements", func(t *testing.T) {
+		_, batch, _ := recordCommitTestBatch()
+		transient := errors.New("kafka commit: persistent broker failure")
+		failureSeq := make([]error, recordCommitMaxAttempts)
+		for i := range failureSeq {
+			failureSeq[i] = transient
+		}
+		consumer := &fakeConsumer{
+			batches:               [][]FetchedRecord{batch},
+			commitFailureSequence: failureSeq,
+		}
+		reg := metrics.New()
+		r, err := NewRecordRunner(RecordRunnerConfig{
+			Consumer:       consumer,
+			Dispatcher:     &captureDispatcher{},
+			RulesetVersion: "rules-v0.1.0-beta",
+			Metrics:        reg.Runner,
+			Sources:        []RecordSource{recordCommitTestSource()},
+		})
+		if err != nil {
+			t.Fatalf("NewRecordRunner: %v", err)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		_ = r.Start(ctx)
+
+		got := testutil.ToFloat64(reg.Runner.RecordCommitFailures.WithLabelValues("orders_stream"))
+		if got != 1 {
+			t.Errorf("dq_record_commit_failures_total{entity=orders_stream} = %v; want 1 (one cycle exhausted)", got)
+		}
+	})
+
+	t.Run("ContextCancellationExempt", func(t *testing.T) {
+		// fakeConsumer returns context.Canceled on every Commit
+		// call. commitWithRetry's terminal return is context.Canceled;
+		// closeAndDispatch's errors.Is(err, context.Canceled) branch
+		// fires and skips both the warning-log and the failures-counter
+		// increment per ADR-0060 §Clause 5 + ADR-0059 §Clause 5.
+		_, batch, _ := recordCommitTestBatch()
+		consumer := &fakeConsumer{
+			batches:   [][]FetchedRecord{batch},
+			commitErr: context.Canceled,
+		}
+		reg := metrics.New()
+		r, err := NewRecordRunner(RecordRunnerConfig{
+			Consumer:       consumer,
+			Dispatcher:     &captureDispatcher{},
+			RulesetVersion: "rules-v0.1.0-beta",
+			Metrics:        reg.Runner,
+			Sources:        []RecordSource{recordCommitTestSource()},
+		})
+		if err != nil {
+			t.Fatalf("NewRecordRunner: %v", err)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		_ = r.Start(ctx)
+
+		got := testutil.ToFloat64(reg.Runner.RecordCommitFailures.WithLabelValues("orders_stream"))
+		if got != 0 {
+			t.Errorf("dq_record_commit_failures_total{entity=orders_stream} = %v; want 0 (shutdown-exemption invariant per ADR-0060 §Clause 5: context.Canceled is not a failure mode)", got)
+		}
+	})
+}
+
+// TestRecordRunner_CommitRetriesCounterOutcomeLabels verifies
+// ADR-0060 §Clause 1 + Clause 2: dq_record_commit_retries_total
+// increments at the two terminal branches that consumed at least
+// one retry (success_after_retry, exhausted) and is NOT incremented
+// on the first-attempt-success path.
+func TestRecordRunner_CommitRetriesCounterOutcomeLabels(t *testing.T) {
+	t.Run("SuccessAfterRetryIncrements", func(t *testing.T) {
+		_, batch, _ := recordCommitTestBatch()
+		transient := errors.New("kafka commit: broker connection reset")
+		consumer := &fakeConsumer{
+			batches:               [][]FetchedRecord{batch},
+			commitFailureSequence: []error{transient, transient},
+		}
+		reg := metrics.New()
+		r, err := NewRecordRunner(RecordRunnerConfig{
+			Consumer:       consumer,
+			Dispatcher:     &captureDispatcher{},
+			RulesetVersion: "rules-v0.1.0-beta",
+			Metrics:        reg.Runner,
+			Sources:        []RecordSource{recordCommitTestSource()},
+		})
+		if err != nil {
+			t.Fatalf("NewRecordRunner: %v", err)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		_ = r.Start(ctx)
+
+		got := testutil.ToFloat64(reg.Runner.RecordCommitRetries.WithLabelValues("orders_stream", "success_after_retry"))
+		if got != 1 {
+			t.Errorf("dq_record_commit_retries_total{entity=orders_stream,outcome=success_after_retry} = %v; want 1", got)
+		}
+		exh := testutil.ToFloat64(reg.Runner.RecordCommitRetries.WithLabelValues("orders_stream", "exhausted"))
+		if exh != 0 {
+			t.Errorf("dq_record_commit_retries_total{entity=orders_stream,outcome=exhausted} = %v; want 0 (success-after-retry branch fired, not exhausted)", exh)
+		}
+	})
+
+	t.Run("ExhaustedIncrements", func(t *testing.T) {
+		_, batch, _ := recordCommitTestBatch()
+		transient := errors.New("kafka commit: persistent broker failure")
+		failureSeq := make([]error, recordCommitMaxAttempts)
+		for i := range failureSeq {
+			failureSeq[i] = transient
+		}
+		consumer := &fakeConsumer{
+			batches:               [][]FetchedRecord{batch},
+			commitFailureSequence: failureSeq,
+		}
+		reg := metrics.New()
+		r, err := NewRecordRunner(RecordRunnerConfig{
+			Consumer:       consumer,
+			Dispatcher:     &captureDispatcher{},
+			RulesetVersion: "rules-v0.1.0-beta",
+			Metrics:        reg.Runner,
+			Sources:        []RecordSource{recordCommitTestSource()},
+		})
+		if err != nil {
+			t.Fatalf("NewRecordRunner: %v", err)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		_ = r.Start(ctx)
+
+		got := testutil.ToFloat64(reg.Runner.RecordCommitRetries.WithLabelValues("orders_stream", "exhausted"))
+		if got != 1 {
+			t.Errorf("dq_record_commit_retries_total{entity=orders_stream,outcome=exhausted} = %v; want 1", got)
+		}
+		sar := testutil.ToFloat64(reg.Runner.RecordCommitRetries.WithLabelValues("orders_stream", "success_after_retry"))
+		if sar != 0 {
+			t.Errorf("dq_record_commit_retries_total{entity=orders_stream,outcome=success_after_retry} = %v; want 0 (exhausted branch fired)", sar)
+		}
+	})
+
+	t.Run("FirstAttemptSuccessUninstrumented", func(t *testing.T) {
+		_, batch, _ := recordCommitTestBatch()
+		consumer := &fakeConsumer{batches: [][]FetchedRecord{batch}} // no failures
+		reg := metrics.New()
+		r, err := NewRecordRunner(RecordRunnerConfig{
+			Consumer:       consumer,
+			Dispatcher:     &captureDispatcher{},
+			RulesetVersion: "rules-v0.1.0-beta",
+			Metrics:        reg.Runner,
+			Sources:        []RecordSource{recordCommitTestSource()},
+		})
+		if err != nil {
+			t.Fatalf("NewRecordRunner: %v", err)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		defer cancel()
+		_ = r.Start(ctx)
+
+		sar := testutil.ToFloat64(reg.Runner.RecordCommitRetries.WithLabelValues("orders_stream", "success_after_retry"))
+		if sar != 0 {
+			t.Errorf("dq_record_commit_retries_total{outcome=success_after_retry} = %v; want 0 (first-attempt success is the no-op-retry path per ADR-0060 §Clause 1)", sar)
+		}
+		exh := testutil.ToFloat64(reg.Runner.RecordCommitRetries.WithLabelValues("orders_stream", "exhausted"))
+		if exh != 0 {
+			t.Errorf("dq_record_commit_retries_total{outcome=exhausted} = %v; want 0", exh)
+		}
+	})
+}
+
+// TestRecordRunner_CommitDurationHistogramObservesPerAttempt verifies
+// ADR-0060 §Clause 2: dq_record_commit_duration_seconds records one
+// observation per individual consumer.Commit attempt (per-attempt,
+// not per-cycle), via the HistogramVec's `_count` series.
+func TestRecordRunner_CommitDurationHistogramObservesPerAttempt(t *testing.T) {
+	_, batch, _ := recordCommitTestBatch()
+	transient := errors.New("kafka commit: broker connection reset")
+	// 2 transient failures + 1 success = 3 attempts → 3 observations.
+	consumer := &fakeConsumer{
+		batches:               [][]FetchedRecord{batch},
+		commitFailureSequence: []error{transient, transient},
+	}
+	reg := metrics.New()
+	r, err := NewRecordRunner(RecordRunnerConfig{
+		Consumer:       consumer,
+		Dispatcher:     &captureDispatcher{},
+		RulesetVersion: "rules-v0.1.0-beta",
+		Metrics:        reg.Runner,
+		Sources:        []RecordSource{recordCommitTestSource()},
+	})
+	if err != nil {
+		t.Fatalf("NewRecordRunner: %v", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_ = r.Start(ctx)
+
+	got := histogramSampleCount(t, reg.Runner.RecordCommitDuration, "orders_stream")
+	if got != uint64(recordCommitMaxAttempts) {
+		t.Errorf("dq_record_commit_duration_seconds{entity=orders_stream} sample count = %d; want %d (one observation per consumer.Commit attempt per ADR-0060 §Clause 2)", got, recordCommitMaxAttempts)
 	}
 }
 

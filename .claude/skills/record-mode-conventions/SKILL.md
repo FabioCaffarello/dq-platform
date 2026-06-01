@@ -80,6 +80,29 @@ verbatim — the retry layer is additive on top of the existing
 terminal, not replacing it. Jitter source is `math/rand/v2`
 (stdlib Go 1.22+).
 
+**Commit-path observability** (per
+[ADR-0060](../../../docs/adr/0060-record-commit-emission-slice.md)):
+the commit path emits three series on `metrics.RunnerMetrics`
+(per ADR-0055 §Clause 3's per-package convention):
+`dq_record_commit_failures_total` (counter, `entity` label) at
+`closeAndDispatch`'s warning-log site;
+`dq_record_commit_retries_total` (counter, `entity` +
+`outcome ∈ {success_after_retry, exhausted}`) at the two
+`commitWithRetry` terminal branches that consumed at least one
+retry; `dq_record_commit_duration_seconds` (histogram, `entity`,
+β buckets `prometheus.DefBuckets`) observed around each
+individual `consumer.Commit` call (per-attempt, not per-cycle —
+this is the load-bearing primitive for ADR-0059 OQ-6's
+stall-budget calibration). The failures counter carries a
+**shutdown exemption** per ADR-0060 §Clause 5: `context.Canceled`
+/ `context.DeadlineExceeded` returns are excluded because
+ADR-0059 §Clause 5 distinguishes clean shutdown ("operator-
+driven, not a failure mode") from broker-failure exhaustion —
+the counter follows the warning-log path so shutdown doesn't
+perturb `rate(dq_record_commit_failures_total[5m])` alerts.
+First-attempt success is the no-op-retry path and is
+uninstrumented on the retries counter.
+
 ```go
 opts := []kgo.Opt{
     kgo.SeedBrokers(cfg.Brokers...),

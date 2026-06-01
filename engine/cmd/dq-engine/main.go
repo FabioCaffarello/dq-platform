@@ -367,7 +367,7 @@ func main() {
 	// Per the β scope, manifest refresh does not yet restart
 	// record runners — the set of record-mode rules is fixed
 	// at boot. A future slice adds the per-rule lifecycle.
-	recordRunners, err := buildRecordRunners(ctx, initial, gcsStore, r, cfg, costGuardrails, runnerLogger)
+	recordRunners, err := buildRecordRunners(ctx, initial, gcsStore, r, cfg, costGuardrails, runnerLogger, metricsReg.Runner)
 	if err != nil {
 		logger.Error("build record runners", "error", err.Error())
 		os.Exit(1)
@@ -648,6 +648,7 @@ func buildRecordRunners(
 	cfg startupConfig,
 	guardrails spec.CostGuardrails,
 	logger *slog.Logger,
+	runnerMetrics metrics.RunnerMetrics,
 ) ([]*runner.RecordRunner, error) {
 	var out []*runner.RecordRunner
 	for i := range manifest.Rules {
@@ -690,6 +691,7 @@ func buildRecordRunners(
 			Dispatcher:     dispatcher,
 			RulesetVersion: manifest.RulesetVersion,
 			Logger:         logger,
+			Metrics:        runnerMetrics,
 			Sources: []runner.RecordSource{{
 				Entity:            parsed.Entity,
 				Topic:             parsed.Source.Topic,
