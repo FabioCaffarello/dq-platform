@@ -132,6 +132,54 @@ single-attempt failure.
 (`commitWithRetry` helper + `closeAndDispatch` invocation
 site).
 
+**Commit-path observability** (per
+[ADR-0060](../../../../docs/adr/0060-record-commit-emission-slice.md)):
+the commit path emits three series on `metrics.RunnerMetrics`
+(per ADR-0055 §Clause 3's per-package convention):
+
+- `dq_record_commit_failures_total` (counter, `entity` label)
+  — incremented at `closeAndDispatch`'s warning-log site for
+  the per-cycle terminal-failure boundary per ADR-0060
+  §Clause 2. Carries a **shutdown exemption**: returns caused
+  by `context.Canceled` / `context.DeadlineExceeded` do NOT
+  increment the counter, because ADR-0059 §Clause 5
+  distinguishes clean shutdown ("operator-driven, not a
+  failure mode") from broker-failure exhaustion. The counter
+  follows the warning-log path so shutdown doesn't perturb
+  `rate(dq_record_commit_failures_total[5m])` alerts.
+- `dq_record_commit_retries_total` (counter, `entity` +
+  `outcome ∈ {success_after_retry, exhausted}`) — incremented
+  at the two `commitWithRetry` terminal branches that consumed
+  at least one retry. First-attempt success is the no-op-
+  retry path and is uninstrumented (`outcome` enum has no
+  `success_first_attempt` value per ADR-0060 §Clause 1).
+- `dq_record_commit_duration_seconds` (histogram, `entity`,
+  β buckets `prometheus.DefBuckets`) — one observation per
+  individual `consumer.Commit` call (per-attempt, not per-
+  cycle) per ADR-0060 §Clause 2. The per-attempt site is the
+  load-bearing primitive for ADR-0059 OQ-6's stall-budget
+  calibration (carried forward as ADR-0060 OQ-2 pending
+  production observation).
+
+**Cardinality contribution.** `entity × 17` total: failures
+`× 1` + retries `× 2` (one labelset per outcome) + duration
+`× 14` (12 cumulative `_bucket` series including `+Inf`, plus
+`_count` and `_sum`). Bounded by entity-count per ADR-0039
+§"Cardinality posture" (preserved without ceiling).
+
+**Observability citation.**
+`engine/internal/metrics/registry.go` — `RunnerMetrics`
+struct's three new fields (`RecordCommitFailures`,
+`RecordCommitRetries`, `RecordCommitDuration`) registered in
+`newRunnerMetrics`;
+`engine/internal/runner/record_runner.go` — `commitWithRetry`
+instrumentation (duration histogram around each
+`consumer.Commit` call; retries counter at
+success-after-retry + exhausted terminal branches) +
+`closeAndDispatch` failures-counter increment with the
+shutdown-exemption guard alongside the existing warning-log
+line.
+
 ---
 
 ## S3 — Translation-at-boot boundary

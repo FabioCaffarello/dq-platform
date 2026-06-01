@@ -58,16 +58,45 @@ func (r *Registry) Handler() http.Handler {
 func (r *Registry) Gatherer() prometheus.Gatherer { return r.reg }
 
 // RunnerMetrics holds the handles emitted by the runner package
-// per ADR-0055 §Clause 4. The five handles correspond to five of
-// ADR-0039's eight inventory metrics; the remaining engine-side
-// metric (dq_loader_refresh_failures_total) lives on
+// per ADR-0055 §Clause 4. The first five handles correspond to
+// five of ADR-0039's eight inventory metrics; the remaining
+// engine-side metric (dq_loader_refresh_failures_total) lives on
 // LoaderMetrics, and the two scheduler-side metrics are external.
+//
+// The three commit-path handles (RecordCommitFailures,
+// RecordCommitRetries, RecordCommitDuration) are added by
+// ADR-0060 §Clause 1 — record-mode commit-path observability for
+// the boundaries committed by ADR-0058 (commit-after-dispatch) +
+// ADR-0059 (commit retry). They extend ADR-0039 along its
+// §"Evolution rules" rule 1 additive-within-engine-major lane;
+// only the record-mode RecordRunner emits them.
 type RunnerMetrics struct {
 	RunsTotal            *prometheus.CounterVec
 	ChecksEvaluatedTotal *prometheus.CounterVec
 	RunDurationSeconds   *prometheus.HistogramVec
 	CheckDurationSeconds *prometheus.HistogramVec
 	BytesScanned         *prometheus.GaugeVec
+
+	// RecordCommitFailures counts cycles where commitWithRetry
+	// exhausts the retry budget per ADR-0059 §Clause 5 and
+	// closeAndDispatch falls through to ADR-0058 §Clause 2's
+	// warning-log + skip path. Per ADR-0060 §Clause 5, returns
+	// caused by context.Canceled / context.DeadlineExceeded are
+	// excluded — operator-driven shutdown is not a failure mode.
+	RecordCommitFailures *prometheus.CounterVec
+
+	// RecordCommitRetries counts commitWithRetry cycles that
+	// consumed at least one retry, broken down by terminal
+	// outcome (success_after_retry | exhausted). First-attempt
+	// success is the no-op-retry path and does not increment.
+	RecordCommitRetries *prometheus.CounterVec
+
+	// RecordCommitDuration observes per-attempt consumer.Commit
+	// duration per ADR-0060 §Clause 2 (one observation per
+	// individual Commit call, not per cycle). Per ADR-0060
+	// §Clause 4, β bucket boundaries are prometheus.DefBuckets;
+	// re-tuning is ADR-0060 OQ-1.
+	RecordCommitDuration *prometheus.HistogramVec
 }
 
 func newRunnerMetrics(reg prometheus.Registerer) RunnerMetrics {
@@ -94,6 +123,19 @@ func newRunnerMetrics(reg prometheus.Registerer) RunnerMetrics {
 			Name: "dq_bytes_scanned",
 			Help: "Most-recent bytes-scanned value per (entity, check_id) per ADR-0039. Emits zero when the evidence_summary.bytes_scanned sub-field is absent per ADR-0055 §Clause 4 OQ-6 resolution (preserves time-series continuity).",
 		}, []string{"entity", "check_id"}),
+		RecordCommitFailures: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "dq_record_commit_failures_total",
+			Help: "Count of record-mode commitWithRetry cycles that exhausted the retry budget and fell through to ADR-0058 §Clause 2's warning-log + skip path. Per ADR-0060 §Clause 5, context.Canceled / context.DeadlineExceeded returns are excluded (operator-driven shutdown is not a failure mode).",
+		}, []string{"entity"}),
+		RecordCommitRetries: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "dq_record_commit_retries_total",
+			Help: "Count of record-mode commitWithRetry cycles that consumed at least one retry per ADR-0060 §Clause 1, broken down by outcome: success_after_retry (commit succeeded on attempt > 1) or exhausted (all recordCommitMaxAttempts attempts failed).",
+		}, []string{"entity", "outcome"}),
+		RecordCommitDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name:    "dq_record_commit_duration_seconds",
+			Help:    "Distribution of per-attempt record-mode consumer.Commit duration per ADR-0060 §Clause 2 (one observation per individual Commit call, not per cycle). β buckets = prometheus.DefBuckets per ADR-0060 §Clause 4.",
+			Buckets: prometheus.DefBuckets,
+		}, []string{"entity"}),
 	}
 	reg.MustRegister(
 		m.RunsTotal,
@@ -101,6 +143,9 @@ func newRunnerMetrics(reg prometheus.Registerer) RunnerMetrics {
 		m.RunDurationSeconds,
 		m.CheckDurationSeconds,
 		m.BytesScanned,
+		m.RecordCommitFailures,
+		m.RecordCommitRetries,
+		m.RecordCommitDuration,
 	)
 	return m
 }
