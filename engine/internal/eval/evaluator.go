@@ -24,6 +24,7 @@ import (
 const (
 	KindSetRowCountPositive      = "set.row_count_positive"
 	KindSetRowCountWithinBaseline = "set.row_count_within_baseline"
+	KindSetNullRate              = "set.null_rate"
 	KindRecordSchemaConformance  = "record.schema_conformance"
 )
 
@@ -118,6 +119,7 @@ func New(cfg Config) (*Evaluator, error) {
 	}
 	e.Register(KindSetRowCountPositive, setRowCountPositiveHandler)
 	e.Register(KindSetRowCountWithinBaseline, setRowCountWithinBaselineHandler)
+	e.Register(KindSetNullRate, setNullRateHandler)
 	e.Register(KindRecordSchemaConformance, recordSchemaConformanceHandler)
 	return e, nil
 }

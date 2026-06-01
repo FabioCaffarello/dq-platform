@@ -103,6 +103,49 @@ kinds:
     aggregation:
       type: none
 
+  - name: set.null_rate
+    description: >-
+      Set-mode check that asserts the share of NULL values in one
+      BigQuery column does not exceed `params.max_null_rate` within
+      the trigger's window. SQL is
+      `SELECT COUNTIF(<column> IS NULL), COUNT(*) FROM <table>
+       [WHERE <partition_column> >= @window_start AND < @window_end]`;
+      the engine computes the rate and compares against the
+      threshold (per ADR-0022 catalog params, ADR-0023 source
+      descriptor, ADR-0029 set-mode cost envelope). The operator
+      declares the column name plus the threshold — never raw SQL
+      (P1). Empty window returns Pass with `vacuous: true`;
+      liveness is the contract of set.row_count_positive, not this
+      kind. Produces one CheckResult per window with no per-record
+      aggregation.
+    mode: set
+    source_mode: set
+    params_schema:
+      type: object
+      additionalProperties: false
+      required:
+        - column
+        - max_null_rate
+      properties:
+        column:
+          description: >-
+            BigQuery column whose NULL rate is measured. Constrained
+            to the BigQuery column-name grammar so the value cannot
+            widen the COUNTIF expression at SQL-build time.
+          type: string
+          pattern: "^[A-Za-z_][A-Za-z0-9_]*$"
+        max_null_rate:
+          description: >-
+            Inclusive ceiling on the column's NULL rate over the
+            window, expressed as a fraction in [0.0, 1.0]. A rate
+            equal to the ceiling passes; a rate above the ceiling
+            fails.
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+    aggregation:
+      type: none
+
   - name: record.schema_conformance
     description: >-
       Record-mode check that validates each Kafka record against a
