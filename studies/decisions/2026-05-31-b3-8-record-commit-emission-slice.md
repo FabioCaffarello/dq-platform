@@ -23,7 +23,21 @@
     quantitative-calibration half remains open as a new OQ
     in the promotion ADR, pending production signal)
 - Critique rounds:
-  - Round 1 — *pending* (this draft is pre-`/critique`).
+  - Round 1 — [capture](../critiques/2026-06-01-b3-8-record-commit-emission-slice-critique-1.md)
+    (0 blocking / 5 important / 5 minor); 5 important applied
+    in this revision — (I-1) R2 cite corrected to ADR-0059
+    §Consequence 2 with its actual numbers; (I-2) DD-3
+    multiplication formula dropped in favor of an explicit
+    back-off derivation; (I-3) failures-counter shutdown
+    exemption (`context.Canceled` / `context.DeadlineExceeded`)
+    applied at all three sites (Option A table row,
+    §Recommendation Implementation-site bullet, §Consequences
+    #4); (I-4) OQ Register posture (a) — ADR-0059 OQ-6 stays
+    `open` with ADR-0060 linked as enabler, calibration carried
+    by ADR-0060's OQ-2; (I-5) cardinality math corrected to
+    `entity × 17` with the histogram decomposition shown
+    (`_bucket` + `_count` + `_sum`). 5 minor deferred under the
+    two-round cap per [ADR-0048](../../docs/adr/0048-critique-rounds-preservation.md).
 
 ---
 
@@ -183,12 +197,15 @@ additive-within-major lane — not amendment.
 - **DD-3 — Histogram observation site is per-attempt, not
   per-cycle.** ADR-0059 OQ-6's calibration question is
   "observed poll-batch processing time vs. retry stall" —
-  that quantity is the *per-attempt* commit-RPC latency
-  (one `consumer.Commit` call), not the per-cycle aggregate
-  (which would include back-off sleep time and is operator-
-  derivable from `commit_attempts × per-attempt-duration`).
-  Per-attempt observation is the load-bearing primitive; the
-  per-cycle aggregate is a derived view.
+  the load-bearing quantity is the *per-attempt* commit-RPC
+  latency (one `consumer.Commit` call). The per-cycle
+  aggregate is `Σ per-attempt durations + Σ back-off durations`
+  per ADR-0059 §Clause 3's loop shape; it includes back-off
+  sleep time that the calibration is not asking about, and
+  the per-attempt portion is anyway reconstructible from the
+  per-attempt histogram combined with the `commit_attempts`
+  log field ADR-0059 §Clause 5 commits. Per-attempt
+  observation is the primitive; per-cycle is a derived view.
 
 - **DD-4 — Failures counter increments once per cycle, not
   once per attempt.** The operational signal an operator
@@ -218,11 +235,11 @@ additive-within-major lane — not amendment.
   signal is the same posture mistake ADR-0059's original
   draft made with the cap parameter (its 1.6s figure was
   unsupported; the round-1 critique exposed it). The β
-  buckets should cover the worst-case stall (`600ms` per
-  ADR-0059 §Consequence 2) and ADR-0059's default
-  parameters' typical range (`~100ms–~400ms`), but a
-  measurement-grounded bucket-boundary commit waits for
-  production data — recorded as the promotion ADR's OQ.
+  buckets should cover ADR-0059's documented range
+  (§Consequence 2: `~100ms` typical, `~150ms` expected,
+  `600ms` worst-case), but a measurement-grounded bucket-
+  boundary commit waits for production data — recorded as
+  the promotion ADR's OQ.
 
 ---
 
@@ -234,7 +251,7 @@ Three new metric series added to `RunnerMetrics`:
 
 | Metric name | Type | Labels | Emission site (in `engine/internal/runner/record_runner.go`) | Increment / observe semantics |
 |---|---|---|---|---|
-| `dq_record_commit_failures_total` | counter | `entity` | `closeAndDispatch` post-`commitWithRetry`, on non-nil return (terminal warning-log path per ADR-0058 §Clause 2 + ADR-0059 §Clause 5) | One increment per `commitWithRetry` failure (per-cycle terminal failure) |
+| `dq_record_commit_failures_total` | counter | `entity` | `closeAndDispatch` post-`commitWithRetry`, on non-nil return that is **not** `context.Canceled` / `context.DeadlineExceeded` (terminal warning-log path per ADR-0058 §Clause 2 + ADR-0059 §Clause 5 — the shutdown exemption keeps the counter aligned with the warning-log path actually firing per §Clause 5's "shutdown is operator-driven, not a failure mode" distinction) | One increment per `commitWithRetry` broker-failure cycle; clean shutdown does not increment |
 | `dq_record_commit_retries_total` | counter | `entity`, `outcome` (∈ `success_after_retry`, `exhausted`) | Inside `commitWithRetry`, on the success-after-retry path (where `attempt > 1`) and on the exhausted path (where `attempt == recordCommitMaxAttempts` and `err != nil`) | One increment per `commitWithRetry` cycle that consumed at least one retry; not incremented on first-attempt success |
 | `dq_record_commit_duration_seconds` | histogram | `entity` | Inside `commitWithRetry`, around each `consumer.Commit(ctx, records)` call (per-attempt observation per DD-3) | One observation per attempt; histogram bucket boundaries deferred to OQ (DD-6) |
 
@@ -376,10 +393,13 @@ reading; no new D0 borderline is introduced.
 - **Implementation site.** Three new fields on
   `metrics.RunnerMetrics` (per ADR-0055 §Clause 3). Emission
   sites: failures counter at `closeAndDispatch` post-
-  `commitWithRetry` non-nil return; retries counter at
-  `commitWithRetry` `success_after_retry` and `exhausted`
-  branches; duration histogram around each `consumer.Commit`
-  call inside `commitWithRetry`.
+  `commitWithRetry` non-nil return, **excluding**
+  `context.Canceled` / `context.DeadlineExceeded` (clean
+  shutdown is operator-driven, not a failure mode, per
+  ADR-0059 §Clause 5); retries counter at `commitWithRetry`
+  `success_after_retry` and `exhausted` branches; duration
+  histogram around each `consumer.Commit` call inside
+  `commitWithRetry`.
 - **Labels.** Minimal — `entity` across all three;
   `outcome ∈ (success_after_retry, exhausted)` on the
   retries counter only. No `attempt`, no `partition`, no
@@ -388,9 +408,9 @@ reading; no new D0 borderline is introduced.
   - **β commits Prometheus-library default buckets**
     (`prometheus.DefBuckets` → `5ms, 10ms, 25ms, 50ms, 100ms,
     250ms, 500ms, 1s, 2.5s, 5s, 10s`). These cover ADR-0059's
-    worst-case stall (`600ms`) and typical range
-    (`~100–400ms` per ADR-0059 §Consequence 3) at a
-    resolution that supports the calibration intent.
+    documented range (§Consequence 2: `~100ms` typical,
+    `~150ms` expected, `600ms` worst-case) at a resolution
+    that supports the calibration intent.
   - **Bucket-boundary calibration is OQ-1** below — a
     measurement-grounded re-tuning waits for production
     signal (parallel to ADR-0059 OQ-6's two-fold structure;
@@ -489,7 +509,14 @@ reading; no new D0 borderline is introduced.
    one instrumentation call:** a
    `metrics.RecordCommitFailures.WithLabelValues(entity).Inc()`
    alongside the existing warning-log line on
-   `commitWithRetry` non-nil return.
+   `commitWithRetry` non-nil return, **excluding**
+   `context.Canceled` / `context.DeadlineExceeded`. ADR-0059
+   §Clause 5 distinguishes those from warning-log + skip
+   ("Context-cancellation returns from `commitWithRetry`
+   without warning-logging since shutdown is operator-
+   driven, not a failure mode"); the counter follows the
+   warning-log path so clean shutdown does not increment
+   the failures series.
 
 5. **ADR-0058 / ADR-0059 / ADR-0055 / ADR-0039 / ADR-0021 /
    ADR-0023 / ADR-0024 / ADR-0002 / ADR-0003 / ADR-0049
@@ -498,14 +525,26 @@ reading; no new D0 borderline is introduced.
    ADR-0055's emitter convention; no committed contract is
    reshaped.
 
-6. **The OQ Register flips three rows to `resolved-adr` at
-   promotion-PR time** per the playbook step 9 OQ Register
-   hunk rule:
+6. **The OQ Register flips two rows to `resolved-adr` and
+   extends one description at promotion-PR time** per the
+   playbook step 9 OQ Register hunk rule:
    - ADR-0058 OQ-4 → `resolved-adr ([ADR-0060](...))`
    - ADR-0059 OQ-3 → `resolved-adr ([ADR-0060](...))`
-   - ADR-0059 OQ-6 → `resolved-adr ([ADR-0060](...))` (the
-     *wiring* half; the *calibration* half lands as a new
-     OQ in ADR-0060)
+   - ADR-0059 OQ-6 **stays at `open`**; the description
+     column is extended to link ADR-0060 as the *enabling*
+     slice that wires the commit-RPC histogram. The
+     calibration analysis OQ-6 literally names
+     ("Quantitative stall-budget calibration — observed
+     poll-batch processing time vs. retry stall") is not
+     performed by ADR-0060 and is carried forward as
+     ADR-0060's OQ-2 below. Posture rationale: the OQ
+     Register §"Scope and conventions" defines
+     `resolved-adr` as "consumed by a subsequent ADR or
+     amendment" — ADR-0060 *enables* the calibration
+     without performing it, so OQ-6 is not yet consumed.
+     This posture (a) preserves the register's existing
+     `resolved-adr` semantic without amending its
+     conventions in the same PR.
 
 7. **ADR-0060 adds new OQ rows to the OQ Register at
    promotion-PR time** for each labeled OQ this study
@@ -516,12 +555,22 @@ reading; no new D0 borderline is introduced.
 
 8. **Cardinality posture continues to be governed by
    ADR-0039 §"Cardinality posture".** No numeric ceiling
-   is committed; the three new series' cardinality
-   contribution is `entity × 1 + entity × 2 + entity × 1`
-   = `4 × entity` plus the histogram's per-bucket series
-   (12 buckets × entity = `12 × entity`). Total
-   contribution: `16 × entity`. Operationally bounded by
-   entity-count, which is bounded by the loader's manifest.
+   is committed; the three new series' time-series
+   contribution decomposes as:
+   - `dq_record_commit_failures_total` (counter, `entity`
+     label only): `entity × 1` series.
+   - `dq_record_commit_retries_total` (counter, `entity`
+     + `outcome`): `entity × 2` series (one labelset per
+     `outcome` value).
+   - `dq_record_commit_duration_seconds` (histogram,
+     `entity` label): `entity × 14` series per labelset
+     — 12 cumulative `_bucket` series (the 11 explicit
+     `prometheus.DefBuckets` boundaries plus the implicit
+     `+Inf` bucket) plus `_count` and `_sum`.
+
+   Total: `entity × (1 + 2 + 14) = entity × 17`.
+   Operationally bounded by entity-count, which is
+   bounded by the loader's manifest.
 
 9. **`record-mode-conventions` skill convention S2 is
    updated** to mention the emission surface for the
@@ -559,14 +608,19 @@ reading; no new D0 borderline is introduced.
   is worse than a default with an explicit deferral).
 
 - **OQ-2: ADR-0059 OQ-6 calibration analysis.** This
-  slice wires the histogram (the OQ-6 *wiring* half);
-  the *quantitative-calibration* half — comparing
-  `dq_record_commit_duration_seconds` percentiles
-  against observed poll-batch processing time under
-  production load — remains a future study when
-  observation window accumulates. **Out-of-scope for
-  current cycle** — requires production telemetry that
-  does not exist at this slice's promotion time.
+  slice wires the commit-RPC histogram so that the
+  calibration becomes performable; the calibration
+  itself — comparing `dq_record_commit_duration_seconds`
+  percentiles against observed poll-batch processing
+  time under production load — remains a future study
+  when an observation window accumulates. ADR-0059 OQ-6
+  in the OQ Register stays at `open` with this slice
+  linked in its description column as the *enabling*
+  step (per Consequences #6 above); the calibration is
+  not consumed until a future B3-N performs the
+  analysis. **Out-of-scope for current cycle** —
+  requires production telemetry that does not exist at
+  this slice's promotion time.
 
 - **OQ-3: Per-attempt label dimension.** Option B's
   richer-cardinality reading remains available if
