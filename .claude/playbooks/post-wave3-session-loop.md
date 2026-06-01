@@ -120,6 +120,23 @@ two deltas:
    deferral, update the relevant ADR's Consequence row or add
    a "Last updated" entry summarizing what shipped.
 
+   **OQ Register hunk (one-line extension).** If the promoted
+   ADR labels new OQs (any `OQ-N` / `OQ-G3.1`-style identifier
+   in its §Notes / §"Open Questions" / §Consequences), add a
+   row per OQ to the
+   `06-decision-log.md` §"Open Questions Register" in the same
+   PR — source ADR / OQ id / one-line description / named
+   trigger condition / `open`. If the promoted ADR consumes an
+   open OQ (B3-N or amendment), flip the consumed OQ's row to
+   `resolved-adr` and link the consuming ADR in the description
+   column. The register's lane committed by the
+   classification D0 ratified at PR #126 is
+   [`CONTRIBUTING.md`](../../CONTRIBUTING.md) Flow 6, which
+   admits this maintenance hunk inside the same promotion PR
+   without opening a B-row. See the register's §"Scope and
+   conventions" for the description-sourcing rule and the
+   reused status vocabulary.
+
 10. **Open the PR.** This is the **close action** — the
     intermediate commits already landed in steps 6 / 7 / 9.
 

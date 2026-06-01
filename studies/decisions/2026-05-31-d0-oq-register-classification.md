@@ -2,9 +2,22 @@
 
 # D0 — Open Questions register: classification (Flow 6 vs B3-N)
 
-- **Status:** draft — operator ratification pending
+- **Status:** resolved — **Option A (Flow 6) ratified at PR #126 merge on 2026-05-31**; register landed in
+  [`studies/foundation/06-decision-log.md`](../foundation/06-decision-log.md)
+  §"Open Questions Register" via Flow 6 direct edit. The D0
+  stays in `studies/decisions/` as the reasoning artifact per
+  R8; no ADR back-links to it. Step-number drift in this
+  document's pointers (the body cites "step 10" for the
+  decision-log update; the actual playbook home is step 9) was
+  corrected in the Flow 6 landing PR's edits to
+  [`06-decision-log.md`](../foundation/06-decision-log.md) and
+  [`.claude/playbooks/post-wave3-session-loop.md`](../../.claude/playbooks/post-wave3-session-loop.md);
+  this D0 is preserved as-written.
 - **Date:** 2026-05-31
 - **Type:** Classification D0 (Flow 6 direct-edit vs B3-N entry)
+- **Critique rounds:** 1 (round 1 — 0 blocking / 7 important / 8 minor; all importants + minors applied in-place; capture at
+  [`studies/critiques/2026-05-31-d0-oq-register-classification-critique-1.md`](../critiques/2026-05-31-d0-oq-register-classification-critique-1.md)
+  per [ADR-0048](../../docs/adr/0048-critique-rounds-preservation.md)).
 - **Artifact proposed:** a live index of open Open Questions
   (OQs) currently registered as `out-of-scope for current cycle`
   across `docs/adr/*.md` §Notes / §"Open Questions" sections.
